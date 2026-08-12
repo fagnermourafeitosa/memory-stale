@@ -37,6 +37,12 @@
 - Never create or amend a commit without explicit user authorization for that
   specific commit. A request to implement, test, stage, or prepare work is not
   permission to commit.
+- After an explicitly authorized commit succeeds, integrate its dedicated branch
+  into the local `main` branch with a fast-forward merge unless the user says not
+  to. If fast-forward is unavailable, stop and ask for direction; commit
+  authorization never implies permission to rebase, create a merge commit, or
+  resolve conflicts. Remain on `main` after successful integration and do not
+  delete the working branch automatically.
 - Never push, tag, rebase, squash, or open a pull request unless the user
   explicitly requests that operation.
 
