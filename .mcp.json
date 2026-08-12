@@ -1,24 +1,12 @@
 {
   "mcpServers": {
     "memory-stale": {
-      "command": "uv",
+      "command": "sh",
       "args": [
-        "run",
-        "--quiet",
-        "--project",
-        "${PLUGIN_ROOT}",
-        "--frozen",
-        "--no-sync",
-        "python",
+        "${PLUGIN_ROOT}/scripts/run-python.sh",
         "-m",
         "memory_stale.mcp_server"
-      ],
-      "env": {
-        "PYTHONPATH": "${PLUGIN_ROOT}/src",
-        "UV_CACHE_DIR": "${PLUGIN_DATA}/.venv/.uv-cache",
-        "UV_PROJECT_ENVIRONMENT": "${PLUGIN_DATA}/.venv",
-        "VIRTUAL_ENV": ""
-      }
+      ]
     }
   }
 }

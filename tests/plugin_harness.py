@@ -25,7 +25,12 @@ class PluginHarness:
         command = self._hooks[event][0]["hooks"][0]["command"]
         environment = os.environ.copy()
         environment.update(
-            {"PLUGIN_ROOT": str(self.plugin_root), "PLUGIN_DATA": str(self.plugin_root)}
+            {
+                "PLUGIN_ROOT": str(self.plugin_root),
+                "PLUGIN_DATA": str(self.plugin_root / ".venv" / "plugin-test-data"),
+                "MEMORY_STALE_SKIP_SYNC": "1",
+                "MEMORY_STALE_PROJECT_ENVIRONMENT": str(self.plugin_root / ".venv"),
+            }
         )
         result = subprocess.run(
             command,

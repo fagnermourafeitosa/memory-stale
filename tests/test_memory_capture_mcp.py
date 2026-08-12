@@ -26,7 +26,14 @@ def _repository(tmp_path: Path) -> Path:
 
 def _start_turn(repository: Path) -> None:
     environment = os.environ.copy()
-    environment.update({"PLUGIN_ROOT": str(PLUGIN_ROOT), "PLUGIN_DATA": str(PLUGIN_ROOT)})
+    environment.update(
+        {
+            "PLUGIN_ROOT": str(PLUGIN_ROOT),
+            "PLUGIN_DATA": str(PLUGIN_ROOT / ".venv" / "plugin-test-data"),
+            "MEMORY_STALE_SKIP_SYNC": "1",
+            "MEMORY_STALE_PROJECT_ENVIRONMENT": str(PLUGIN_ROOT / ".venv"),
+        }
+    )
     config = json.loads((PLUGIN_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
     command = config["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
     result = subprocess.run(
@@ -105,7 +112,14 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
     assert not (repository / ".agents" / "skills" / ".agent-memory" / "memories").exists()
 
     environment = os.environ.copy()
-    environment.update({"PLUGIN_ROOT": str(PLUGIN_ROOT), "PLUGIN_DATA": str(PLUGIN_ROOT)})
+    environment.update(
+        {
+            "PLUGIN_ROOT": str(PLUGIN_ROOT),
+            "PLUGIN_DATA": str(PLUGIN_ROOT / ".venv" / "plugin-test-data"),
+            "MEMORY_STALE_SKIP_SYNC": "1",
+            "MEMORY_STALE_PROJECT_ENVIRONMENT": str(PLUGIN_ROOT / ".venv"),
+        }
+    )
     config = json.loads((PLUGIN_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
     stop_command = config["hooks"]["Stop"][0]["hooks"][0]["command"]
     stopped = subprocess.run(

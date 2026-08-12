@@ -60,7 +60,9 @@ def _run_hook(
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["PLUGIN_ROOT"] = str(PLUGIN_ROOT)
-    environment["PLUGIN_DATA"] = str(PLUGIN_ROOT)
+    environment["PLUGIN_DATA"] = str(PLUGIN_ROOT / ".venv" / "plugin-test-data")
+    environment["MEMORY_STALE_SKIP_SYNC"] = "1"
+    environment["MEMORY_STALE_PROJECT_ENVIRONMENT"] = str(PLUGIN_ROOT / ".venv")
     return subprocess.run(
         _hook_command(event),
         cwd=repository,
