@@ -241,6 +241,34 @@ baseline is versioned in `evaluation-baseline.yaml`; its known instrumentation
 false-stale and indirect-policy false-negative cases document limitations rather
 than redefining evidence staleness as claim truth.
 
+## Repository-scale lifecycle evaluation
+
+`evaluator/corpus/repository-lifecycle-corpus.yaml` is a separate, versioned
+evaluation of the full plugin lifecycle in temporary Git repositories. Every labeled trial creates
+an initial commit, captures a claim through the real `memory.capture` MCP
+process, applies a subsequent Git change, completes the real `Stop` hook, and
+observes both persisted Markdown status and later `UserPromptSubmit` context.
+It does not change capture, reconciliation, or retrieval behavior; it measures
+their resulting availability decision.
+
+Its checked-in result,
+`evaluator/results/2026-08-12-repository-lifecycle-evaluation.yaml`, records the
+complete confusion matrix before rates: true stale (`changed → stale`), false
+stale (`preserved → stale`), missed semantic change (`changed → active`), and
+true active (`preserved → active`). It also records stale recall, stale
+precision, specificity, unnecessary-revalidation rate,
+missed-semantic-change rate, and overall accuracy, with descriptive Wilson 95%
+intervals produced by the evaluator. The corpus is curated rather than randomly
+sampled, so these intervals describe this labeled set and are not population
+estimates.
+
+Capture failures, hook failures, unresolved locators, and retrieval mismatches
+remain separate operational outcomes. They are never counted as favorable stale
+results or mixed into the semantic matrix. The corpus includes a changed and a
+preserved trial for every supported grammar, plus deliberate instrumentation
+false-stale and incomplete-provenance false-active cases; adding a trial or
+changing its expected outcome requires a reviewed baseline explanation.
+
 Project configuration lives at:
 
 ```text
@@ -486,7 +514,7 @@ Use `uv` for every Python operation:
 uv sync --frozen
 uv run ruff format --check .
 uv run ruff check .
-uv run mypy src tests
+uv run mypy src tests evaluator
 uv run pytest
 ```
 

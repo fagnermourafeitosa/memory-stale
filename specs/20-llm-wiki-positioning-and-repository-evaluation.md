@@ -1,5 +1,7 @@
 # 20 — LLM-Wiki positioning and repository-scale evaluation
 
+**Status: Done (2026-08-12)**
+
 ## Problem Statement
 
 Memory Stale can be mistaken for a system with no persistent memory when its

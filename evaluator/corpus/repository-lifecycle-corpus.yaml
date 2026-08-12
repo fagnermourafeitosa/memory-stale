@@ -1,0 +1,161 @@
+version: 1
+trials:
+  - id: python-local-change
+    family: direct-local
+    label: changed
+    initial_files: {sample.py: "def compute():\n    return 0\n"}
+    capture_files: {sample.py: "def compute():\n    return 1\n"}
+    capture: {kind: behavior, claim: Python compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.py:compute}]}
+    change_files: {sample.py: "def compute():\n    return 2\n"}
+    retrieval_prompt: sample.py:compute
+  - id: python-trivia
+    family: preserving
+    label: preserved
+    initial_files: {sample.py: "def compute():\n    return 0\n"}
+    capture_files: {sample.py: "def compute():\n    return 1\n"}
+    capture: {kind: behavior, claim: Python compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.py:compute}]}
+    change_files: {sample.py: "# formatting only\ndef compute():\n  return 1\n"}
+    retrieval_prompt: sample.py:compute
+  - id: javascript-local-change
+    family: direct-local
+    label: changed
+    initial_files: {sample.js: "function compute() { return 0; }\n"}
+    capture_files: {sample.js: "function compute() { return 1; }\n"}
+    capture: {kind: behavior, claim: JavaScript compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.js:compute}]}
+    change_files: {sample.js: "function compute() { return 2; }\n"}
+    retrieval_prompt: sample.js:compute
+  - id: javascript-trivia
+    family: preserving
+    label: preserved
+    initial_files: {sample.js: "function compute() { return 0; }\n"}
+    capture_files: {sample.js: "function compute() { return 1; }\n"}
+    capture: {kind: behavior, claim: JavaScript compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.js:compute}]}
+    change_files: {sample.js: "// formatting only\nfunction compute() { return 1; }\n"}
+    retrieval_prompt: sample.js:compute
+  - id: typescript-local-change
+    family: direct-local
+    label: changed
+    initial_files: {sample.ts: "function compute(): number { return 0; }\n"}
+    capture_files: {sample.ts: "function compute(): number { return 1; }\n"}
+    capture: {kind: behavior, claim: TypeScript compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.ts:compute}]}
+    change_files: {sample.ts: "function compute(): number { return 2; }\n"}
+    retrieval_prompt: sample.ts:compute
+  - id: typescript-trivia
+    family: preserving
+    label: preserved
+    initial_files: {sample.ts: "function compute(): number { return 0; }\n"}
+    capture_files: {sample.ts: "function compute(): number { return 1; }\n"}
+    capture: {kind: behavior, claim: TypeScript compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.ts:compute}]}
+    change_files: {sample.ts: "// formatting only\nfunction compute(): number { return 1; }\n"}
+    retrieval_prompt: sample.ts:compute
+  - id: go-local-change
+    family: direct-local
+    label: changed
+    initial_files: {sample.go: "package sample\nfunc compute() int { return 0 }\n"}
+    capture_files: {sample.go: "package sample\nfunc compute() int { return 1 }\n"}
+    capture: {kind: behavior, claim: Go compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.go:compute}]}
+    change_files: {sample.go: "package sample\nfunc compute() int { return 2 }\n"}
+    retrieval_prompt: sample.go:compute
+  - id: go-trivia
+    family: preserving
+    label: preserved
+    initial_files: {sample.go: "package sample\nfunc compute() int { return 0 }\n"}
+    capture_files: {sample.go: "package sample\nfunc compute() int { return 1 }\n"}
+    capture: {kind: behavior, claim: Go compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.go:compute}]}
+    change_files: {sample.go: "package sample\n// formatting only\nfunc compute() int { return 1 }\n"}
+    retrieval_prompt: sample.go:compute
+  - id: java-local-change
+    family: direct-local
+    label: changed
+    initial_files: {Sample.java: "class Sample { int compute() { return 0; } }\n"}
+    capture_files: {Sample.java: "class Sample { int compute() { return 1; } }\n"}
+    capture: {kind: behavior, claim: Java compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: Sample.java:compute}]}
+    change_files: {Sample.java: "class Sample { int compute() { return 2; } }\n"}
+    retrieval_prompt: Sample.java:compute
+  - id: java-trivia
+    family: preserving
+    label: preserved
+    initial_files: {Sample.java: "class Sample { int compute() { return 0; } }\n"}
+    capture_files: {Sample.java: "class Sample { int compute() { return 1; } }\n"}
+    capture: {kind: behavior, claim: Java compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: Sample.java:compute}]}
+    change_files: {Sample.java: "class Sample { // formatting only\n int compute() { return 1; } }\n"}
+    retrieval_prompt: Sample.java:compute
+  - id: kotlin-local-change
+    family: direct-local
+    label: changed
+    initial_files: {sample.kt: "fun compute(): Int { return 0 }\n"}
+    capture_files: {sample.kt: "fun compute(): Int { return 1 }\n"}
+    capture: {kind: behavior, claim: Kotlin compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.kt:compute}]}
+    change_files: {sample.kt: "fun compute(): Int { return 2 }\n"}
+    retrieval_prompt: sample.kt:compute
+  - id: kotlin-trivia
+    family: preserving
+    label: preserved
+    initial_files: {sample.kt: "fun compute(): Int { return 0 }\n"}
+    capture_files: {sample.kt: "fun compute(): Int { return 1 }\n"}
+    capture: {kind: behavior, claim: Kotlin compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.kt:compute}]}
+    change_files: {sample.kt: "// formatting only\nfun compute(): Int { return 1 }\n"}
+    retrieval_prompt: sample.kt:compute
+  - id: rust-local-change
+    family: direct-local
+    label: changed
+    initial_files: {sample.rs: "fn compute() -> i32 { 0 }\n"}
+    capture_files: {sample.rs: "fn compute() -> i32 { 1 }\n"}
+    capture: {kind: behavior, claim: Rust compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.rs:compute}]}
+    change_files: {sample.rs: "fn compute() -> i32 { 2 }\n"}
+    retrieval_prompt: sample.rs:compute
+  - id: rust-trivia
+    family: preserving
+    label: preserved
+    initial_files: {sample.rs: "fn compute() -> i32 { 0 }\n"}
+    capture_files: {sample.rs: "fn compute() -> i32 { 1 }\n"}
+    capture: {kind: behavior, claim: Rust compute returns one., durability_reason: Callers rely on the result., evidence: [{type: symbol, role: primary, locator: sample.rs:compute}]}
+    change_files: {sample.rs: "// formatting only\nfn compute() -> i32 { 1 }\n"}
+    retrieval_prompt: sample.rs:compute
+  - id: instrumentation-python
+    family: conservative-false-stale
+    label: preserved
+    initial_files: {service.py: "def compute():\n    return 0\n"}
+    capture_files: {service.py: "def compute():\n    return 1\n"}
+    capture: {kind: behavior, claim: Instrumented compute returns one., durability_reason: The behavior remains useful to callers., evidence: [{type: symbol, role: primary, locator: service.py:compute}]}
+    change_files: {service.py: "def compute():\n    trace_metric()\n    return 1\n"}
+    retrieval_prompt: service.py:compute
+  - id: incomplete-configuration-provenance
+    family: incomplete-provenance
+    label: changed
+    initial_files: {app.py: "def login():\n    return False\n", settings.yaml: "mfa:\n  required: true\n"}
+    capture_files: {app.py: "def login():\n    return True\n", settings.yaml: "mfa:\n  required: true\n"}
+    capture: {kind: behavior, claim: Login remains enabled by configuration., durability_reason: The configuration determines the externally visible login behavior., evidence: [{type: symbol, role: primary, locator: app.py:login}]}
+    change_files: {app.py: "def login():\n    return True\n", settings.yaml: "mfa:\n  required: false\n"}
+    retrieval_prompt: app.py:login
+  - id: graph-two-hop-policy
+    family: evidence-graph
+    label: changed
+    initial_files: {auth.py: "def login():\n    return False\n", policy.py: "def policy():\n    return True\n", mfa.py: "def mfa():\n    return True\n"}
+    capture_files: {auth.py: "def login():\n    return policy()\n", policy.py: "def policy():\n    return mfa()\n", mfa.py: "def mfa():\n    return True\n"}
+    capture:
+      kind: behavior
+      claim: Login follows the transitive MFA policy.
+      durability_reason: The login behavior depends on this explicit evidence graph.
+      evidence:
+        - type: symbol
+          role: primary
+          locator: auth.py:login
+          depends_on:
+            - type: symbol
+              locator: policy.py:policy
+              depends_on:
+                - type: symbol
+                  locator: mfa.py:mfa
+    change_files: {auth.py: "def login():\n    return policy()\n", policy.py: "def policy():\n    return mfa()\n", mfa.py: "def mfa():\n    return False\n"}
+    retrieval_prompt: auth.py:login
+    expected_stale_reasons:
+      symbol:mfa.py:mfa: changed via symbol:auth.py:login -> symbol:policy.py:policy -> symbol:mfa.py:mfa
+  - id: repository-shape-deletion
+    family: repository-shape
+    label: changed
+    initial_files: {service.py: "def compute():\n    return 0\n"}
+    capture_files: {service.py: "def compute():\n    return 1\n"}
+    capture: {kind: behavior, claim: Compute returns one before removal., durability_reason: The original callable behavior is recorded., evidence: [{type: symbol, role: primary, locator: service.py:compute}]}
+    change_files: {notes.txt: "service implementation moved elsewhere\n"}
+    retrieval_prompt: service.py:compute
