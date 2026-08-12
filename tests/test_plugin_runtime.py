@@ -339,3 +339,29 @@ def test_stop_marks_memory_stale_when_task_changes_its_symbol(tmp_path: Path) ->
     assert result.returncode == 0
     assert store.load_all()[0].status == "stale"
     assert store.load_all()[0].stale_reasons == {"service.py:compute": "changed"}
+
+
+def test_prompt_hook_injects_only_relevant_active_memory(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path)
+    MemoryStore(repository).write_all(
+        [
+            Memory(
+                "memory-1",
+                "constraint",
+                "active",
+                "Auth changes require review.",
+                "Security boundary.",
+                {"auth.py:login": "sig"},
+            )
+        ]
+    )
+
+    result = _run_hook(
+        "UserPromptSubmit",
+        repository,
+        {"turn_id": "turn-context", "cwd": str(repository), "prompt": "Change auth.py:login"},
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert "Auth changes require review." in output["hookSpecificOutput"]["additionalContext"]

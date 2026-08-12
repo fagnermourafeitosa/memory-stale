@@ -24,6 +24,9 @@ Rankear memórias active por match estrutural e BM25, respeitando orçamento con
 
 ## Testing Decisions
 
+- Seam confirmado pela autorização contínua: a função pública de retrieval
+  recebe corpus, prompt e budget e devolve exatamente o contexto injetável;
+  integração é observada pelo comando real `UserPromptSubmit`.
 - Testar filtro stale, match exato acima de texto, ranking BM25 e corte por orçamento.
 - Testar corpus vazio e prompt sem resultado.
 

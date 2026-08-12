@@ -213,11 +213,18 @@ def run_user_prompt_submit(
             "captures": [],
         }
         _atomic_json_write(_task_path(repository, turn_id), state)
+        from memory_stale.memory_store import MemoryStore
+        from memory_stale.retrieval import retrieve
+
+        prompt = payload.get("prompt")
+        context = retrieve(
+            MemoryStore(repository).load_all(), prompt if isinstance(prompt, str) else "", 1500
+        )
         json.dump(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "UserPromptSubmit",
-                    "additionalContext": "",
+                    "additionalContext": context,
                 }
             },
             output_stream,
