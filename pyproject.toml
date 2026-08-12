@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "Your Name" }]
 dependencies = [
     "pyyaml>=6.0",
+    "tree-sitter-language-pack>=1.14.3",
 ]
 
 [dependency-groups]

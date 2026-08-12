@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TextIO, cast
 
 from memory_stale.hook_runtime import _atomic_json_write, _repository_root, _snapshot
+from memory_stale.symbol_index import SymbolIndexer
 
 KINDS = {"behavior", "contract", "constraint", "architecture", "operation"}
 
@@ -57,15 +58,19 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
     task = cast(dict[str, object], json.loads(task_path.read_text(encoding="utf-8")))
     baseline = cast(dict[str, object], task["baseline"])
     current = _snapshot(repository)
+    indexer = SymbolIndexer(repository)
+    signatures: dict[str, str] = {}
     for ref in refs:
         path_text, separator, _symbol = ref.rpartition(":")
         if not separator or not path_text or baseline.get(path_text) == current.get(path_text):
             raise ValueError(f"ref did not change in this turn: {ref}")
+        signatures[ref] = indexer.signature(ref)
     candidate = {
         "kind": kind,
         "claim": claim,
         "refs": refs,
         "durability_reason": durability_reason,
+        "signatures": signatures,
     }
     captures = cast(list[object], task.setdefault("captures", []))
     key = (kind, " ".join(claim.casefold().split()), tuple(sorted(refs)))

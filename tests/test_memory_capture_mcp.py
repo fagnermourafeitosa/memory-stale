@@ -95,14 +95,13 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
     assert result["isError"] is False
     task_files = list((repository / ".git" / "memory-stale" / "tasks").glob("*.json"))
     task = json.loads(task_files[0].read_text(encoding="utf-8"))
-    assert task["captures"] == [
-        {
-            "kind": "behavior",
-            "claim": "Login validates MFA before creating a session.",
-            "refs": ["auth.py:login"],
-            "durability_reason": "Future authentication changes must preserve MFA.",
-        }
-    ]
+    assert len(task["captures"]) == 1
+    capture = task["captures"][0]
+    assert capture["kind"] == "behavior"
+    assert capture["claim"] == "Login validates MFA before creating a session."
+    assert capture["refs"] == ["auth.py:login"]
+    assert capture["durability_reason"] == "Future authentication changes must preserve MFA."
+    assert len(capture["signatures"]["auth.py:login"]) == 64
     assert not (repository / ".agents" / "skills" / ".agent-memory" / "memories").exists()
 
 

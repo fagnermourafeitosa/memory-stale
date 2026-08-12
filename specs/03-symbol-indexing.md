@@ -24,6 +24,9 @@ Criar indexadores tree-sitter que resolvem símbolos e produzem assinaturas estr
 
 ## Testing Decisions
 
+- Seam confirmado pela autorização de execução contínua: a interface pública do
+  indexador recebe raiz Git e ref `path:symbol`, retornando uma assinatura ou
+  erro estruturado; fixtures reais exercitam cada gramática.
 - Fixtures por linguagem para resolução, mudança semântica e mudança de comentário/formatação.
 - Testar símbolo ausente, parser inválido e arquivo ausente.
 - Testar que hash igual para trivia e diferente para mudança de lógica, assinatura, identificador ou literal.
