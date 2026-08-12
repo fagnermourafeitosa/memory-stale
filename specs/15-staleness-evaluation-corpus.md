@@ -1,5 +1,7 @@
 # 15 — Staleness evaluation corpus
 
+**Status: Done (2026-08-12)**
+
 ## Problem Statement
 
 The lifecycle uses structural change as a conservative proxy for revalidation,

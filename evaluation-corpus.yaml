@@ -1,0 +1,82 @@
+version: 1
+scenarios:
+  - id: instrumentation-python
+    label: preserved
+    evidence: service.py:compute
+    before: {service.py: "def compute():\n    return 1\n"}
+    after: {service.py: "def compute():\n    trace_metric()\n    return 1\n"}
+  - id: indirect-mfa-policy
+    label: changed
+    evidence: auth.py:login
+    before: {auth.py: "def login():\n    return allow_login()\n", policy.py: "MFA_REQUIRED = True\n"}
+    after: {auth.py: "def login():\n    return allow_login()\n", policy.py: "MFA_REQUIRED = False\n"}
+  - id: python-trivia
+    label: preserved
+    evidence: sample.py:compute
+    before: {sample.py: "def compute():\n    return 1\n"}
+    after: {sample.py: "# formatting only\ndef compute():\n  return 1\n"}
+  - id: python-local-change
+    label: changed
+    evidence: sample.py:compute
+    before: {sample.py: "def compute():\n    return 1\n"}
+    after: {sample.py: "def compute():\n    return 2\n"}
+  - id: javascript-trivia
+    label: preserved
+    evidence: sample.js:compute
+    before: {sample.js: "function compute() { return 1; }\n"}
+    after: {sample.js: "// formatting only\nfunction compute() { return 1; }\n"}
+  - id: javascript-local-change
+    label: changed
+    evidence: sample.js:compute
+    before: {sample.js: "function compute() { return 1; }\n"}
+    after: {sample.js: "function compute() { return 2; }\n"}
+  - id: typescript-trivia
+    label: preserved
+    evidence: sample.ts:compute
+    before: {sample.ts: "function compute(): number { return 1; }\n"}
+    after: {sample.ts: "// formatting only\nfunction compute(): number { return 1; }\n"}
+  - id: typescript-local-change
+    label: changed
+    evidence: sample.ts:compute
+    before: {sample.ts: "function compute(): number { return 1; }\n"}
+    after: {sample.ts: "function compute(): number { return 2; }\n"}
+  - id: go-trivia
+    label: preserved
+    evidence: sample.go:compute
+    before: {sample.go: "package sample\nfunc compute() int { return 1 }\n"}
+    after: {sample.go: "package sample\n// formatting only\nfunc compute() int { return 1 }\n"}
+  - id: go-local-change
+    label: changed
+    evidence: sample.go:compute
+    before: {sample.go: "package sample\nfunc compute() int { return 1 }\n"}
+    after: {sample.go: "package sample\nfunc compute() int { return 2 }\n"}
+  - id: java-trivia
+    label: preserved
+    evidence: Sample.java:compute
+    before: {Sample.java: "class Sample { int compute() { return 1; } }\n"}
+    after: {Sample.java: "class Sample { // formatting only\n int compute() { return 1; } }\n"}
+  - id: java-local-change
+    label: changed
+    evidence: Sample.java:compute
+    before: {Sample.java: "class Sample { int compute() { return 1; } }\n"}
+    after: {Sample.java: "class Sample { int compute() { return 2; } }\n"}
+  - id: kotlin-trivia
+    label: preserved
+    evidence: sample.kt:compute
+    before: {sample.kt: "fun compute(): Int { return 1 }\n"}
+    after: {sample.kt: "// formatting only\nfun compute(): Int { return 1 }\n"}
+  - id: kotlin-local-change
+    label: changed
+    evidence: sample.kt:compute
+    before: {sample.kt: "fun compute(): Int { return 1 }\n"}
+    after: {sample.kt: "fun compute(): Int { return 2 }\n"}
+  - id: rust-trivia
+    label: preserved
+    evidence: sample.rs:compute
+    before: {sample.rs: "fn compute() -> i32 { 1 }\n"}
+    after: {sample.rs: "// formatting only\nfn compute() -> i32 { 1 }\n"}
+  - id: rust-local-change
+    label: changed
+    evidence: sample.rs:compute
+    before: {sample.rs: "fn compute() -> i32 { 1 }\n"}
+    after: {sample.rs: "fn compute() -> i32 { 2 }\n"}

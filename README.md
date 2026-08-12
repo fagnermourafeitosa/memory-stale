@@ -201,6 +201,17 @@ migrated deterministically on their next write; their prior ID remains in
 front matter as migration provenance. The HTML report groups revision history
 by claim, while context retrieval uses only the current active revision.
 
+## Staleness evaluation corpus
+
+`evaluation-corpus.yaml` is a versioned, human-labeled set of before-and-after
+fixtures used by the normal test suite. Its deterministic evaluator runs the
+same lifecycle against real source files, then reports two deliberately separate
+trade-offs: `unnecessary_revalidation_rate` for `preserved` claims marked stale,
+and `missed_semantic_change_rate` for `changed` claims left active. The current
+baseline is versioned in `evaluation-baseline.yaml`; its known instrumentation
+false-stale and indirect-policy false-negative cases document limitations rather
+than redefining evidence staleness as claim truth.
+
 Project configuration lives at:
 
 ```text
@@ -352,6 +363,8 @@ implemented and covered by integration or end-to-end tests:
 - Markdown memory store and `active → stale` evidence-revalidation lifecycle;
 - versioned claim/evidence revisions with deterministic legacy migration and
   Git observation metadata;
+- labeled evaluation corpus and deterministic revalidation trade-off baseline
+  across every supported grammar;
 - structural indexing for all seven v1 languages;
 - deterministic retrieval with exact-ref priority and context budgets;
 - Dream reconciliation, project configuration, and HTML reporting;
