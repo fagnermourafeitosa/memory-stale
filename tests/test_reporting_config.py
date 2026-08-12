@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from memory_stale.evidence import EvidenceItem
+from memory_stale.evidence import EvidenceEdge, EvidenceItem
 from memory_stale.lifecycle import Memory
 from memory_stale.reporting import ConfigError, load_config, write_report
 
@@ -34,7 +34,9 @@ def test_html_report_escapes_content_and_is_explicit_by_default(tmp_path: Path) 
         "Use <safe> output.",
         "Avoid & bugs.",
         (EvidenceItem("symbol", "primary", "web.py:render", "sig"),),
-        {"symbol:web.py:render": "changed"},
+        {"symbol:web.py:render": "changed via symbol:web.py:render -> symbol:policy.py:rule"},
+        supported_by=("symbol:web.py:render",),
+        dependencies=(EvidenceEdge("symbol:web.py:render", "symbol:policy.py:rule"),),
     )
     assert write_report(tmp_path, [memory], requested=False) is None
     path = write_report(tmp_path, [memory], requested=True)
@@ -43,5 +45,6 @@ def test_html_report_escapes_content_and_is_explicit_by_default(tmp_path: Path) 
     assert "Use &lt;safe&gt; output." in html
     assert "Avoid &amp; bugs." in html
     assert "web.py:render" in html and "changed" in html
+    assert "Graph" in html and "depends_on: symbol:web.py:render → symbol:policy.py:rule" in html
     assert "Claim one" in html
     assert "Observed commit" in html

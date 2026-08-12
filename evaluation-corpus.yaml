@@ -1,4 +1,4 @@
-version: 1
+version: 2
 scenarios:
   - id: instrumentation-python
     label: preserved
@@ -8,8 +8,9 @@ scenarios:
   - id: indirect-mfa-policy
     label: changed
     evidence: auth.py:login
-    before: {auth.py: "def login():\n    return allow_login()\n", policy.py: "MFA_REQUIRED = True\n"}
-    after: {auth.py: "def login():\n    return allow_login()\n", policy.py: "MFA_REQUIRED = False\n"}
+    depends_on: [policy.py:mfa_policy]
+    before: {auth.py: "def login():\n    return allow_login()\n", policy.py: "def mfa_policy():\n    return True\n"}
+    after: {auth.py: "def login():\n    return allow_login()\n", policy.py: "def mfa_policy():\n    return False\n"}
   - id: python-trivia
     label: preserved
     evidence: sample.py:compute

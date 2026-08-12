@@ -8,7 +8,7 @@ from typing import cast
 
 import yaml
 
-from memory_stale.evidence import EvidenceItem
+from memory_stale.evidence import EvidenceEdge, EvidenceItem
 from memory_stale.lifecycle import Memory, migrate_legacy_memory
 
 
@@ -49,6 +49,10 @@ class MemoryStore:
                 }
                 for item in memory.evidence
             ],
+            "supported_by": list(memory.supported_by),
+            "dependencies": [
+                {"from": edge.source, "to": edge.target} for edge in memory.dependencies
+            ],
             "stale_reasons": memory.stale_reasons,
             "observed_commit": memory.observed_commit,
             "observed_at": memory.observed_at,
@@ -67,7 +71,22 @@ class MemoryStore:
         data = cast(dict[str, object], yaml.safe_load(front_matter))
         stale_reasons = cast(dict[str, str] | None, data.get("stale_reasons"))
         schema_version = data.get("schema_version")
-        if schema_version != 3:
+        if schema_version == 3:
+            evidence = _evidence(data, path)
+            return Memory(
+                id=str(data["revision_id"]),
+                kind=str(data["kind"]),
+                status=str(data["status"]),
+                claim=claim.strip(),
+                durability_reason=str(data["durability_reason"]),
+                evidence=evidence,
+                stale_reasons=stale_reasons,
+                claim_id=_optional_string(data, "claim_id") or str(data["revision_id"]),
+                observed_commit=_optional_string(data, "observed_commit"),
+                observed_at=_optional_string(data, "observed_at"),
+                legacy_id=_optional_string(data, "legacy_id"),
+            )
+        if schema_version != 4:
             signatures = cast(dict[str, str], data["signatures"])
             return migrate_legacy_memory(
                 legacy_id=str(data.get("revision_id", data.get("id"))),
@@ -80,19 +99,25 @@ class MemoryStore:
                 observed_commit=_optional_string(data, "observed_commit"),
                 observed_at=_optional_string(data, "observed_at"),
             )
+        evidence = _evidence(data, path)
+        supported_by = _supported_by(data, path)
+        dependencies = _dependencies(data, path)
+        _validate_graph(evidence, supported_by, dependencies, path)
         return Memory(
             id=str(data["revision_id"]),
             kind=str(data["kind"]),
             status=str(data["status"]),
             claim=claim.strip(),
             durability_reason=str(data["durability_reason"]),
-            evidence=_evidence(data, path),
+            evidence=evidence,
             stale_reasons=stale_reasons,
             schema_version=schema_version,
             claim_id=_optional_string(data, "claim_id") or str(data["revision_id"]),
             observed_commit=_optional_string(data, "observed_commit"),
             observed_at=_optional_string(data, "observed_at"),
             legacy_id=_optional_string(data, "legacy_id"),
+            supported_by=supported_by,
+            dependencies=dependencies,
         )
 
 
@@ -126,6 +151,47 @@ def _evidence_string(data: dict[str, object], key: str, path: Path) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(f"invalid evidence item in {path}")
     return value
+
+
+def _supported_by(data: dict[str, object], path: Path) -> tuple[str, ...]:
+    raw = data.get("supported_by")
+    if not isinstance(raw, list) or not raw or not all(isinstance(item, str) for item in raw):
+        raise ValueError(f"invalid supported_by in {path}")
+    result = tuple(sorted(cast(list[str], raw)))
+    if len(set(result)) != len(result):
+        raise ValueError(f"duplicate supported_by in {path}")
+    return result
+
+
+def _dependencies(data: dict[str, object], path: Path) -> tuple[EvidenceEdge, ...]:
+    raw = data.get("dependencies")
+    if not isinstance(raw, list):
+        raise ValueError(f"invalid dependencies in {path}")
+    edges: list[EvidenceEdge] = []
+    for item in raw:
+        if not isinstance(item, dict) or set(item) != {"from", "to"}:
+            raise ValueError(f"invalid dependency in {path}")
+        edge = cast(dict[str, object], item)
+        edges.append(
+            EvidenceEdge(_evidence_string(edge, "from", path), _evidence_string(edge, "to", path))
+        )
+    result = tuple(sorted(set(edges)))
+    if len(result) != len(edges):
+        raise ValueError(f"duplicate dependency in {path}")
+    return result
+
+
+def _validate_graph(
+    evidence: tuple[EvidenceItem, ...],
+    supported_by: tuple[str, ...],
+    dependencies: tuple[EvidenceEdge, ...],
+    path: Path,
+) -> None:
+    keys = {item.key for item in evidence}
+    if not set(supported_by) <= keys:
+        raise ValueError(f"supported_by references unknown evidence in {path}")
+    if any(edge.source not in keys or edge.target not in keys for edge in dependencies):
+        raise ValueError(f"dependency references unknown evidence in {path}")
 
 
 def _optional_string(data: dict[str, object], key: str) -> str | None:

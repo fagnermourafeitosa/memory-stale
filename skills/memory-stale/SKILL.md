@@ -36,6 +36,13 @@ unchanged `supporting` items are permitted but must resolve. Supported types are
 `settings.yaml#/authentication/mfa`. Do not use whole-file evidence or invent a
 fallback when an item cannot resolve.
 
+When one evidence item depends on another, declare it in that item's nested
+`depends_on` array. A dependency uses the same typed locator and is stored as
+supporting evidence. A string dependency reference may target an already
+declared `type:locator` node when a cycle must be represented. Do not infer
+relationships from imports or call sites. Explain the deterministic invalidation
+path returned by Dream or the report when a transitive node becomes stale.
+
 When the user asks for the memory health report, call `memory.report` and return
 the generated local path. Do not generate the report on ordinary turns unless
 project configuration enables automatic reporting.

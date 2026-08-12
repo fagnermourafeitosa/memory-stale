@@ -51,11 +51,18 @@ def _render(memories: list[Memory]) -> str:
     for memory in memories:
         groups.setdefault(memory.claim_id or memory.id, []).append(memory)
     for claim_id, revisions in sorted(groups.items()):
-        rows.append(f'<tr class="claim"><th colspan="9">Claim {html.escape(claim_id)}</th></tr>')
+        rows.append(f'<tr class="claim"><th colspan="10">Claim {html.escape(claim_id)}</th></tr>')
         for memory in sorted(revisions, key=lambda revision: revision.id):
             evidence = "<br>".join(
                 html.escape(f"{item.type} · {item.role} · {item.locator} · {item.fingerprint}")
                 for item in memory.evidence
+            )
+            graph = "<br>".join(
+                [f"supported_by: {html.escape(', '.join(memory.supported_by))}"]
+                + [
+                    html.escape(f"depends_on: {edge.source} → {edge.target}")
+                    for edge in memory.dependencies
+                ]
             )
             reasons = "<br>".join(
                 f"{html.escape(ref)}: {html.escape(reason)}"
@@ -68,11 +75,11 @@ def _render(memories: list[Memory]) -> str:
                 f"<td>{html.escape(memory.kind)}</td>"
                 f"<td>{html.escape(memory.claim)}</td>"
                 f"<td>{html.escape(memory.durability_reason)}</td>"
-                f"<td>{evidence}</td><td>{reasons}</td>"
+                f"<td>{evidence}</td><td>{graph}</td><td>{reasons}</td>"
                 f"<td>{html.escape(memory.observed_commit or '')}</td>"
                 f"<td>{html.escape(memory.observed_at or '')}</td></tr>"
             )
-    body = "".join(rows) or '<tr><td colspan="9">No memories.</td></tr>'
+    body = "".join(rows) or '<tr><td colspan="10">No memories.</td></tr>'
     return (
         '<!doctype html><html><head><meta charset="utf-8"><title>Memory Stale</title>'
         "<style>body{font-family:system-ui;margin:2rem}table{border-collapse:collapse;width:100%}"
@@ -82,7 +89,7 @@ def _render(memories: list[Memory]) -> str:
         "<p><code>active</code> means recorded evidence is unchanged; "
         "<code>stale</code> means evidence requires revalidation. Neither state "
         "proves claim truth or falsehood.</p><table><thead><tr><th>Revision</th><th>Status</th>"
-        "<th>Kind</th><th>Claim</th><th>Durability</th><th>Evidence</th><th>Reasons</th>"
+        "<th>Kind</th><th>Claim</th><th>Durability</th><th>Evidence</th><th>Graph</th><th>Reasons</th>"
         "<th>Observed commit</th><th>Observed at</th>"
         f"</tr></thead><tbody>{body}</tbody></table></body></html>\n"
     )

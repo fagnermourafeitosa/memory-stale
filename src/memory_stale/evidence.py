@@ -35,6 +35,23 @@ class EvidenceItem:
         return f"{self.type}:{self.locator}"
 
 
+@dataclass(frozen=True, order=True)
+class EvidenceEdge:
+    """One directed ``depends_on`` relationship between evidence nodes."""
+
+    source: str
+    target: str
+
+
+@dataclass(frozen=True)
+class EvidenceGraph:
+    """Unresolved graph declared by one MCP capture request."""
+
+    items: tuple[tuple[str, str, str], ...]
+    supported_by: tuple[str, ...]
+    dependencies: tuple[EvidenceEdge, ...]
+
+
 def parse_items(value: object) -> tuple[tuple[str, str, str], ...]:
     """Validate MCP evidence input before resolving any item."""
     if not isinstance(value, list) or not value:
@@ -61,6 +78,72 @@ def parse_items(value: object) -> tuple[tuple[str, str, str], ...]:
     if not any(role == "primary" for _item_type, role, _locator in parsed):
         raise EvidenceError("evidence requires at least one primary item")
     return tuple(parsed)
+
+
+def parse_graph(value: object) -> EvidenceGraph:
+    """Parse nested dependency declarations into canonical nodes and edges."""
+    if not isinstance(value, list) or not value:
+        raise EvidenceError("evidence is required")
+    nodes: dict[str, tuple[str, str, str]] = {}
+    supported_by: list[str] = []
+    dependencies: set[EvidenceEdge] = set()
+    references: list[EvidenceEdge] = []
+
+    def visit(raw: object, role: str | None, *, direct: bool, context: str) -> str:
+        if not isinstance(raw, dict):
+            raise EvidenceError(f"{context} must be an object")
+        allowed = {"type", "locator", "depends_on", "fingerprint"}
+        if direct:
+            allowed.add("role")
+        if not set(raw) <= allowed:
+            raise EvidenceError(f"{context} has unsupported fields")
+        item_type = _required(raw, "type")
+        locator = _required(raw, "locator")
+        resolved_role = _required(raw, "role") if direct else "supporting"
+        if role is not None:
+            resolved_role = role
+        if item_type not in EVIDENCE_TYPES:
+            raise EvidenceError(f"unsupported evidence type: {item_type}")
+        if resolved_role not in EVIDENCE_ROLES:
+            raise EvidenceError(f"unsupported evidence role: {resolved_role}")
+        key = f"{item_type}:{locator}"
+        existing = nodes.get(key)
+        candidate = (item_type, resolved_role, locator)
+        if existing is None or (existing[1] == "supporting" and resolved_role == "primary"):
+            nodes[key] = candidate
+        elif existing[1] != resolved_role:
+            raise EvidenceError(f"{context} has an incompatible role for {key}")
+        raw_dependencies = raw.get("depends_on", [])
+        if not isinstance(raw_dependencies, list):
+            raise EvidenceError(f"{context}.depends_on must be an array")
+        for index, dependency in enumerate(raw_dependencies):
+            if isinstance(dependency, str):
+                references.append(EvidenceEdge(key, dependency))
+                continue
+            target = visit(
+                dependency,
+                "supporting",
+                direct=False,
+                context=f"{context}.depends_on[{index}]",
+            )
+            dependencies.add(EvidenceEdge(key, target))
+        return key
+
+    for index, raw in enumerate(value):
+        root = visit(raw, None, direct=True, context=f"evidence[{index}]")
+        supported_by.append(root)
+    dependencies.update(references)
+    unknown = sorted({edge.target for edge in dependencies if edge.target not in nodes})
+    if unknown:
+        raise EvidenceError(f"dependency target is not declared: {unknown[0]}")
+    items = tuple(nodes.values())
+    if not any(role == "primary" for _item_type, role, _locator in items):
+        raise EvidenceError("evidence requires at least one primary item")
+    return EvidenceGraph(
+        items,
+        tuple(sorted(set(supported_by))),
+        tuple(sorted(dependencies)),
+    )
 
 
 def resolve_item(repository: Path, item_type: str, role: str, locator: str) -> EvidenceItem:

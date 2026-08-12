@@ -25,18 +25,21 @@ scenarios:
   - id: indirect-policy
     label: changed
     evidence: auth.py:login
+    depends_on: [policy.py:mfa_policy]
     before:
       auth.py: |-
         def login():
             return allow_login()
       policy.py: |-
-        MFA_REQUIRED = True
+        def mfa_policy():
+            return True
     after:
       auth.py: |-
         def login():
             return allow_login()
       policy.py: |-
-        MFA_REQUIRED = False
+        def mfa_policy():
+            return False
 """,
         encoding="utf-8",
     )
@@ -49,6 +52,11 @@ scenarios:
         ("indirect-policy", "active"),
         ("instrumentation", "stale"),
     ]
+    assert [(item.identifier, item.lifecycle_status) for item in result.graph_scenarios] == [
+        ("indirect-policy", "stale"),
+        ("instrumentation", "stale"),
+    ]
+    assert result.graph_missed_semantic_change_rate == 0.0
 
 
 def test_corpus_schema_errors_name_the_invalid_scenario(tmp_path: Path) -> None:
@@ -73,3 +81,5 @@ def test_versioned_baseline_corpus_covers_each_supported_grammar(tmp_path: Path)
         assert f"{language}-local-change" in identifiers
     assert result.unnecessary_revalidation_rate == pytest.approx(1 / 8)
     assert result.missed_semantic_change_rate == pytest.approx(1 / 8)
+    assert result.graph_unnecessary_revalidation_rate == pytest.approx(1 / 8)
+    assert result.graph_missed_semantic_change_rate == 0.0

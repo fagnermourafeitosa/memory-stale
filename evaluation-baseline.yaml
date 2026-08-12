@@ -1,8 +1,10 @@
-version: 1
+version: 2
 corpus: evaluation-corpus.yaml
 unnecessary_revalidation_rate: 0.125
 missed_semantic_change_rate: 0.125
+graph_unnecessary_revalidation_rate: 0.125
+graph_missed_semantic_change_rate: 0.0
 notes:
   - The instrumentation scenario intentionally records a structural false stale.
-  - The indirect MFA policy intentionally records incomplete-provenance false negative.
+  - The graph captures the indirect MFA policy dependency and removes that false negative.
   - Changes to this baseline require a reviewed explanation in the same change.

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TextIO, cast
 
 from memory_stale.dream import dream
-from memory_stale.evidence import EvidenceError, parse_items, resolve_item
+from memory_stale.evidence import EvidenceError, EvidenceGraph, parse_graph, resolve_item
 from memory_stale.hook_runtime import _atomic_json_write, _repository_root, _snapshot
 from memory_stale.memory_store import MemoryStore
 from memory_stale.reporting import write_report
@@ -52,7 +52,7 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         raise ValueError(f"kind must be one of: {', '.join(sorted(KINDS))}")
     claim = _string(arguments, "claim")
     durability_reason = _string(arguments, "durability_reason")
-    parsed_evidence = parse_items(arguments.get("evidence"))
+    graph = parse_graph(arguments.get("evidence"))
     repository = _repository_root(cwd)
     observed_commit = subprocess.run(
         ["git", "-C", str(repository), "rev-parse", "HEAD"],
@@ -66,7 +66,7 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
     current = _snapshot(repository)
     evidence = []
     primary_changed = False
-    for index, (item_type, role, locator) in enumerate(parsed_evidence):
+    for index, (item_type, role, locator) in enumerate(graph.items):
         try:
             path_text = _evidence_path(item_type, locator)
             if role == "primary" and baseline.get(path_text) != current.get(path_text):
@@ -88,35 +88,36 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         "kind": kind,
         "claim": claim,
         "evidence": evidence,
+        "supported_by": list(graph.supported_by),
+        "dependencies": [{"from": edge.source, "to": edge.target} for edge in graph.dependencies],
         "durability_reason": durability_reason,
-        "schema_version": 3,
+        "schema_version": 4,
         "observed_commit": observed_commit,
         "observed_at": datetime.now(timezone.utc).isoformat(),
     }
     captures = cast(list[object], task.setdefault("captures", []))
-    key = (kind, " ".join(claim.casefold().split()), tuple(sorted(parsed_evidence)))
+    key = (kind, " ".join(claim.casefold().split()), _graph_identity(graph))
     for existing in captures:
         if isinstance(existing, dict):
             existing_key = (
                 existing.get("kind"),
                 " ".join(str(existing.get("claim", "")).casefold().split()),
-                tuple(
-                    sorted(
-                        (
-                            str(item.get("type")),
-                            str(item.get("role")),
-                            str(item.get("locator")),
-                        )
-                        for item in cast(list[object], existing.get("evidence", []))
-                        if isinstance(item, dict)
-                    )
-                ),
+                _capture_graph_key(existing),
             )
             if existing_key == key:
                 return _tool_result("Capture already staged for this turn.")
     captures.append(candidate)
     _atomic_json_write(task_path, task)
     return _tool_result("Capture staged for lifecycle validation.")
+
+
+def _capture_graph_key(capture: dict[str, object]) -> tuple[object, ...]:
+    graph = parse_graph(capture.get("evidence"))
+    return _graph_identity(graph)
+
+
+def _graph_identity(graph: EvidenceGraph) -> tuple[object, ...]:
+    return (tuple(sorted(graph.items)), graph.supported_by, graph.dependencies)
 
 
 def _evidence_path(item_type: str, locator: str) -> str:
@@ -174,7 +175,7 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
                                         },
                                         "locator": {"type": "string"},
                                     },
-                                    "additionalProperties": False,
+                                    "additionalProperties": True,
                                 },
                             },
                             "durability_reason": {"type": "string"},

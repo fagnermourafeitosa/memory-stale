@@ -182,6 +182,57 @@ def test_capture_rejects_an_invalid_evidence_item_atomically(tmp_path: Path) -> 
     assert MemoryStore(harness.root).load_all() == []
 
 
+def test_transitive_evidence_dependency_marks_claim_stale_with_provenance_path(
+    tmp_path: Path,
+) -> None:
+    harness = PluginHarness(tmp_path / "repo", PLUGIN_ROOT)
+    login = harness.root / "auth.py"
+    policy = harness.root / "policy.py"
+    mfa = harness.root / "mfa.py"
+    login.write_text("def login():\n    return False\n", encoding="utf-8")
+    policy.write_text("def authentication_policy():\n    return True\n", encoding="utf-8")
+    mfa.write_text("def mfa_policy():\n    return True\n", encoding="utf-8")
+    harness.git("add", "auth.py", "policy.py", "mfa.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Change auth.py:login")
+    login.write_text("def login():\n    return authentication_policy()\n", encoding="utf-8")
+    captured = harness.capture(
+        kind="behavior",
+        claim="Login follows the transitive MFA policy.",
+        evidence=[
+            {
+                "type": "symbol",
+                "role": "primary",
+                "locator": "auth.py:login",
+                "depends_on": [
+                    {
+                        "type": "symbol",
+                        "locator": "policy.py:authentication_policy",
+                        "depends_on": [{"type": "symbol", "locator": "mfa.py:mfa_policy"}],
+                    }
+                ],
+            }
+        ],
+        durability_reason="Login policy depends on the MFA policy.",
+    )
+    assert cast(dict[str, object], captured["result"])["isError"] is False
+    harness.hook("Stop", "turn-1")
+
+    harness.hook("UserPromptSubmit", "turn-2", prompt="Change mfa.py:mfa_policy")
+    mfa.write_text("def mfa_policy():\n    return False\n", encoding="utf-8")
+    harness.hook("Stop", "turn-2")
+
+    revision = MemoryStore(harness.root).load_all()[0]
+    assert revision.status == "stale"
+    assert revision.stale_reasons == {
+        "symbol:mfa.py:mfa_policy": (
+            "changed via symbol:auth.py:login -> symbol:policy.py:authentication_policy "
+            "-> symbol:mfa.py:mfa_policy"
+        )
+    }
+
+
 def test_recapturing_a_stale_claim_preserves_history_and_restores_active_context(
     tmp_path: Path,
 ) -> None:
@@ -221,7 +272,7 @@ def test_recapturing_a_stale_claim_preserves_history_and_restores_active_context
     assert {revision.status for revision in revisions} == {"active", "stale"}
     assert len({revision.id for revision in revisions}) == 2
     assert len({revision.claim_id for revision in revisions}) == 1
-    assert {revision.schema_version for revision in revisions} == {3}
+    assert {revision.schema_version for revision in revisions} == {4}
     assert all(revision.observed_commit for revision in revisions)
 
     context = harness.hook("UserPromptSubmit", "turn-4", prompt="service.py:compute")

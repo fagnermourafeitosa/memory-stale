@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import cast
 
-from memory_stale.evidence import EvidenceItem
+from memory_stale.evidence import EvidenceEdge, EvidenceItem
 
 
 @dataclass(frozen=True)
@@ -25,11 +25,17 @@ class Memory:
     durability_reason: str
     evidence: tuple[EvidenceItem, ...]
     stale_reasons: dict[str, str] | None = None
-    schema_version: int = 3
+    schema_version: int = 4
     claim_id: str | None = None
     observed_commit: str | None = None
     observed_at: str | None = None
     legacy_id: str | None = None
+    supported_by: tuple[str, ...] = ()
+    dependencies: tuple[EvidenceEdge, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.supported_by:
+            object.__setattr__(self, "supported_by", tuple(item.key for item in self.evidence))
 
     @property
     def signatures(self) -> dict[str, str]:
@@ -49,11 +55,17 @@ def _claim_id(kind: str, claim: str, evidence: Sequence[EvidenceItem]) -> str:
     return _identifier(f"{kind}\0{normalized_claim}\0{primary_scope}")
 
 
-def _revision_id(claim_id: str, evidence: Sequence[EvidenceItem]) -> str:
+def _revision_id(
+    claim_id: str,
+    evidence: Sequence[EvidenceItem],
+    supported_by: Sequence[str],
+    dependencies: Sequence[EvidenceEdge],
+) -> str:
     fingerprints = "\0".join(
         f"{item.type}\0{item.role}\0{item.locator}\0{item.fingerprint}" for item in evidence
     )
-    return _identifier(f"{claim_id}\0{fingerprints}")
+    graph = "\0".join((*supported_by, *(f"{edge.source}\0{edge.target}" for edge in dependencies)))
+    return _identifier(f"{claim_id}\0{fingerprints}\0{graph}")
 
 
 def _capture_memory(capture: Mapping[str, object]) -> Memory:
@@ -64,8 +76,10 @@ def _capture_memory(capture: Mapping[str, object]) -> Memory:
     if not isinstance(evidence_value, list):
         raise ValueError("capture evidence must be an array")
     evidence = _stored_items(evidence_value)
+    supported_by = _stored_supported_by(capture.get("supported_by"), evidence)
+    dependencies = _stored_edges(capture.get("dependencies"), evidence)
     claim_id = _claim_id(kind, claim, evidence)
-    revision_id = _revision_id(claim_id, evidence)
+    revision_id = _revision_id(claim_id, evidence, supported_by, dependencies)
     return Memory(
         id=revision_id,
         kind=kind,
@@ -76,6 +90,8 @@ def _capture_memory(capture: Mapping[str, object]) -> Memory:
         claim_id=claim_id,
         observed_commit=_optional_string(capture, "observed_commit"),
         observed_at=_optional_string(capture, "observed_at"),
+        supported_by=supported_by,
+        dependencies=dependencies,
     )
 
 
@@ -108,6 +124,40 @@ def _evidence_string(item: Mapping[str, object], name: str) -> str:
     return value
 
 
+def _stored_supported_by(value: object, evidence: Sequence[EvidenceItem]) -> tuple[str, ...]:
+    if value is None:
+        return tuple(item.key for item in evidence)
+    if not isinstance(value, list) or not value or not all(isinstance(item, str) for item in value):
+        raise ValueError("capture supported_by must be a non-empty array")
+    supported_by = tuple(sorted(cast(list[str], value)))
+    keys = {item.key for item in evidence}
+    if len(set(supported_by)) != len(supported_by) or not set(supported_by) <= keys:
+        raise ValueError("capture supported_by has unknown or duplicate evidence")
+    return supported_by
+
+
+def _stored_edges(value: object, evidence: Sequence[EvidenceItem]) -> tuple[EvidenceEdge, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError("capture dependencies must be an array")
+    edges: list[EvidenceEdge] = []
+    keys = {item.key for item in evidence}
+    for raw in value:
+        if not isinstance(raw, dict):
+            raise ValueError("capture dependency must be an object")
+        edge = cast(dict[str, object], raw)
+        source = _evidence_string(edge, "from")
+        target = _evidence_string(edge, "to")
+        if set(edge) != {"from", "to"} or source not in keys or target not in keys:
+            raise ValueError("capture dependency has an unknown node")
+        edges.append(EvidenceEdge(source, target))
+    canonical = tuple(sorted(set(edges)))
+    if len(canonical) != len(edges):
+        raise ValueError("capture dependencies must not contain duplicates")
+    return canonical
+
+
 def _optional_string(capture: Mapping[str, object], name: str) -> str | None:
     value = capture.get(name)
     return value if isinstance(value, str) and value else None
@@ -131,7 +181,8 @@ def migrate_legacy_memory(
         for locator, fingerprint in sorted(signatures.items())
     )
     claim_id = _claim_id(kind, claim, evidence)
-    revision_id = _revision_id(claim_id, evidence)
+    supported_by = tuple(item.key for item in evidence)
+    revision_id = _revision_id(claim_id, evidence, supported_by, ())
     remapped_reasons = (
         {f"symbol:{locator}": reason for locator, reason in stale_reasons.items()}
         if stale_reasons
@@ -149,6 +200,7 @@ def migrate_legacy_memory(
         observed_commit=observed_commit,
         observed_at=observed_at,
         legacy_id=legacy_id if legacy_id != revision_id else None,
+        supported_by=supported_by,
     )
 
 
@@ -163,12 +215,14 @@ def reconcile(
             result.append(memory)
             continue
         reasons: dict[str, str] = {}
+        paths = _provenance_paths(memory)
         for item in memory.evidence:
             current = evidence.get(item.key)
             if current is None or current.signature is None:
-                reasons[item.key] = current.reason if current and current.reason else "unresolvable"
+                reason = current.reason if current and current.reason else "unresolvable"
+                reasons[item.key] = _with_path(reason, paths.get(item.key, (item.key,)))
             elif current.signature != item.fingerprint:
-                reasons[item.key] = "changed"
+                reasons[item.key] = _with_path("changed", paths.get(item.key, (item.key,)))
         result.append(
             replace(memory, status="stale", stale_reasons=dict(sorted(reasons.items())))
             if reasons
@@ -185,3 +239,28 @@ def reconcile(
         result.append(memory)
         known.add(memory.id)
     return result
+
+
+def _provenance_paths(memory: Memory) -> dict[str, tuple[str, ...]]:
+    adjacency: dict[str, list[str]] = {}
+    for edge in memory.dependencies:
+        adjacency.setdefault(edge.source, []).append(edge.target)
+    paths: dict[str, tuple[str, ...]] = {}
+    queue: list[tuple[str, tuple[str, ...]]] = [
+        (root, (root,)) for root in sorted(memory.supported_by)
+    ]
+    while queue:
+        node, path = queue.pop(0)
+        if node in paths:
+            continue
+        paths[node] = path
+        queue.extend(
+            (target, (*path, target))
+            for target in sorted(adjacency.get(node, []))
+            if target not in paths
+        )
+    return paths
+
+
+def _with_path(reason: str, path: tuple[str, ...]) -> str:
+    return reason if len(path) == 1 else f"{reason} via {' -> '.join(path)}"

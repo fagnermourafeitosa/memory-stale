@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from memory_stale.evidence import EvidenceItem
+from memory_stale.evidence import EvidenceEdge, EvidenceItem
 from memory_stale.lifecycle import Memory, RefEvidence, reconcile
 from memory_stale.memory_store import MemoryStore
 
@@ -116,7 +116,7 @@ def test_legacy_markdown_migrates_to_one_versioned_revision_without_losing_histo
 
     assert len(migrated) == 1
     revision = migrated[0]
-    assert revision.schema_version == 3
+    assert revision.schema_version == 4
     assert revision.legacy_id == "legacy-id"
     assert revision.id != "legacy-id"
     assert revision.claim_id is not None
@@ -127,5 +127,32 @@ def test_legacy_markdown_migrates_to_one_versioned_revision_without_losing_histo
 
     paths = list(store.directory.glob("*.md"))
     assert [path.name for path in paths] == [f"{revision.id}.md"]
-    assert "schema_version: 3" in paths[0].read_text(encoding="utf-8")
+    assert "schema_version: 4" in paths[0].read_text(encoding="utf-8")
     assert store.load_all() == migrated
+
+
+def test_dependency_cycle_has_a_finite_deterministic_invalidation_path() -> None:
+    login = EvidenceItem("symbol", "primary", "auth.py:login", "login-before")
+    policy = EvidenceItem("symbol", "supporting", "policy.py:authentication", "policy-before")
+    memory = Memory(
+        id="cycle",
+        kind="behavior",
+        status="active",
+        claim="Login follows policy.",
+        durability_reason="Policy is reusable evidence.",
+        evidence=(login, policy),
+        supported_by=(login.key,),
+        dependencies=(EvidenceEdge(login.key, policy.key), EvidenceEdge(policy.key, login.key)),
+    )
+
+    reconciled = reconcile(
+        [memory],
+        [],
+        {
+            login.key: RefEvidence("login-before"),
+            policy.key: RefEvidence("policy-after"),
+        },
+    )
+
+    assert reconciled[0].status == "stale"
+    assert reconciled[0].stale_reasons == {policy.key: f"changed via {login.key} -> {policy.key}"}

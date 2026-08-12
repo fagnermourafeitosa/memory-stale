@@ -21,6 +21,7 @@ class Scenario:
     identifier: str
     label: str
     evidence: str
+    dependencies: list[str]
     before: dict[str, str]
     after: dict[str, str]
 
@@ -37,12 +38,15 @@ class EvaluationResult:
     scenarios: list[ScenarioResult]
     unnecessary_revalidation_rate: float
     missed_semantic_change_rate: float
+    graph_scenarios: list[ScenarioResult]
+    graph_unnecessary_revalidation_rate: float
+    graph_missed_semantic_change_rate: float
 
 
 def load_corpus(path: Path) -> list[Scenario]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict) or data.get("version") != 1:
-        raise CorpusError("corpus version must be 1")
+    if not isinstance(data, dict) or data.get("version") not in {1, 2}:
+        raise CorpusError("corpus version must be 1 or 2")
     raw_scenarios = data.get("scenarios")
     if not isinstance(raw_scenarios, list) or not raw_scenarios:
         raise CorpusError("corpus scenarios must be a non-empty list")
@@ -63,7 +67,8 @@ def load_corpus(path: Path) -> list[Scenario]:
             raise CorpusError(f"{identifier}: evidence must be a symbol locator")
         before = _sources(item.get("before"), identifier, "before")
         after = _sources(item.get("after"), identifier, "after")
-        scenarios.append(Scenario(identifier, label, evidence, before, after))
+        dependencies = _dependencies(item.get("depends_on", []), identifier)
+        scenarios.append(Scenario(identifier, label, evidence, dependencies, before, after))
     return scenarios
 
 
@@ -87,6 +92,14 @@ def _sources(value: object, identifier: str, field: str) -> dict[str, str]:
     return sources
 
 
+def _dependencies(value: object, identifier: str) -> list[str]:
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) and ":" in item for item in value
+    ):
+        raise CorpusError(f"{identifier}: depends_on must be symbol locators")
+    return sorted(value)
+
+
 def _write_sources(root: Path, sources: dict[str, str]) -> None:
     for path, content in sources.items():
         target = root / path
@@ -99,6 +112,7 @@ def evaluate_corpus(corpus_path: Path, fixtures_root: Path) -> EvaluationResult:
     scenarios = load_corpus(corpus_path)
     fixtures_root.mkdir(parents=True, exist_ok=True)
     results: list[ScenarioResult] = []
+    graph_results: list[ScenarioResult] = []
     for scenario in scenarios:
         root = fixtures_root / scenario.identifier
         shutil.rmtree(root, ignore_errors=True)
@@ -119,6 +133,38 @@ def evaluate_corpus(corpus_path: Path, fixtures_root: Path) -> EvaluationResult:
             ],
         }
         captured = reconcile([], [capture], {})
+        graph_evidence = [
+            {
+                "type": "symbol",
+                "role": "primary",
+                "locator": scenario.evidence,
+                "fingerprint": baseline_signature,
+            }
+        ]
+        dependencies = []
+        for locator in scenario.dependencies:
+            fingerprint = SymbolIndexer(root).signature(locator)
+            graph_evidence.append(
+                {
+                    "type": "symbol",
+                    "role": "supporting",
+                    "locator": locator,
+                    "fingerprint": fingerprint,
+                }
+            )
+            dependencies.append({"from": f"symbol:{scenario.evidence}", "to": f"symbol:{locator}"})
+        graph_captured = reconcile(
+            [],
+            [
+                {
+                    **capture,
+                    "evidence": graph_evidence,
+                    "supported_by": [f"symbol:{scenario.evidence}"],
+                    "dependencies": dependencies,
+                }
+            ],
+            {},
+        )
         shutil.rmtree(root)
         root.mkdir()
         _write_sources(root, scenario.after)
@@ -128,10 +174,32 @@ def evaluate_corpus(corpus_path: Path, fixtures_root: Path) -> EvaluationResult:
             [],
             {f"symbol:{scenario.evidence}": RefEvidence(current_signature)},
         )
+        graph_evidence_current = {
+            f"symbol:{scenario.evidence}": RefEvidence(current_signature),
+            **{
+                f"symbol:{locator}": RefEvidence(SymbolIndexer(root).signature(locator))
+                for locator in scenario.dependencies
+            },
+        }
+        graph_final = reconcile(graph_captured, [], graph_evidence_current)
         results.append(ScenarioResult(scenario.identifier, scenario.label, final[0].status))
+        graph_results.append(
+            ScenarioResult(scenario.identifier, scenario.label, graph_final[0].status)
+        )
     ordered = sorted(results, key=lambda result: result.identifier)
     preserved = [result for result in ordered if result.label == "preserved"]
     changed = [result for result in ordered if result.label == "changed"]
     unnecessary = sum(result.lifecycle_status == "stale" for result in preserved) / len(preserved)
     missed = sum(result.lifecycle_status == "active" for result in changed) / len(changed)
-    return EvaluationResult(ordered, unnecessary, missed)
+    graph_ordered = sorted(graph_results, key=lambda result: result.identifier)
+    graph_preserved = [result for result in graph_ordered if result.label == "preserved"]
+    graph_changed = [result for result in graph_ordered if result.label == "changed"]
+    return EvaluationResult(
+        ordered,
+        unnecessary,
+        missed,
+        graph_ordered,
+        sum(result.lifecycle_status == "stale" for result in graph_preserved)
+        / len(graph_preserved),
+        sum(result.lifecycle_status == "active" for result in graph_changed) / len(graph_changed),
+    )

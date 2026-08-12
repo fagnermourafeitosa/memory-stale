@@ -192,7 +192,7 @@ Memories are plain Markdown with structured front matter:
 ```
 
 Each file is an immutable evidence revision. It records a stable `claim_id`, a
-fingerprint-derived `revision_id`, `schema_version: 3`, and the observed Git
+fingerprint-derived `revision_id`, `schema_version: 4`, and the observed Git
 commit and time when available. Re-capturing the same claim after its evidence
 changes preserves the earlier revision and restores one new `active` revision
 to normal context. Repeating an identical evidence revision is idempotent.
@@ -291,6 +291,26 @@ raw file-hash fallback. Supporting items may be intact when captured, but any
 recorded item that changes, disappears, or becomes unresolvable makes the
 revision stale with an item-specific reason.
 
+## Evidence dependency graph
+
+Evidence can also declare explicit nested `depends_on` relationships. This is a
+local provenance graph: the current Codex instance declares the relationships,
+while the engine validates locators, fingerprints nodes, and traverses them in
+canonical order. It does not infer a call graph, use embeddings, or act as
+GraphRAG.
+
+For example, a changed `auth.py:login` can be primary evidence that depends on
+an authentication policy, which itself depends on an MFA policy. A later change
+to the MFA policy makes the login revision stale even when `login` is untouched.
+The recorded stale reason includes a deterministic path from the claim's direct
+evidence to the affected node. Cycles are finite and deterministic; broken edges
+or unresolved nodes reject the entire capture.
+
+The Markdown record persists graph nodes, `supported_by` roots, and
+`depends_on` edges. The HTML report shows those edges and invalidation paths.
+The evaluation corpus compares the flat and graph outcomes separately so that
+the added coverage is visible alongside unnecessary revalidation.
+
 ## Symbol-level staleness
 
 Memory Stale uses tree-sitter to resolve symbols and create canonical structural
@@ -377,6 +397,10 @@ implemented and covered by integration or end-to-end tests:
 - Markdown memory store and `active → stale` evidence-revalidation lifecycle;
 - versioned claim/evidence revisions with deterministic legacy migration and
   Git observation metadata;
+- typed primary and supporting evidence for symbols, tests, configuration, and
+  schema nodes, with canonical fingerprints and item-level stale reasons;
+- explicit local evidence dependency graphs with deterministic transitive
+  invalidation paths, finite cycle handling, and flat-versus-graph corpus metrics;
 - labeled evaluation corpus and deterministic revalidation trade-off baseline
   across every supported grammar;
 - structural indexing for all seven v1 languages;
