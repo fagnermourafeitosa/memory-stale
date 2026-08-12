@@ -148,6 +148,8 @@ def _run_lifecycle(
     indexer = SymbolIndexer(repository)
     evidence: dict[str, RefEvidence] = {}
     for memory in memories:
+        if memory.status != "active":
+            continue
         for ref, expected in memory.signatures.items():
             path_text = ref.rpartition(":")[0]
             if path_text not in changed_paths:

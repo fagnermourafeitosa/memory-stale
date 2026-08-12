@@ -343,6 +343,58 @@ def test_stop_marks_memory_stale_when_task_changes_its_symbol(tmp_path: Path) ->
     assert store.load_all()[0].stale_reasons == {"service.py:compute": "changed"}
 
 
+def test_read_only_turn_preserves_active_memory_for_preexisting_dirty_symbol(
+    tmp_path: Path,
+) -> None:
+    repository = _create_repository(tmp_path)
+    source = repository / "service.py"
+    source.write_text("def compute():\n    return 1\n", encoding="utf-8")
+    _run_git(repository, "add", "service.py")
+    _run_git(repository, "commit", "--quiet", "-m", "add service")
+    source.write_text("def compute():\n    return 2\n", encoding="utf-8")
+    signature = SymbolIndexer(repository).signature("service.py:compute")
+    store = MemoryStore(repository)
+    store.write_all(
+        [
+            Memory(
+                "memory-old",
+                "behavior",
+                "stale",
+                "Compute returns one.",
+                "Historical behavior.",
+                {"service.py:compute": "old-signature"},
+                {"service.py:compute": "changed"},
+            ),
+            Memory(
+                "memory-1",
+                "behavior",
+                "active",
+                "Compute returns two.",
+                "Callers rely on it.",
+                {"service.py:compute": signature},
+            ),
+        ]
+    )
+
+    prompt = _run_hook(
+        "UserPromptSubmit",
+        repository,
+        {"turn_id": "turn-read-only", "cwd": str(repository), "prompt": "service.py:compute"},
+    )
+    stopped = _run_hook("Stop", repository, {"turn_id": "turn-read-only", "cwd": str(repository)})
+
+    assert prompt.returncode == 0
+    assert (
+        "Compute returns two."
+        in json.loads(prompt.stdout)["hookSpecificOutput"]["additionalContext"]
+    )
+    assert stopped.returncode == 0
+    memories = {memory.id: memory for memory in store.load_all()}
+    assert memories["memory-old"].status == "stale"
+    assert memories["memory-1"].status == "active"
+    assert memories["memory-1"].stale_reasons is None
+
+
 def test_prompt_hook_injects_only_relevant_active_memory(tmp_path: Path) -> None:
     repository = _create_repository(tmp_path)
     MemoryStore(repository).write_all(
