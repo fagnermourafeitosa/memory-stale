@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import TextIO, cast
 
+from memory_stale.dream import dream
 from memory_stale.hook_runtime import _atomic_json_write, _repository_root, _snapshot
 from memory_stale.symbol_index import SymbolIndexer
 
@@ -116,12 +117,33 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
                         },
                         "additionalProperties": False,
                     },
-                }
+                },
+                {
+                    "name": "memory.dream",
+                    "description": "Audit stale and broken project memory.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                },
             ]
         }
     elif method == "tools/call":
         params = request.get("params")
-        if not isinstance(params, dict) or params.get("name") != "memory.capture":
+        if isinstance(params, dict) and params.get("name") == "memory.dream":
+            summary = dream(_repository_root(cwd))
+            result = _tool_result(
+                json.dumps(
+                    {
+                        "audited": summary.audited,
+                        "marked_stale": summary.marked_stale,
+                        "errors": summary.errors,
+                    },
+                    sort_keys=True,
+                )
+            )
+        elif not isinstance(params, dict) or params.get("name") != "memory.capture":
             result = _tool_result("Unknown tool.", error=True)
         else:
             arguments = params.get("arguments")

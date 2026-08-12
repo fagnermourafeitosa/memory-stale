@@ -23,6 +23,9 @@ Adicionar operação explícita da skill: `/memory-stale dream`.
 
 ## Testing Decisions
 
+- Seam confirmado pela autorização contínua: a operação pública `dream`
+  recebe o repositório, audita o store real e devolve resumo estruturado; a
+  skill orienta a mesma instância Codex a usar essa operação e `memory.capture`.
 - Simular corpus misto e verificar escopo limitado de auditoria.
 - Testar resumo e propagação não bloqueante de erros.
 
