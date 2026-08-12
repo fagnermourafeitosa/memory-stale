@@ -253,18 +253,27 @@ observes both persisted Markdown status and later `UserPromptSubmit` context.
 It does not change capture, reconciliation, or retrieval behavior; it measures
 their resulting availability decision.
 
-Its checked-in result,
-`evaluator/results/2026-08-12-repository-lifecycle-evaluation.yaml`, records the
-complete confusion matrix before rates: true stale (`changed → stale`), false
-stale (`preserved → stale`), missed semantic change (`changed → active`), and
-true active (`preserved → active`). It also records stale recall, stale
-precision, specificity, unnecessary-revalidation rate,
-missed-semantic-change rate, and the aggregate corpus score. The current matrix
-is 38 true stale, 26 false stale, 12 missed changes, and 24 true active: a 62%
-aggregate corpus score, 76% stale recall, and 48% specificity. The unweighted
-macro-family score is 58.3%. Per-family matrices keep repeated grammar variants
-from hiding the intentionally difficult conservative-revalidation and
-incomplete-provenance families.
+The [checked-in result](evaluator/results/2026-08-12-repository-lifecycle-evaluation.yaml)
+records every trial, the complete confusion matrix, per-family matrices, and
+Wilson intervals. The [immutable corpus](evaluator/corpus/repository-lifecycle-corpus.yaml)
+contains the independently labeled input samples and must not be tuned to raise
+the result.
+
+| Metric | Current result |
+| --- | ---: |
+| True stale / false stale / missed change / true active | `38 / 8 / 12 / 42` |
+| Aggregate accuracy | 80.0% |
+| Stale recall | 76.0% |
+| Stale precision | 82.6% |
+| Specificity | 84.0% |
+| Unnecessary revalidation rate | 16.0% |
+| Missed semantic change rate | 24.0% |
+| Macro-family accuracy | 72.2% |
+
+These figures are produced by the real hook/MCP lifecycle in 100 temporary Git
+repositories. Per-family matrices keep repeated grammar variants from hiding
+the intentionally difficult conservative-revalidation and incomplete-provenance
+families.
 
 These values are regression measurements for this curated corpus, not an
 estimate of accuracy on all repositories. Wilson 95% intervals are retained as
@@ -381,12 +390,14 @@ the added coverage is visible alongside unnecessary revalidation.
 
 ## Symbol-level staleness
 
-Memory Stale uses tree-sitter to resolve symbols and create canonical structural
-signatures. Signatures include syntax structure and real tokens while ignoring
-whitespace and comments.
+Memory Stale uses tree-sitter to resolve symbols and create canonical,
+versioned signatures. Signatures include syntax structure and real tokens while
+ignoring whitespace and comments, plus a small fail-closed set of locally
+provable semantic normalizations.
 
-- Logic, identifiers, literals, parameters, or structural changes make a memory
-  stale and require its claim to be revalidated.
+- Logic, public identifiers, parameters, changed literals, or structural changes
+  make a memory stale and require its claim to be revalidated. Strictly local
+  temporary-variable renames and allowlisted literal rewrites do not.
 - Deleting or renaming a symbol makes its recorded evidence stale.
 - Deleting its file makes its recorded evidence stale.
 - Formatting and comment-only changes do not make it stale.
@@ -394,6 +405,10 @@ whitespace and comments.
 V1 supports TypeScript, JavaScript, Python, Go, Java, Kotlin, and Rust. There is
 deliberately no file-level fallback. Unsupported languages and unresolved syntax
 are rejected instead of producing imprecise evidence.
+
+New symbol fingerprints carry a `v2:` prefix. Existing unversioned fingerprints
+continue to use the prior structural representation until their memory is
+recaptured, so an upgrade alone does not make legacy evidence stale.
 
 Every typed evidence item in a new capture must resolve in the final state. At
 least one `primary` item must have changed during the active task; supporting

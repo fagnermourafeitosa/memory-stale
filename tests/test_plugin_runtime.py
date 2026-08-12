@@ -344,6 +344,41 @@ def test_stop_marks_memory_stale_when_task_changes_its_symbol(tmp_path: Path) ->
     assert store.load_all()[0].stale_reasons == {"symbol:service.py:compute": "changed"}
 
 
+def test_stop_preserves_legacy_structural_fingerprints_until_real_change(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path)
+    source = repository / "service.py"
+    source.write_text("def compute():\n    return 1\n", encoding="utf-8")
+    _run_git(repository, "add", "service.py")
+    _run_git(repository, "commit", "--quiet", "-m", "add service")
+    indexer = SymbolIndexer(repository)
+    legacy_signature = indexer.legacy_signature("service.py:compute")
+    store = MemoryStore(repository)
+    store.write_all(
+        [
+            Memory(
+                "memory-legacy",
+                "behavior",
+                "active",
+                "Compute returns one.",
+                "Callers rely on it.",
+                (EvidenceItem("symbol", "primary", "service.py:compute", legacy_signature),),
+            )
+        ]
+    )
+
+    _run_hook("UserPromptSubmit", repository, {"turn_id": "turn-1", "cwd": str(repository)})
+    source.write_text("# note\ndef compute():\n    return 1\n", encoding="utf-8")
+    _run_hook("Stop", repository, {"turn_id": "turn-1", "cwd": str(repository)})
+
+    assert store.load_all()[0].status == "active"
+
+    _run_hook("UserPromptSubmit", repository, {"turn_id": "turn-2", "cwd": str(repository)})
+    source.write_text("def compute():\n    return 2\n", encoding="utf-8")
+    _run_hook("Stop", repository, {"turn_id": "turn-2", "cwd": str(repository)})
+
+    assert store.load_all()[0].status == "stale"
+
+
 def test_read_only_turn_preserves_active_memory_for_preexisting_dirty_symbol(
     tmp_path: Path,
 ) -> None:

@@ -5,9 +5,9 @@
   "sample_count": 100,
   "matrix": {
     "true_stale": 38,
-    "false_stale": 26,
+    "false_stale": 8,
     "missed_change": 12,
-    "true_active": 24
+    "true_active": 42
   },
   "metrics": {
     "stale_recall": {
@@ -21,29 +21,29 @@
     },
     "stale_precision": {
       "count": 38,
-      "denominator": 64,
-      "rate": 0.59375,
+      "denominator": 46,
+      "rate": 0.8260869565217391,
       "wilson_95": [
-        0.4714520812860451,
-        0.7054309075028039
+        0.692766462836215,
+        0.9091420829775368
       ]
     },
     "specificity": {
-      "count": 24,
+      "count": 42,
       "denominator": 50,
-      "rate": 0.48,
+      "rate": 0.84,
       "wilson_95": [
-        0.34797135286578046,
-        0.6148825510995539
+        0.7148578393696501,
+        0.916625793219666
       ]
     },
     "unnecessary_revalidation_rate": {
-      "count": 26,
+      "count": 8,
       "denominator": 50,
-      "rate": 0.52,
+      "rate": 0.16,
       "wilson_95": [
-        0.38511744890044614,
-        0.6520286471342196
+        0.08337420678033404,
+        0.2851421606303499
       ]
     },
     "missed_semantic_change_rate": {
@@ -56,12 +56,12 @@
       ]
     },
     "overall_accuracy": {
-      "count": 62,
+      "count": 80,
       "denominator": 100,
-      "rate": 0.62,
+      "rate": 0.8,
       "wilson_95": [
-        0.5220975529551107,
-        0.7090240074752127
+        0.7111708344068411,
+        0.8666330666689676
       ]
     }
   },
@@ -71,17 +71,17 @@
       "sample_count": 12,
       "matrix": {
         "true_stale": 0,
-        "false_stale": 12,
+        "false_stale": 8,
         "missed_change": 0,
-        "true_active": 0
+        "true_active": 4
       },
       "accuracy": {
-        "count": 0,
+        "count": 4,
         "denominator": 12,
-        "rate": 0,
+        "rate": 0.3333333333333333,
         "wilson_95": [
-          2.7755575615628914e-17,
-          0.24249400665524085
+          0.13812009109121315,
+          0.6093779111272004
         ]
       }
     },
@@ -147,17 +147,17 @@
       "sample_count": 28,
       "matrix": {
         "true_stale": 0,
-        "false_stale": 14,
+        "false_stale": 0,
         "missed_change": 0,
-        "true_active": 14
+        "true_active": 28
       },
       "accuracy": {
-        "count": 14,
+        "count": 28,
         "denominator": 28,
-        "rate": 0.5,
+        "rate": 1,
         "wilson_95": [
-          0.32633127457293465,
-          0.6736687254270654
+          0.8793566952341543,
+          0.9999999999999998
         ]
       }
     },
@@ -181,7 +181,7 @@
       }
     }
   ],
-  "macro_family_accuracy": 0.5833333333333334,
+  "macro_family_accuracy": 0.7222222222222222,
   "operational_outcomes": [],
   "trials": [
     {
@@ -209,8 +209,8 @@
       "id": "go-equivalent-expression",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "go-formatting-only",
@@ -230,8 +230,8 @@
       "id": "go-local-variable-rename",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "go-return-value-change",
@@ -419,8 +419,8 @@
       "id": "java-equivalent-expression",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "java-formatting-only",
@@ -440,8 +440,8 @@
       "id": "java-local-variable-rename",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "java-return-value-change",
@@ -475,8 +475,8 @@
       "id": "javascript-equivalent-expression",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "javascript-formatting-only",
@@ -496,8 +496,8 @@
       "id": "javascript-local-variable-rename",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "javascript-return-value-change",
@@ -531,8 +531,8 @@
       "id": "kotlin-equivalent-expression",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "kotlin-formatting-only",
@@ -552,8 +552,8 @@
       "id": "kotlin-local-variable-rename",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "kotlin-return-value-change",
@@ -580,8 +580,8 @@
       "id": "python-conservative-constant-conditional",
       "family": "conservative-false-stale",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "python-conservative-defined-logging",
@@ -608,8 +608,8 @@
       "id": "python-conservative-double-negation",
       "family": "conservative-false-stale",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "python-conservative-harmless-guard",
@@ -629,15 +629,15 @@
       "id": "python-conservative-neutral-arithmetic",
       "family": "conservative-false-stale",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "python-conservative-single-item-index",
       "family": "conservative-false-stale",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "python-conservative-temporary-variable",
@@ -671,8 +671,8 @@
       "id": "python-equivalent-expression",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "python-formatting-only",
@@ -692,8 +692,8 @@
       "id": "python-local-variable-rename",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "python-return-value-change",
@@ -727,8 +727,8 @@
       "id": "rust-equivalent-expression",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "rust-formatting-only",
@@ -748,8 +748,8 @@
       "id": "rust-local-variable-rename",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "rust-return-value-change",
@@ -853,8 +853,8 @@
       "id": "typescript-equivalent-expression",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "typescript-formatting-only",
@@ -874,8 +874,8 @@
       "id": "typescript-local-variable-rename",
       "family": "preserving",
       "label": "preserved",
-      "lifecycle_status": "stale",
-      "retrieval_status": "stale"
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
     },
     {
       "id": "typescript-return-value-change",

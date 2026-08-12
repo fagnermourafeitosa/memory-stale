@@ -110,7 +110,9 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
     assert capture["claim"] == "Login validates MFA before creating a session."
     assert capture["evidence"][0]["locator"] == "auth.py:login"
     assert capture["durability_reason"] == "Future authentication changes must preserve MFA."
-    assert len(capture["evidence"][0]["fingerprint"]) == 64
+    fingerprint = capture["evidence"][0]["fingerprint"]
+    assert fingerprint.startswith("v2:")
+    assert len(fingerprint) == 67
     assert not (repository / ".agents" / "skills" / ".agent-memory" / "memories").exists()
 
     environment = os.environ.copy()

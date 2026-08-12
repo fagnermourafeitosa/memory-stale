@@ -11,7 +11,7 @@ from typing import cast
 import tomli
 import yaml
 
-from memory_stale.symbol_index import SymbolIndexer, SymbolIndexError
+from memory_stale.symbol_index import SIGNATURE_VERSION, SymbolIndexer, SymbolIndexError
 
 EVIDENCE_TYPES = frozenset({"symbol", "config", "schema", "test"})
 EVIDENCE_ROLES = frozenset({"primary", "supporting"})
@@ -162,6 +162,14 @@ def resolve_item(repository: Path, item_type: str, role: str, locator: str) -> E
 
 def resolve_stored_item(repository: Path, item: EvidenceItem) -> str:
     """Resolve persisted evidence without changing its role or identity."""
+    if item.type in {"symbol", "test"}:
+        indexer = SymbolIndexer(repository)
+        try:
+            if item.fingerprint.startswith(f"{SIGNATURE_VERSION}:"):
+                return indexer.signature(item.locator)
+            return indexer.legacy_signature(item.locator)
+        except SymbolIndexError as error:
+            raise EvidenceError(str(error)) from error
     return resolve_item(repository, item.type, item.role, item.locator).fingerprint
 
 

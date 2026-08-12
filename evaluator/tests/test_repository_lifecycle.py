@@ -250,22 +250,22 @@ def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path
     assert result.sample_count == 100
     assert result.matrix == ConfusionMatrix(
         true_stale=38,
-        false_stale=26,
+        false_stale=8,
         missed_change=12,
-        true_active=24,
+        true_active=42,
     )
     assert [
         (family.family, family.sample_count, family.matrix, family.accuracy.rate)
         for family in result.families
     ] == [
-        ("conservative-false-stale", 12, ConfusionMatrix(0, 12, 0, 0), 0.0),
+        ("conservative-false-stale", 12, ConfusionMatrix(0, 8, 0, 4), 1 / 3),
         ("direct-local", 28, ConfusionMatrix(28, 0, 0, 0), 1.0),
         ("evidence-graph", 10, ConfusionMatrix(6, 0, 0, 4), 1.0),
         ("incomplete-provenance", 12, ConfusionMatrix(0, 0, 12, 0), 0.0),
-        ("preserving", 28, ConfusionMatrix(0, 14, 0, 14), 0.5),
+        ("preserving", 28, ConfusionMatrix(0, 0, 0, 28), 1.0),
         ("repository-shape", 10, ConfusionMatrix(4, 0, 0, 6), 1.0),
     ]
-    assert result.macro_family_accuracy == pytest.approx(7 / 12)
+    assert result.macro_family_accuracy == pytest.approx(13 / 18)
     assert_repository_baseline(
         result,
         evaluator_root / "results" / "2026-08-12-repository-lifecycle-evaluation.yaml",
