@@ -1,72 +1,72 @@
-# 16 — Evidence sets tipados
+# 16 — Typed evidence sets
 
 ## Problem Statement
 
-Uma claim pode depender de mais de um símbolo ou de estado estruturado fora do
-símbolo alterado. O contrato atual permite várias refs, mas exige que todas tenham
-mudado no turno, impedindo registrar dependências de suporte intactas. Ele também
-trata toda evidência como símbolo de código, sem representar explicitamente
-configuração, schemas ou testes. Isso mantém claims `active` quando uma fonte de
-suporte não registrada muda.
+A claim may depend on more than one symbol or on structured state outside the
+changed symbol. The current contract permits multiple refs but requires all of
+them to have changed during the turn, preventing intact supporting dependencies
+from being recorded. It also treats all evidence as a code symbol without
+explicitly representing configuration, schemas, or tests. Claims therefore
+remain `active` when an unrecorded supporting source changes.
 
 ## Solution
 
-Substituir o conjunto implícito de refs por um evidence set explícito e tipado em
-cada revisão. Evidências terão locator, fingerprint, tipo e papel. Pelo menos uma
-evidência `primary` deverá ter mudado durante o turno; evidências `supporting`
-precisarão resolver e serão fingerprintadas mesmo quando não tiverem mudado. A
-revisão exigirá revalidação quando qualquer item registrado divergir.
+Replace the implicit ref collection with an explicit, typed evidence set in each
+revision. Evidence has a locator, fingerprint, type, and role. At least one
+`primary` item must have changed during the turn; `supporting` evidence must
+resolve and is fingerprinted even when unchanged. The revision requires
+revalidation whenever any recorded item diverges.
 
 ## User Stories
 
-1. Como Codex, quero ancorar uma claim no símbolo alterado e em símbolos de suporte intactos, para que mudanças futuras em qualquer suporte sejam detectadas.
-2. Como usuário, quero que uma mudança em configuração registrada torne a revisão stale, para que comportamento controlado fora do método não permaneça implícito.
-3. Como usuário, quero registrar um schema estruturado como evidência, para que mudanças de contrato de dados exijam revalidação.
-4. Como mantenedor, quero distinguir evidência primária e de suporte, para que a regra de elegibilidade da captura continue rigorosa sem exigir que tudo mude no turno.
-5. Como auditor, quero ver tipo, papel, locator e fingerprint de cada evidência, para que a provenance seja legível.
-6. Como usuário, quero que testes relevantes possam ser evidência explícita, para que a remoção ou alteração do cenário de proteção exija revalidação.
-7. Como mantenedor, quero rejeitar formatos e locators não suportados, para que não surja um fallback impreciso por arquivo.
-8. Como usuário de memórias existentes, quero que refs legadas sejam migradas para evidências primárias de símbolo, para que o histórico continue utilizável.
-9. Como Codex, quero receber erros por item inválido, para que uma evidence set parcialmente resolvida nunca seja capturada como válida.
+1. As Codex, I want to anchor a claim to the changed symbol and intact supporting symbols, so that future changes to any support are detected.
+2. As a user, I want a registered configuration change to make a revision stale, so that behavior controlled outside a method does not remain implicit.
+3. As a user, I want to register a structured schema as evidence, so that data-contract changes require revalidation.
+4. As a maintainer, I want to distinguish primary and supporting evidence, so that capture eligibility remains strict without requiring everything to change during the turn.
+5. As an auditor, I want to see each item's type, role, locator, and fingerprint, so that provenance is readable.
+6. As a user, I want relevant tests to be explicit evidence, so that removing or changing a protective scenario requires revalidation.
+7. As a maintainer, I want unsupported formats and locators rejected, so that no imprecise file-level fallback appears.
+8. As an existing user, I want legacy refs migrated to primary symbol evidence, so that history remains usable.
+9. As Codex, I want per-item errors, so that a partially resolved evidence set is never captured as valid.
 
 ## Implementation Decisions
 
-- Cada revisão conterá um conjunto canônico de `EvidenceItem` com `type`, `role`, `locator` e `fingerprint`.
-- Os papéis serão `primary` e `supporting`. Pelo menos um item `primary` deverá ter mudado no turno ativo; itens `supporting` não precisarão ter mudado.
-- Todos os itens deverão resolver no estado final antes da captura. A captura será rejeitada atomicamente se qualquer item for inválido.
-- Tipos suportados serão `symbol`, `config`, `schema` e `test`.
-- `symbol` continuará usando resolução tree-sitter e assinatura estrutural do símbolo, sem fallback por arquivo.
-- `test` resolverá uma função ou método de teste como símbolo estrutural, mas manterá tipo próprio para explicar seu papel de provenance.
-- `config` apontará para um nó exato em documento JSON, YAML ou TOML por locator estruturado. O fingerprint será calculado sobre a representação canônica do nó, ignorando formatação e comentários.
-- `schema` apontará para um nó exato de JSON Schema ou OpenAPI em JSON ou YAML. O fingerprint será calculado sobre a representação canônica do nó selecionado.
-- Documento inteiro, formato não suportado, parse inválido ou locator inexistente serão rejeitados; não haverá fallback para hash bruto do arquivo.
-- Mudança, remoção ou impossibilidade de resolver qualquer item registrado tornará a revisão `stale`, com razão por evidence item.
-- A identidade da claim usará somente o escopo das evidências `primary`; adicionar ou trocar suporte produzirá nova evidence revision da mesma claim quando o escopo primário permanecer igual.
-- A ordem fornecida dos itens não afetará IDs, comparação nem resultado.
-- O schema legado de refs será migrado para itens `symbol` com papel `primary`.
-- Skill, MCP, Markdown, Dream e relatório usarão o mesmo modelo tipado e mostrarão razões acionáveis por item.
+- Each revision contains a canonical set of `EvidenceItem` values with `type`, `role`, `locator`, and `fingerprint`.
+- Roles are `primary` and `supporting`. At least one `primary` item must have changed during the active turn; `supporting` items need not have changed.
+- Every item must resolve in the final state before capture. Capture is rejected atomically if any item is invalid.
+- Supported types are `symbol`, `config`, `schema`, and `test`.
+- `symbol` continues to use tree-sitter resolution and the symbol's structural signature without a file fallback.
+- `test` resolves a test function or method as a structural symbol but retains its own type to explain its provenance role.
+- `config` points to an exact node in a JSON, YAML, or TOML document through a structured locator. Its fingerprint covers the node's canonical representation while ignoring formatting and comments.
+- `schema` points to an exact JSON Schema or OpenAPI node in JSON or YAML. Its fingerprint covers the selected node's canonical representation.
+- Whole-document locators, unsupported formats, invalid parsing, and missing locators are rejected; there is no fallback to a raw file hash.
+- A change, removal, or resolution failure for any recorded item makes the revision `stale`, with a reason for that evidence item.
+- Claim identity uses only the scope of `primary` evidence; adding or replacing support creates a new evidence revision of the same claim while primary scope remains unchanged.
+- Input order does not affect IDs, comparison, or results.
+- The legacy refs schema migrates to `symbol` items with the `primary` role.
+- The skill, MCP server, Markdown store, Dream, and report use the same typed model and show actionable reasons per item.
 
 ## Testing Decisions
 
-- Seam mais alto confirmado: chamada MCP real em repositório Git temporário, seguida por hooks ou Dream, persistência Markdown e observação do status final.
-- Primeiro slice comportamental: alterar o símbolo primário, capturar uma claim com um símbolo de suporte intacto, mudar somente o suporte em turno posterior e observar a revisão `stale`.
-- O teste inicial deverá falhar sob o contrato atual porque uma ref intacta não pode participar da captura.
-- Slices seguintes cobrirão configuração, schema e teste com alterações semânticas e mudanças apenas de formatação/comentários quando o formato permitir.
-- Cada tipo terá fixtures válidos, locator inexistente, parse inválido, remoção e canonicalização independente.
-- Testes confirmarão rejeição atômica de evidence sets parcialmente inválidos e razões de staleness por item.
-- A migração de refs legadas será exercitada através do store público e do fluxo instalado.
-- Os sete indexadores continuarão usando fixtures reais para itens `symbol` e `test` suportados.
+- Highest seam confirmed: a real MCP call in a temporary Git repository followed by hooks or Dream, Markdown persistence, and observation of final status.
+- First behavioral slice: change the primary symbol, capture a claim with an intact supporting symbol, change only the support in a later turn, and observe the revision become `stale`.
+- The first test must fail under the current contract because an unchanged ref cannot participate in capture.
+- Subsequent slices cover configuration, schema, and test evidence with semantic changes and formatting-only or comment-only changes when the format permits.
+- Each type has fixtures for valid evidence, missing locator, invalid parsing, removal, and independent canonicalization.
+- Tests confirm atomic rejection of partially invalid evidence sets and staleness reasons per item.
+- Legacy-ref migration is exercised through the public store and installed flow.
+- All seven indexers continue to use real fixtures for supported `symbol` and `test` items.
 
 ## Out of Scope
 
-- Inferir automaticamente quais evidências sustentam uma claim.
-- Criar ou percorrer relações `depends_on` entre evidence items.
-- Suportar hashes de arquivo inteiro, regiões arbitrárias de texto ou linguagens não suportadas.
-- Interpretar semanticamente o conteúdo de uma configuração ou schema.
-- Adicionar SQL, banco vetorial, serviço remoto ou outro LLM.
-- Usar evidence types para ranking semântico de retrieval.
+- Automatically inferring which evidence supports a claim.
+- Creating or traversing `depends_on` relationships between evidence items.
+- Supporting whole-file hashes, arbitrary text regions, or unsupported languages.
+- Semantically interpreting configuration or schema content.
+- Adding SQL, a vector database, a remote service, or another LLM.
+- Using evidence types for semantic retrieval ranking.
 
 ## Further Notes
 
-- Esta spec depende do schema revisionado da spec 14 e deve ser avaliada com o corpus da spec 15.
-- Evidence sets planos entregam invalidação por múltiplas fontes antes do custo de um grafo.
+- This spec depends on the revisioned schema from spec 14 and is evaluated with the corpus from spec 15.
+- Flat evidence sets provide multi-source invalidation before the cost of a graph.

@@ -1,59 +1,47 @@
-# 01 — Runtime do plugin e hooks
+# 01 — Plugin runtime and hooks
 
 ## Problem Statement
 
-O plugin precisa receber contexto antes da tarefa e concluir manutenção depois dela sem depender de ação humana.
+The plugin must provide context before a task and finish maintenance afterward without depending on human action.
 
 ## Solution
 
-Empacotar manifesto, skill e handlers dos hooks `UserPromptSubmit`,
-`PostToolUse` e `Stop`, deixando a inclusão do MCP para a spec 02, quando seu
-servidor e contrato existirem de fato.
+Package the manifest, skill, and handlers for the `UserPromptSubmit`,
+`PostToolUse`, and `Stop` hooks, leaving MCP inclusion to spec 02, when its
+server and contract actually exist.
 
 ## User Stories
 
-1. Como usuário, quero instalar e confiar no plugin uma vez para que hooks operem no ciclo do Codex.
-2. Como Codex, quero receber contexto antes de agir.
-3. Como mantenedor, quero mudanças reais da tarefa disponíveis no fim do turno.
+1. As a user, I want to install and trust the plugin once, so that hooks operate throughout the Codex lifecycle.
+2. As Codex, I want to receive context before acting.
+3. As a maintainer, I want the task's real changes available at the end of the turn.
 
 ## Implementation Decisions
 
-- O repositório é a raiz instalável do plugin e contém manifesto
-  `.codex-plugin/plugin.json`, skill em `skills/` e configuração descoberta por
-  padrão em `hooks/hooks.json`.
-- Cada hook é um comando JSON: recebe um objeto por `stdin`, escreve somente o
-  JSON aceito pelo evento em `stdout` e usa o diretório de trabalho informado
-  pelo Codex como raiz do repositório.
-- Os comandos dos hooks executam Python por `uv`, em modo frozen e sem sync
-  implícito; ambiente e cache do plugin ficam sob o diretório gravável
-  `PLUGIN_DATA`, nunca no cache global do usuário.
-- `UserPromptSubmit` pede contexto ao módulo de retrieval.
-- `PostToolUse` acrescenta operações de escrita ao ledger da tarefa.
-- `Stop` combina ledger com diff contra snapshot inicial e chama o motor de lifecycle.
-- Snapshot do working tree é criado no início da tarefa; mudanças pré-existentes não entram no ledger da tarefa.
-- Hooks são adaptadores finos e tolerantes a erro.
-- Até os motores das specs 04 e 05 existirem, suas fronteiras retornam resultado
-  vazio sem inventar política de memória; a integração posterior substitui
-  somente essas fronteiras, sem alterar o contrato dos hooks.
-- Estado efêmero por `turn_id` fica fora do store durável e suas escritas são
-  atômicas.
+- The repository is the plugin's installable root and contains the `.codex-plugin/plugin.json` manifest, the skill under `skills/`, and configuration discovered by default at `hooks/hooks.json`.
+- Each hook is a JSON command: it receives an object through `stdin`, writes only the JSON accepted by the event to `stdout`, and uses the working directory supplied by Codex as the repository root.
+- Hook commands run Python through `uv` in frozen mode without implicit sync; the plugin environment and cache live under the writable `PLUGIN_DATA` directory, never in the user's global cache.
+- `UserPromptSubmit` requests context from the retrieval module.
+- `PostToolUse` appends write operations to the task ledger.
+- `Stop` combines the ledger with a diff against the initial snapshot and calls the lifecycle engine.
+- A working-tree snapshot is created at the beginning of the task; pre-existing changes do not enter the task ledger.
+- Hooks are thin, error-tolerant adapters.
+- Until the engines from specs 04 and 05 exist, their boundaries return empty results without inventing memory policy; later integration replaces only those boundaries without changing the hook contract.
+- Ephemeral state keyed by `turn_id` remains outside the durable store, and its writes are atomic.
 
 ## Testing Decisions
 
-- Seam confirmado: executar os comandos reais declarados em
-  `hooks/hooks.json`, enviando payload JSON por `stdin` dentro de repositórios
-  Git temporários e verificando `stdout`, exit code e estado local observável.
-- A cobertura instrumenta os subprocessos desses comandos e combina seus dados,
-  preservando o seam público em vez de duplicar testes em funções internas.
-- Validar o manifesto com o validador de plugins usado pelo Codex.
-- Simular payload JSON de cada hook e verificar as saídas públicas do adaptador.
-- Validar que workspace sujo anterior à tarefa não aparece como mudança da tarefa.
-- Validar que erro interno não impede retorno normal do hook.
+- Confirmed seam: execute the real commands declared in `hooks/hooks.json`, send JSON payloads through `stdin` inside temporary Git repositories, and verify `stdout`, exit code, and observable local state.
+- Coverage instruments the subprocesses for those commands and combines their data, preserving the public seam instead of duplicating tests against internal functions.
+- Validate the manifest with the plugin validator used by Codex.
+- Simulate each hook's JSON payload and verify the adapter's public outputs.
+- Verify that a dirty workspace that predates the task does not appear as a task change.
+- Verify that an internal error does not prevent the hook from returning normally.
 
 ## Out of Scope
 
-- Ferramenta e configuração MCP, política de memória, parsing de símbolos e persistência.
+- MCP tooling and configuration, memory policy, symbol parsing, and persistence.
 
 ## Further Notes
 
-- A ativação por projeto será definida junto à configuração em 07.
+- Per-project activation will be defined with configuration in spec 07.

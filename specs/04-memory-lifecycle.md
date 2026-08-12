@@ -1,39 +1,37 @@
-# 04 — Store e lifecycle de memória
+# 04 — Memory store and lifecycle
 
 ## Problem Statement
 
-Claims capturados precisam virar memória auditável, e memórias ligadas a código mudado precisam se tornar stale de forma determinística.
+Captured claims must become auditable memory, and memories tied to changed code must become stale deterministically.
 
 ## Solution
 
-Implementar motor puro que recebe memórias, ledger e captures e devolve operações persistíveis.
+Implement a pure engine that receives memories, a ledger, and captures and returns persistable operations.
 
 ## User Stories
 
-1. Como equipe, quero memórias versionáveis junto ao projeto.
-2. Como usuário, quero saber por que uma memória ficou stale.
-3. Como Codex, quero criar uma memória com várias refs alteradas na mesma tarefa.
+1. As a team, I want project memory that can be versioned with the project.
+2. As a user, I want to know why a memory became stale.
+3. As Codex, I want to create a memory with multiple refs changed during the same task.
 
 ## Implementation Decisions
 
-- Memórias: `<repo>/.agents/skills/.agent-memory/memories/*.md` com front matter estruturado.
-- Motor cria memória para candidate válido e marca active existente como stale quando assinatura atual diverge.
-- Stale registra razão por ref: mudança, símbolo ausente, arquivo ausente ou não resolvível.
-- Não edita claim active para representar mudança; novo fato é nova memória.
-- Escritas são atômicas: falha não deixa memória parcial.
+- Memories live at `<repo>/.agents/skills/.agent-memory/memories/*.md` with structured front matter.
+- The engine creates memory for a valid candidate and marks an existing active memory stale when its current signature diverges.
+- Staleness records a reason per ref: changed, missing symbol, missing file, or unresolvable.
+- The engine does not edit an active claim to represent a change; a new fact becomes new memory.
+- Writes are atomic: failure does not leave partial memory.
 
 ## Testing Decisions
 
-- Seam confirmado pela autorização contínua: uma função pública pura recebe
-  corpus, captures e estados atuais das refs e devolve o corpus reconciliado;
-  o store Markdown é testado pelo diretório público persistido.
-- Testar criação, múltiplas refs, cada razão de stale, idempotência e escrita atômica.
-- Testar motor como seam único com entradas/saídas puras.
+- Seam confirmed by continuous authorization: a pure public function receives the corpus, captures, and current ref states and returns the reconciled corpus; the Markdown store is tested through the public persisted directory.
+- Test creation, multiple refs, each staleness reason, idempotency, and atomic writes.
+- Test the engine as a single seam with pure inputs and outputs.
 
 ## Out of Scope
 
-- Rendering HTML, ranking e chamadas de hook.
+- HTML rendering, ranking, and hook calls.
 
 ## Further Notes
 
-- Cache e ledger não pertencem ao store durável.
+- Cache and ledger do not belong in the durable store.

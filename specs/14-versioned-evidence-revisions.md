@@ -1,71 +1,71 @@
-# 14 — Claims com revisões versionadas de evidência
+# 14 — Claims with versioned evidence revisions
 
 ## Problem Statement
 
-A identidade persistida atual combina kind, claim normalizada e refs, mas não
-inclui os fingerprints da evidência. Depois que uma memória fica `stale`, uma
-captura semanticamente idêntica com as mesmas refs e uma implementação nova
-produz o mesmo ID e é descartada como conhecida. O produto não consegue
-representar que a mesma claim foi sustentada por revisões diferentes ao longo do
-tempo nem restaurá-la ao contexto sem perder o histórico anterior.
+Current persisted identity combines kind, normalized claim, and refs but omits
+evidence fingerprints. After a memory becomes `stale`, a semantically identical
+capture with the same refs and a new implementation produces the same ID and is
+discarded as known. The product cannot represent that the same claim was
+supported by different revisions over time or restore it to context without
+losing prior history.
 
 ## Solution
 
-Separar a identidade estável da claim da identidade imutável de cada revisão de
-evidência. A mesma claim poderá acumular revisões históricas, das quais no máximo
-uma será a revisão corrente `active`. Uma nova captura com fingerprints novos
-criará outra revisão, preservará as anteriores e tornará a claim novamente
-elegível para retrieval. O armazenamento Markdown receberá `schema_version` e
-uma migração determinística do formato pre-alpha existente.
+Separate stable claim identity from the immutable identity of each evidence
+revision. The same claim may accumulate historical revisions, at most one of
+which is the current `active` revision. A new capture with new fingerprints
+creates another revision, preserves previous revisions, and makes the claim
+eligible for retrieval again. Markdown storage receives a `schema_version` and
+a deterministic migration from the existing pre-alpha format.
 
 ## User Stories
 
-1. Como usuário, quero revalidar a mesma claim após uma mudança irrelevante, para que conhecimento ainda útil volte ao contexto.
-2. Como usuário, quero preservar cada revisão anterior, para que a evolução da evidência permaneça auditável em Git.
-3. Como Codex, quero recapturar a mesma claim e o mesmo escopo com fingerprints novos, para que a deduplicação não bloqueie uma revalidação legítima.
-4. Como Codex, quero que repetir exatamente a mesma revisão seja idempotente, para que hooks repetidos não criem duplicatas.
-5. Como mantenedor, quero separar `claim_id` e `revision_id`, para que identidade semântica e observação histórica não sejam o mesmo objeto.
-6. Como mantenedor, quero um schema versionado, para que futuras mudanças do Markdown tenham migrações explícitas.
-7. Como usuário de uma instalação existente, quero que memórias do formato anterior continuem legíveis, para que o upgrade não perca histórico.
-8. Como usuário, quero que retrieval mostre uma claim apenas uma vez, usando sua revisão `active`, para que o histórico não polua o contexto.
-9. Como auditor, quero ver commit e instante observados quando disponíveis, para que eu possa relacionar uma revisão ao estado do repositório.
+1. As a user, I want to revalidate the same claim after an irrelevant change, so that useful knowledge returns to context.
+2. As a user, I want every previous revision preserved, so that evidence evolution remains auditable in Git.
+3. As Codex, I want to recapture the same claim and scope with new fingerprints, so that deduplication does not block legitimate revalidation.
+4. As Codex, I want repeating the exact same revision to be idempotent, so that repeated hooks do not create duplicates.
+5. As a maintainer, I want separate `claim_id` and `revision_id` values, so that semantic identity and historical observation are not the same object.
+6. As a maintainer, I want a versioned schema, so that future Markdown changes have explicit migrations.
+7. As an existing user, I want earlier-format memories to remain readable, so that an upgrade does not lose history.
+8. As a user, I want retrieval to show a claim only once through its `active` revision, so that history does not pollute context.
+9. As an auditor, I want to see the observed commit and time when available, so that I can relate a revision to repository state.
 
 ## Implementation Decisions
 
-- O modelo durável terá uma entidade lógica de claim e uma ou mais revisões imutáveis de evidência.
-- `claim_id` será determinístico a partir de kind, claim normalizada e escopo canônico. Nesta etapa, o escopo canônico é o conjunto ordenado de locators de símbolo atualmente representado por refs.
-- `revision_id` será determinístico a partir de `claim_id` e do conjunto ordenado de fingerprints da evidência.
-- Repetir uma captura com o mesmo `revision_id` será idempotente.
-- Capturar a mesma claim e escopo com fingerprints diferentes criará uma nova revisão, mesmo que exista uma revisão `stale` anterior.
-- No máximo uma revisão será corrente `active` para cada `claim_id`. Ao aceitar uma nova revisão, qualquer revisão anteriormente corrente será preservada fora do contexto normal.
-- O status pertence à revisão de evidência. A claim é elegível para retrieval somente quando possui uma revisão corrente `active`.
-- O armazenamento continuará em Markdown, auditável e diffável, e usará `revision_id` para impedir colisão entre arquivos históricos.
-- Todo registro persistido terá `schema_version`. Documentos sem versão serão interpretados como o schema legado da versão pre-alpha.
-- A migração será determinística, não destrutiva e idempotente. IDs legados permanecerão disponíveis como provenance de migração quando diferirem dos novos IDs.
-- A revisão armazenará metadados de observação determinísticos disponíveis no repositório, incluindo commit quando houver. Timestamp será metadado e nunca participará da deduplicação.
-- A escrita do corpus reconciliado continuará atômica e não deixará claims ou revisões parcialmente gravadas.
-- O relatório mostrará o agrupamento por claim e o histórico de revisões; o contexto normal continuará recebendo somente a revisão corrente `active`.
+- The durable model has a logical claim entity and one or more immutable evidence revisions.
+- `claim_id` is deterministic from kind, normalized claim, and canonical scope. At this stage, canonical scope is the ordered set of symbol locators currently represented by refs.
+- `revision_id` is deterministic from `claim_id` and the ordered set of evidence fingerprints.
+- Repeating a capture with the same `revision_id` is idempotent.
+- Capturing the same claim and scope with different fingerprints creates a new revision even when an earlier `stale` revision exists.
+- At most one revision is the current `active` revision for each `claim_id`. When a new revision is accepted, any previously current revision is preserved outside normal context.
+- Status belongs to the evidence revision. A claim is eligible for retrieval only when it has a current `active` revision.
+- Storage remains auditable, diffable Markdown and uses `revision_id` to prevent collisions between historical files.
+- Every persisted record has `schema_version`. Documents without a version are interpreted as the legacy pre-alpha schema.
+- Migration is deterministic, non-destructive, and idempotent. Legacy IDs remain available as migration provenance when they differ from new IDs.
+- A revision stores deterministic repository observation metadata, including the commit when available. A timestamp is metadata and never participates in deduplication.
+- Writing the reconciled corpus remains atomic and never leaves partially written claims or revisions.
+- The report groups revisions by claim and shows history; normal context continues to receive only the current `active` revision.
 
 ## Testing Decisions
 
-- Seam mais alto confirmado: servidor MCP real e hooks reais em repositório Git temporário, observando captura, Markdown persistido, staleness, recaptura e retrieval.
-- Primeiro slice comportamental: capturar uma claim, alterar seu símbolo, observar a revisão antiga `stale`, recapturar exatamente a mesma claim/refs e observar uma revisão nova `active` no contexto.
-- O teste inicial deverá falhar no comportamento atual porque a deduplicação pelo ID legado descarta a recaptura.
-- Slices seguintes cobrirão idempotência da mesma revisão, agrupamento no retrieval, preservação de histórico e uma única revisão corrente.
-- Fixtures legadas sem `schema_version` provarão leitura, migração idempotente e ausência de perda de claim, status, razões e signatures.
-- O store será testado pelo diretório Markdown público; IDs, agrupamentos e metadados serão observados no documento persistido, sem mocks de módulos do projeto.
-- Testes usarão commits reais em repositórios Git temporários para validar provenance de commit.
+- Highest seam confirmed: real MCP server and hooks in a temporary Git repository, observing capture, persisted Markdown, staleness, recapture, and retrieval.
+- First behavioral slice: capture a claim, change its symbol, observe the old revision become `stale`, recapture the exact same claim and refs, and observe a new `active` revision in context.
+- The first test must fail under current behavior because legacy-ID deduplication discards recapture.
+- Subsequent slices cover same-revision idempotency, retrieval grouping, history preservation, and a single current revision.
+- Legacy fixtures without `schema_version` prove readable, idempotent migration without loss of claim, status, reasons, or signatures.
+- The store is tested through the public Markdown directory; IDs, groupings, and metadata are observed in persisted documents without mocks of project-owned modules.
+- Tests use real commits in temporary Git repositories to validate commit provenance.
 
 ## Out of Scope
 
-- Alterar quais evidências podem ser associadas a uma claim.
-- Permitir refs de suporte que não mudaram no turno.
-- Evidência de configuração, schema ou teste como tipos próprios.
-- Dependency graph ou descoberta automática de dependências.
-- Deduplicação semântica entre claims com redações diferentes.
-- Reparação automática de claims sem captura explícita do Codex atual.
+- Changing which evidence may be associated with a claim.
+- Allowing supporting refs that did not change during the turn.
+- Configuration, schema, or test evidence as first-class types.
+- A dependency graph or automatic dependency discovery.
+- Semantic deduplication between differently worded claims.
+- Automatic claim repair without explicit capture by the current Codex instance.
 
 ## Further Notes
 
-- Esta spec depende do significado de `stale` definido na spec 13.
-- A migração ocorre antes de qualquer expansão para evidence sets, para que as specs seguintes tenham uma base versionada.
+- This spec depends on the meaning of `stale` defined in spec 13.
+- Migration precedes expansion into evidence sets so that later specs have a versioned base.

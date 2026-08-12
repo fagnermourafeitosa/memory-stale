@@ -1,39 +1,37 @@
-# 05 — Recuperação de contexto
+# 05 — Context retrieval
 
 ## Problem Statement
 
-Codex precisa receber poucas memórias úteis antes da tarefa, sem contexto stale, embeddings ou custo de outro modelo.
+Codex must receive a small number of useful memories before a task without stale context, embeddings, or the cost of another model.
 
 ## Solution
 
-Rankear memórias active por match estrutural e BM25, respeitando orçamento configurável.
+Rank active memories by structural match and BM25 within a configurable budget.
 
 ## User Stories
 
-1. Como Codex, quero receber decisão relacionada antes de alterar código.
-2. Como usuário, quero que memória stale nunca seja tratada como fato.
-3. Como mantenedor, quero ranking auditável e configurável.
+1. As Codex, I want to receive a related decision before changing code.
+2. As a user, I want stale memory never to be treated as fact.
+3. As a maintainer, I want ranking to be auditable and configurable.
 
 ## Implementation Decisions
 
-- Filtrar `active` antes de qualquer ranking.
-- Prioridade: match exato de path/símbolo, BM25 em claim e durability reason, boost por refs relacionadas.
-- Sem embeddings no v1.
-- Orçamento default: 1500 tokens; configurável.
-- Resultado é `additionalContext` do `UserPromptSubmit`.
+- Filter for `active` before any ranking.
+- Priority: exact path or symbol match, BM25 over claim and durability reason, then a boost for related refs.
+- No embeddings in V1.
+- Default budget: 1,500 tokens; configurable.
+- The result is `additionalContext` from `UserPromptSubmit`.
 
 ## Testing Decisions
 
-- Seam confirmado pela autorização contínua: a função pública de retrieval
-  recebe corpus, prompt e budget e devolve exatamente o contexto injetável;
-  integração é observada pelo comando real `UserPromptSubmit`.
-- Testar filtro stale, match exato acima de texto, ranking BM25 e corte por orçamento.
-- Testar corpus vazio e prompt sem resultado.
+- Seam confirmed by continuous authorization: the public retrieval function receives a corpus, prompt, and budget and returns the exact injectable context; integration is observed through the real `UserPromptSubmit` command.
+- Test stale filtering, exact match above text match, BM25 ranking, and budget truncation.
+- Test an empty corpus and a prompt with no result.
 
 ## Out of Scope
 
-- Busca semântica, banco vetorial e injeção de toda base de memória.
+- Semantic search, a vector database, and injection of the entire memory base.
 
 ## Further Notes
 
-- Index local é derivado; Markdown permanece fonte de verdade.
+- The local index is derived; Markdown remains the source of truth.

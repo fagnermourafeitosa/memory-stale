@@ -1,43 +1,39 @@
-# 02 — MCP local `memory.capture`
+# 02 — Local `memory.capture` MCP tool
 
 ## Problem Statement
 
-O hook sabe quais símbolos mudaram, mas não sabe o significado final da mudança. O próprio Codex precisa fornecer claim estruturado, sem outro LLM.
+The hook knows which symbols changed but not the final meaning of the change. Codex itself must provide a structured claim without another LLM.
 
 ## Solution
 
-Oferecer ferramenta MCP local `memory.capture` para Codex registrar candidato de memória durante a própria tarefa.
+Provide a local `memory.capture` MCP tool through which Codex records a memory candidate during the task itself.
 
 ## User Stories
 
-1. Como Codex, quero enviar uma decisão final estruturada ao plugin.
-2. Como mantenedor, quero rejeitar claims sem evidência no código alterado.
-3. Como usuário, quero que pedido inicial e resumo de diff não virem memória.
+1. As Codex, I want to send a structured final decision to the plugin.
+2. As a maintainer, I want to reject claims without evidence in changed code.
+3. As a user, I want the initial request and diff summary not to become memory.
 
 ## Implementation Decisions
 
-- O servidor MCP local usa transporte stdio JSON-RPC e é declarado pelo plugin
-  em `.mcp.json`; o processo usa o repositório Git corrente e o único turno
-  ativo para localizar seu ledger efêmero.
-- Entrada obrigatória: `kind`, `claim`, `refs`, `durability_reason`.
-- `kind`: `behavior`, `contract`, `constraint`, `architecture`, `operation`.
-- Skill exige checklist: comportamento durável, risco real de erro futuro, evidência no código final e mais que histórico de tarefa.
-- Cada ref deve resolver e ter mudado nesta tarefa.
-- Repetição com mesmo kind, claim normalizado e refs é idempotente.
-- Candidato válido fica disponível ao `Stop`; MCP não grava memória final sozinho.
+- The local MCP server uses stdio JSON-RPC transport and is declared by the plugin in `.mcp.json`; the process uses the current Git repository and the single active turn to locate its ephemeral ledger.
+- Required input: `kind`, `claim`, `refs`, and `durability_reason`.
+- `kind`: `behavior`, `contract`, `constraint`, `architecture`, or `operation`.
+- The skill requires a checklist: durable behavior, real risk of future error, evidence in the final code, and more than task history.
+- Each ref must resolve and must have changed during the current task.
+- Repetition with the same kind, normalized claim, and refs is idempotent.
+- A valid candidate becomes available to `Stop`; the MCP tool does not write final memory by itself.
 
 ## Testing Decisions
 
-- Seam confirmado pela autorização de execução contínua: iniciar o servidor MCP
-  real, negociar JSON-RPC por stdio e chamar `memory.capture` em repositórios
-  Git temporários cujo turno foi iniciado pelos hooks.
-- Testar schema obrigatório, enum fechado, refs ausentes/inalteradas e repetição idempotente.
-- Testar que captura válida não persiste memória antes do lifecycle.
+- Seam confirmed by continuous execution authorization: start the real MCP server, negotiate JSON-RPC over stdio, and call `memory.capture` in temporary Git repositories whose turn was started by the hooks.
+- Test the required schema, closed enum, missing or unchanged refs, and idempotent repetition.
+- Test that a valid capture does not persist memory before the lifecycle runs.
 
 ## Out of Scope
 
-- Geração de claim por modelo externo ou deduplicação semântica.
+- Claim generation by an external model or semantic deduplication.
 
 ## Further Notes
 
-- Skill orienta Codex; MCP valida contrato estrutural.
+- The skill guides Codex; MCP validates the structural contract.

@@ -1,68 +1,51 @@
-# 09 — Workflow de contribuição e ambiente Python
+# 09 — Contribution workflow and Python environment
 
 ## Problem Statement
 
-O projeto precisa impedir mudanças sem contrato, commits não autorizados,
-trabalho misturado na mesma branch e dependências Python instaladas diretamente
-no ambiente global.
+The project must prevent contract-free changes, unauthorized commits, unrelated
+work mixed on one branch, and Python dependencies installed directly into the
+global environment.
 
 ## Solution
 
-Definir um workflow obrigatório de contribuição: spec antes de qualquer
-feature, bug ou ajuste; branch dedicada por unidade de trabalho; TDD para
-comportamento; autorização explícita antes de commit; e `uv` como único gestor
-de Python, dependências, lockfile e ambiente virtual.
+Define a mandatory contribution workflow: a spec before every feature, bug, or
+adjustment; a dedicated branch per unit of work; TDD for behavior; explicit
+authorization before a commit; and `uv` as the sole manager for Python,
+dependencies, the lockfile, and the virtual environment.
 
 ## User Stories
 
-1. Como mantenedor, quero que toda mudança de comportamento tenha uma spec para
-   que pedidos soltos não virem implementação ambígua.
-2. Como mantenedor, quero uma branch por spec, feature, bug ou chore para que
-   mudanças independentes não sejam misturadas.
-3. Como usuário, quero autorizar cada commit para manter controle sobre o
-   histórico do repositório.
-4. Como contribuidor, quero um ambiente Python isolado e reproduzível para que
-   ferramentas locais não dependam do Python global.
-5. Como contribuidor, quero um único gestor de dependências e comandos para que
-   instalação e CI usem o mesmo fluxo.
-6. Como revisor, quero lint, formato, tipos, testes e cobertura padronizados para
-   que qualidade não dependa do ambiente do autor.
+1. As a maintainer, I want every behavior change to have a spec, so that loose requests do not become ambiguous implementations.
+2. As a maintainer, I want one branch per spec, feature, bug, or chore, so that independent changes are not mixed.
+3. As a user, I want to authorize every commit, so that I retain control over repository history.
+4. As a contributor, I want an isolated, reproducible Python environment, so that local tools do not depend on global Python.
+5. As a contributor, I want one dependency and command manager, so that installation and CI use the same flow.
+6. As a reviewer, I want standardized linting, formatting, typing, tests, and coverage, so that quality does not depend on the author's environment.
 
 ## Implementation Decisions
 
-- `to-spec` é obrigatório antes de implementar qualquer feature, bug fix ou
-  ajuste de comportamento. A spec precisa existir no diretório numerado do
-  projeto e declarar o seam observável de teste.
-- Nenhuma implementação começa a partir de pedido solto. Documentação e
-  governança também devem registrar uma spec quando alterarem o workflow.
-- Cada unidade de trabalho usa branch própria, nomeada por categoria e assunto.
-- Nenhum agente pode criar commit sem autorização explícita do usuário para o
-  commit específico. Preparar mudanças não implica autorização para commitar.
-- `uv` é a única interface permitida para criar ambiente, resolver, instalar,
-  adicionar, remover ou executar dependências Python.
-- O ambiente do projeto é `.venv`, criado e gerenciado por `uv`; `pip`, Python
-  global e ambientes compartilhados não são usados para trabalho do projeto.
-- Dependências de desenvolvimento usam o grupo `dev`; o lockfile é versionado.
-- Os quality gates permanecem Ruff, mypy strict, pytest e cobertura de branch.
+- `to-spec` is mandatory before implementing any feature, bug fix, or behavior adjustment. The spec must exist in the project's numbered spec directory and declare the observable test seam.
+- No implementation begins from a loose request. Documentation and governance must also record a spec when they change the workflow.
+- Each unit of work uses its own branch, named by category and subject.
+- No agent may create a commit without explicit user authorization for that specific commit. Preparing changes does not imply authorization to commit.
+- `uv` is the only permitted interface for creating the environment and resolving, installing, adding, removing, or executing Python dependencies.
+- The project environment is `.venv`, created and managed by `uv`; `pip`, global Python, and shared environments are not used for project work.
+- Development dependencies use the `dev` group; the lockfile is versioned.
+- Quality gates remain Ruff, strict mypy, pytest, and branch coverage.
 
 ## Testing Decisions
 
-- O seam desta mudança é um checkout limpo do repositório: `uv sync` precisa
-  criar o ambiente isolado e os comandos `uv run` precisam localizar todas as
-  ferramentas de qualidade.
-- Configuração é validada pelo parser TOML e pelo próprio `uv`.
-- Um smoke test público valida que o layout `src` instalado pelo ambiente do
-  projeto torna o pacote `memory_stale` importável.
-- Não se cria teste unitário artificial para arquivos de governança; o teste é
-  o fluxo externo de bootstrap e validação do repositório.
+- The seam for this change is a clean repository checkout: `uv sync` must create the isolated environment, and `uv run` commands must locate every quality tool.
+- Configuration is validated by the TOML parser and `uv` itself.
+- A public smoke test validates that the `src` layout installed by the project environment makes the `memory_stale` package importable.
+- No artificial unit test is created for governance files; the test is the external bootstrap and repository validation flow.
 
 ## Out of Scope
 
-- Implementar funcionalidades do plugin.
-- Criar commit, publicar branch ou abrir pull request.
-- Definir CI remoto nesta mudança.
+- Implementing plugin features.
+- Creating a commit, publishing a branch, or opening a pull request.
+- Defining remote CI in this change.
 
 ## Further Notes
 
-- Esta spec formaliza regras permanentes do repositório e deve ser aplicada por
-  agentes e contribuidores humanos.
+- This spec formalizes permanent repository rules and applies to agents and human contributors.

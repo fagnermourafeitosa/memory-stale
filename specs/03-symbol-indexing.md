@@ -1,40 +1,38 @@
-# 03 — Indexação tree-sitter multilíngue
+# 03 — Multilanguage tree-sitter indexing
 
 ## Problem Statement
 
-Memória deve acompanhar símbolos em qualquer projeto suportado, sem invalidar por formatação e sem fallback impreciso.
+Memory must track symbols in every supported project without being invalidated by formatting and without an imprecise fallback.
 
 ## Solution
 
-Criar indexadores tree-sitter que resolvem símbolos e produzem assinaturas estruturais canonizadas.
+Create tree-sitter indexers that resolve symbols and produce canonical structural signatures.
 
 ## User Stories
 
-1. Como desenvolvedor, quero rastrear função/classe equivalente em linguagens diferentes.
-2. Como desenvolvedor, quero editar comentário sem tornar memória stale.
-3. Como usuário, quero erro claro para linguagem não suportada.
+1. As a developer, I want to track equivalent functions and classes across different languages.
+2. As a developer, I want to edit a comment without making memory stale.
+3. As a user, I want a clear error for an unsupported language.
 
 ## Implementation Decisions
 
-- V1: TypeScript, JavaScript, Python, Go, Java, Kotlin e Rust.
-- Assinatura inclui estrutura e tokens reais; ignora whitespace e comentários.
-- Símbolo mudado, removido, renomeado ou arquivo removido produz resultado inequívoco.
-- Linguagem sem gramática rejeita captura; nunca degrada para arquivo inteiro.
-- Interface comum permite adicionar gramáticas sem alterar lifecycle.
+- V1: TypeScript, JavaScript, Python, Go, Java, Kotlin, and Rust.
+- A signature includes structure and real tokens while ignoring whitespace and comments.
+- A changed, removed, or renamed symbol, or a removed file, produces an unambiguous result.
+- A language without a grammar rejects capture and never degrades to a whole-file fallback.
+- A common interface allows grammars to be added without changing the lifecycle.
 
 ## Testing Decisions
 
-- Seam confirmado pela autorização de execução contínua: a interface pública do
-  indexador recebe raiz Git e ref `path:symbol`, retornando uma assinatura ou
-  erro estruturado; fixtures reais exercitam cada gramática.
-- Fixtures por linguagem para resolução, mudança semântica e mudança de comentário/formatação.
-- Testar símbolo ausente, parser inválido e arquivo ausente.
-- Testar que hash igual para trivia e diferente para mudança de lógica, assinatura, identificador ou literal.
+- Seam confirmed by continuous execution authorization: the indexer's public interface receives a Git root and a `path:symbol` ref and returns a signature or structured error; real fixtures exercise every grammar.
+- Provide per-language fixtures for resolution, semantic changes, and comment or formatting changes.
+- Test a missing symbol, invalid parser input, and a missing file.
+- Test that trivia produces the same hash while logic, signature, identifier, or literal changes produce a different hash.
 
 ## Out of Scope
 
-- Suporte a outras linguagens e parsing tolerante a sintaxe quebrada.
+- Supporting additional languages or tolerating broken syntax.
 
 ## Further Notes
 
-- Este módulo não decide se um claim é relevante; apenas prova estado de refs.
+- This module does not decide whether a claim is relevant; it only establishes ref state.

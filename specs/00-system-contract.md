@@ -1,35 +1,35 @@
-# 00 — Contrato do sistema
+# 00 — System contract
 
 ## Problem Statement
 
-Definir limites compartilhados antes de construir adaptadores ou lógica de memória.
+Define shared boundaries before building adapters or memory logic.
 
 ## Solution
 
-Fixar contratos, estados e ordem das specs seguintes.
+Establish contracts, states, and the order of the following specs.
 
 ## User Stories
 
-1. Como mantenedor, quero limites explícitos para que módulos não criem regras conflitantes.
-2. Como usuário, quero memória automática sem outro LLM ou CLI manual.
+1. As a maintainer, I want explicit boundaries, so that modules do not create conflicting rules.
+2. As a user, I want automatic memory without another LLM or a manual CLI.
 
 ## Implementation Decisions
 
-- Produto: plugin Codex `memory-stale` com skill, MCP local e hooks.
-- Git é obrigatório; sem Git, plugin informa estado e não opera.
-- Estados: `active` e `stale`. Mudança de ref marca stale; não há supersede implícito.
-- Sem fallback por arquivo ou linguagem não suportada.
-- Falhas de memória nunca bloqueiam tarefa Codex.
-- Ordem: 01 runtime, 02 capture, 03 indexação, 04 lifecycle, 05 retrieval, 06 dream, 07 report/config, 08 testes.
+- Product: Codex `memory-stale` plugin with a skill, local MCP server, and hooks.
+- Git is required; without Git, the plugin reports its state and does not operate.
+- States: `active` and `stale`. A ref change marks memory stale; there is no implicit supersession.
+- No file-level or unsupported-language fallback.
+- Memory failures never block the Codex task.
+- Order: 01 runtime, 02 capture, 03 indexing, 04 lifecycle, 05 retrieval, 06 dream, 07 report/config, 08 tests.
 
 ## Testing Decisions
 
-- Cada spec posterior valida seu contrato sem exigir Codex real.
+- Each subsequent spec validates its contract without requiring a real Codex session.
 
 ## Out of Scope
 
-- Implementação de qualquer módulo nesta spec.
+- Implementing any module in this spec.
 
 ## Further Notes
 
-- Toda decisão de produto comum deve ser adicionada aqui, não duplicada nas specs de tarefa.
+- Every shared product decision belongs here rather than being duplicated across task specs.

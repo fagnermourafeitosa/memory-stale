@@ -1,61 +1,61 @@
-# 13 — Staleness exige revalidação
+# 13 — Staleness requires revalidation
 
 ## Problem Statement
 
-O produto atualmente associa uma memória a assinaturas estruturais e a marca
-como `stale` quando alguma evidência registrada muda. A linguagem pública ainda
-permite interpretar esse resultado como prova de que a claim se tornou falsa,
-embora o motor apenas consiga provar que a evidência observada deixou de ser a
-mesma. A interpretação excessiva enfraquece a tese técnica e esconde tanto
-revalidações desnecessárias quanto mudanças semânticas fora das refs registradas.
+The product currently associates a memory with structural signatures and marks
+it `stale` when any recorded evidence changes. Public language can still imply
+that this result proves the claim became false, even though the engine can only
+establish that the observed evidence is no longer identical. This overstatement
+weakens the technical thesis and hides both unnecessary revalidations and
+semantic changes outside the recorded refs.
 
 ## Solution
 
-Formalizar `active` e `stale` como estados de validação da provenance, não como
-valores de verdade da claim. Uma revisão `active` tem todas as evidências
-registradas resolvíveis e com os fingerprints observados na captura. Uma revisão
-`stale` teve ao menos uma evidência alterada, removida ou não resolvível e exige
-revalidação antes de voltar ao contexto normal. O produto continuará usando os
-nomes `active` e `stale`, mas explicará explicitamente que `active` não prova
-verdade e `stale` não prova falsidade.
+Define `active` and `stale` as provenance-validation states rather than truth
+values for a claim. An `active` revision has resolvable recorded evidence with
+the fingerprints observed at capture. A `stale` revision has at least one item
+of evidence that changed, was removed, or became unresolvable and requires
+revalidation before returning to normal context. The product retains the names
+`active` and `stale` while stating explicitly that `active` does not prove truth
+and `stale` does not prove falsehood.
 
 ## User Stories
 
-1. Como usuário, quero entender que `stale` significa “requer revalidação”, para que eu não trate o diagnóstico como prova de falsidade.
-2. Como usuário, quero entender que `active` significa “evidência registrada inalterada”, para que eu não presuma que o conjunto de evidências é completo.
-3. Como mantenedor, quero uma definição única dos estados, para que README, skill, ferramentas MCP, relatório e specs não expressem contratos contraditórios.
-4. Como mantenedor, quero preservar a invalidação conservadora, para que uma correção conceitual não reduza silenciosamente a proteção do contexto.
-5. Como avaliador do projeto, quero distinguir validade da evidência e verdade semântica, para que os limites científicos do produto sejam verificáveis.
-6. Como Codex, quero receber somente revisões `active` no contexto normal, para que claims cuja provenance mudou continuem fora do uso automático.
+1. As a user, I want to understand that `stale` means “requires revalidation,” so that I do not treat the diagnosis as proof of falsehood.
+2. As a user, I want to understand that `active` means “recorded evidence is unchanged,” so that I do not assume the evidence set is complete.
+3. As a maintainer, I want one definition of the states, so that the README, skill, MCP tools, report, and specs do not express contradictory contracts.
+4. As a maintainer, I want to preserve conservative invalidation, so that a conceptual correction does not silently reduce context protection.
+5. As a project evaluator, I want to distinguish evidence validity from semantic truth, so that the product's scientific limits are verifiable.
+6. As Codex, I want only `active` revisions in normal context, so that claims whose provenance changed remain excluded from automatic use.
 
 ## Implementation Decisions
 
-- A tese pública do produto será “provenance de memória com revalidação determinística quando a evidência-fonte muda”.
-- `active` significa somente que todas as evidências registradas ainda correspondem aos fingerprints observados; não significa que a claim foi provada nem que a provenance está completa.
-- `stale` significa que ao menos uma evidência registrada mudou, desapareceu ou não pôde ser resolvida; não significa que a claim foi refutada.
-- Mudança estrutural continuará sendo um gatilho conservador de revalidação. Comentários e formatação continuarão fora da assinatura estrutural.
-- Revisões `stale` continuarão excluídas do contexto normal e preservadas para auditoria.
-- Toda superfície pública que descreva invalidação, validade ou verdade adotará o mesmo vocabulário, incluindo documentação, instruções da skill, descrições MCP e relatório.
-- O lifecycle observado não será alterado nesta spec; ela corrige o contrato epistemológico e a linguagem que o apresenta.
-- A limitação de provenance incompleta e de dependências não registradas será explícita.
+- The public product thesis is “memory provenance with deterministic revalidation when source evidence changes.”
+- `active` means only that every recorded item of evidence still matches its observed fingerprint; it does not mean the claim was proven or the provenance is complete.
+- `stale` means that at least one recorded item of evidence changed, disappeared, or could not be resolved; it does not mean the claim was refuted.
+- Structural change remains a conservative revalidation trigger. Comments and formatting remain outside the structural signature.
+- `stale` revisions remain excluded from normal context and preserved for audit.
+- Every public surface that describes invalidation, validity, or truth uses the same vocabulary, including documentation, skill instructions, MCP descriptions, and reports.
+- The observable lifecycle does not change in this spec; it corrects the epistemic contract and the language used to present it.
+- Incomplete provenance and unrecorded dependencies are explicit limitations.
 
 ## Testing Decisions
 
-- Seam mais alto confirmado: as superfícies públicas observáveis do plugin e o lifecycle já exercitado pelo harness instalado.
-- Esta é uma mudança de contrato e documentação; não será fabricado um teste vermelho para texto editorial.
-- Os testes existentes de lifecycle e end-to-end continuarão provando que evidência alterada produz `stale` e que revisões `stale` não entram no contexto.
-- Se descrições MCP ou conteúdo renderizado forem alterados de forma estruturada, os testes observarão a resposta pública completa, não funções auxiliares ou chamadas internas.
-- A revisão documental verificará que nenhuma superfície afirma que o motor detecta falsidade semântica.
+- Highest seam confirmed: the plugin's observable public surfaces and the lifecycle already exercised by the installed harness.
+- This is a contract and documentation change; no artificial red test will be created for editorial text.
+- Existing lifecycle and end-to-end tests continue to prove that changed evidence produces `stale` and that `stale` revisions do not enter context.
+- If MCP descriptions or rendered content change structurally, tests observe the complete public response rather than helper functions or internal calls.
+- Documentation review verifies that no surface claims the engine detects semantic falsehood.
 
 ## Out of Scope
 
-- Alterar a identidade de claims ou revisões de evidência.
-- Reativar uma claim após revalidação.
-- Adicionar novos tipos de evidência ou dependências transitivas.
-- Medir taxas de revalidação desnecessária ou mudanças semânticas perdidas.
-- Adicionar embeddings, outro LLM, vector database, GraphRAG ou inferência semântica local.
+- Changing claim or evidence-revision identity.
+- Reactivating a claim after revalidation.
+- Adding new evidence types or transitive dependencies.
+- Measuring unnecessary revalidation or missed semantic-change rates.
+- Adding embeddings, another LLM, a vector database, GraphRAG, or local semantic inference.
 
 ## Further Notes
 
-- Esta spec é pré-requisito conceitual para todas as specs seguintes.
-- “Invalidação” permanece aceitável quando seu objeto é a validação da evidência, não a verdade da claim.
+- This spec is the conceptual prerequisite for every subsequent spec.
+- “Invalidation” remains acceptable when its object is evidence validation rather than claim truth.

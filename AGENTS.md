@@ -13,6 +13,7 @@
 
 ## Spec-first is mandatory
 
+- Write repository instructions and every numbered spec in English.
 - Every feature, bug fix, refactor, behavior adjustment, tooling change, or
   repository workflow change must have a numbered spec created with the
   `to-spec` skill before implementation starts.

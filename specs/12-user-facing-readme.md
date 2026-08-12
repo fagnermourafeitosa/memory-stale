@@ -1,64 +1,56 @@
-# 12 — README orientado ao usuário final
+# 12 — User-facing README
 
 ## Problem Statement
 
-O README descreve bem a arquitetura, mas não oferece uma jornada clara de
-adoção. Faltam pré-requisitos, instalação local, primeiro uso, configuração
-completa e uma forma simples de verificar que recuperação e staleness estão
-funcionando. Algumas descrições também divergem do produto implementado.
+The README describes the architecture well but does not provide a clear adoption
+journey. It lacks prerequisites, local installation, first use, complete
+configuration, and a simple way to verify that retrieval and staleness work.
+Some descriptions also diverge from the implemented product.
 
 ## Solution
 
-Reorganizar o README como página pública de produto: começar pelo resultado
-para o usuário, apresentar um exemplo curto, explicar instalação e uso normal,
-e mover detalhes internos para depois. Corrigir o contrato dos hooks e dos três
-MCP tools e separar funcionalidades entregues do roadmap futuro.
+Reorganize the README as a public product page: begin with the user outcome,
+present a short example, explain installation and normal use, and move internal
+details later. Correct the contract for hooks and the three MCP tools, and
+separate delivered features from the future roadmap.
 
 ## User Stories
 
-1. Como usuário, quero entender rapidamente o valor do plugin e instalá-lo sem
-   conhecer sua arquitetura interna.
-2. Como usuário, quero saber onde a memória fica, o que devo versionar e como
-   verificar recuperação e staleness.
-3. Como usuário avançado, quero configurar orçamento e relatório com exemplos
-   copiáveis.
-4. Como potencial contribuidor, quero distinguir estado atual, limitações e
-   trabalhos futuros reais.
+1. As a user, I want to understand the plugin's value quickly and install it without knowing its internal architecture.
+2. As a user, I want to know where memory lives, what I should version, and how to verify retrieval and staleness.
+3. As an advanced user, I want to configure the budget and report with copyable examples.
+4. As a potential contributor, I want to distinguish current state, limitations, and actual future work.
 
 ## Observable Test Seam
 
-O seam mais alto é o próprio `README.md` renderizado como contrato público. A
-revisão verificará que comandos, caminhos, configuração, linguagens, hooks,
-MCP tools, estados e defaults correspondem aos manifests e ao código atual.
+The highest seam is the rendered `README.md` itself as the public contract.
+Review verifies that commands, paths, configuration, languages, hooks, MCP tools,
+states, and defaults match the current manifests and code.
 
 ## Expected Behavior
 
-- A proposta de valor e o fluxo automático ficam claros antes dos detalhes.
-- Pré-requisitos e instalação local não prometem uma distribuição pública que
-  ainda não existe.
-- O README inclui primeiro uso, verificação, configuração e versionamento.
-- Os três MCP tools e a divisão entre julgamento do Codex e validação
-  determinística são descritos corretamente.
-- O roadmap contém apenas trabalho ainda não entregue.
+- The value proposition and automatic flow are clear before implementation details.
+- Prerequisites and local installation do not promise a public distribution that does not yet exist.
+- The README includes first use, verification, configuration, and versioning.
+- The three MCP tools and the split between Codex judgment and deterministic validation are described correctly.
+- The roadmap contains only work that has not been delivered.
 
 ## Implementation Constraints
 
-- Manter o README em inglês como a documentação pública existente.
-- Não introduzir um CLI humano como superfície principal.
-- Não prometer release público, fallback por arquivo, embeddings ou outro LLM.
-- Não inventar comandos de marketplace que dependam de publicação inexistente.
-- Preservar Git, `uv`, armazenamento local e as limitações de linguagens.
+- Keep the README in English, matching the existing public documentation.
+- Do not introduce a human-facing CLI as the primary surface.
+- Do not promise a public release, file fallback, embeddings, or another LLM.
+- Do not invent marketplace commands that depend on a nonexistent publication.
+- Preserve Git, `uv`, local storage, and language limitations.
 
 ## Testing Decisions
 
-- Mudança exclusivamente documental: não fabricar teste red-green.
-- Conferir links, headings, exemplos TOML, caminhos, nomes de tools e defaults
-  por busca textual e comparação com o código.
-- Executar `ruff format --check`, `ruff check`, mypy e pytest para garantir que
-  a documentação não acompanha alterações acidentais de produção.
+- Documentation-only change: do not fabricate a red-green test.
+- Check links, headings, TOML examples, paths, tool names, and defaults through textual search and comparison with code.
+- Run `ruff format --check`, `ruff check`, mypy, and pytest to ensure the documentation does not accompany accidental production changes.
 
 ## Out of Scope
 
-- Publicar marketplace ou release.
-- Alterar manifest, runtime, configuração, ranking ou lifecycle.
-- Criar site, screenshots, vídeo ou documentação externa.
+- Publishing a marketplace package or release.
+- Changing the manifest, runtime, configuration, ranking, or lifecycle.
+- Creating a site, screenshots, video, or external documentation.

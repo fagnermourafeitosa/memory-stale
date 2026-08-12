@@ -1,38 +1,36 @@
-# 08 — Harness de testes end-to-end
+# 08 — End-to-end test harness
 
 ## Problem Statement
 
-Plugin depende de Git, hooks, MCP, arquivos e tree-sitter; testes isolados não bastam para provar lifecycle.
+The plugin depends on Git, hooks, MCP, files, and tree-sitter; isolated tests are insufficient to establish the lifecycle.
 
 ## Solution
 
-Montar harness com repositórios Git temporários e eventos de Codex simulados.
+Build a harness with temporary Git repositories and simulated Codex events.
 
 ## User Stories
 
-1. Como mantenedor, quero testar fluxo completo sem sessão Codex real.
-2. Como mantenedor, quero reproduzir tarefas que alteram muitos arquivos e linguagens.
-3. Como usuário, quero confiança de que falha de memória não trava trabalho.
+1. As a maintainer, I want to test the complete flow without a real Codex session.
+2. As a maintainer, I want to reproduce tasks that change many files and languages.
+3. As a user, I want confidence that a memory failure does not block work.
 
 ## Implementation Decisions
 
-- Harness constrói repositório temporário, baseline sujo opcional, eventos de hooks e capturas MCP.
-- Cenários atravessam retrieval, ledger, capture, lifecycle e persistência.
-- Fixtures abrangem todas linguagens v1.
+- The harness builds a temporary repository, an optional dirty baseline, hook events, and MCP captures.
+- Scenarios cross retrieval, ledger, capture, lifecycle, and persistence.
+- Fixtures cover every V1 language.
 
 ## Testing Decisions
 
-- Seam confirmado pela autorização contínua: o harness inicia repositório Git
-  temporário e executa hooks/MCP reais por subprocesso, sem sessão Codex e sem
-  chamar funções internas de produção.
-- Fluxo: contexto active → edição → capture → Stop → Markdown e stale corretos.
-- Cenários: múltiplos arquivos, refs múltiplas, comentário, remoção, linguagem inválida, captura duplicada, falha de indexação e dream.
-- Testes verificam comportamento observável e conteúdo persistido, não chamadas internas.
+- Seam confirmed by continuous authorization: the harness starts a temporary Git repository and executes real hooks and MCP over subprocesses, without a Codex session and without calling internal production functions.
+- Flow: active context → edit → capture → Stop → correct Markdown and staleness.
+- Scenarios: multiple files, multiple refs, comments, removal, invalid language, duplicate capture, indexing failure, and Dream.
+- Tests verify observable behavior and persisted content, not internal calls.
 
 ## Out of Scope
 
-- Testar UI real do Codex ou rede externa.
+- Testing the real Codex UI or an external network.
 
 ## Further Notes
 
-- Este harness é base de demonstração de qualidade para portfólio.
+- This harness is the quality demonstration foundation for the portfolio.

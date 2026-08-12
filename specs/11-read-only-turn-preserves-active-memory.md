@@ -1,63 +1,55 @@
-# 11 — Preservar memória ativa em turno somente leitura
+# 11 — Preserve active memory during a read-only turn
 
 ## Problem Statement
 
-Uma memória recém-capturada e recuperada corretamente foi marcada como `stale`
-ao final de um turno que não modificou seu símbolo. O caso ocorre quando o
-histórico contém uma memória stale anterior para o mesmo ref: sua assinatura
-histórica sobrescreve a evidência da memória ativa. Isso produz falso positivo,
-remove conhecimento válido dos turnos seguintes e degrada a recuperação.
+A newly captured and correctly retrieved memory was marked `stale` at the end of
+a turn that did not modify its symbol. This occurs when history contains an older
+stale memory for the same ref: its historical signature overwrites the evidence
+for the active memory. This creates a false positive, removes valid knowledge
+from later turns, and degrades retrieval.
 
 ## Solution
 
-Garantir que o ciclo de hooks compare somente mudanças ocorridas depois do
-snapshot do `UserPromptSubmit`. Um `Stop` sem alteração no arquivo referenciado
-deve preservar a assinatura, o status `active` e a elegibilidade da memória
-para recuperação.
+Ensure that the hook cycle compares only changes that occurred after the
+`UserPromptSubmit` snapshot. A `Stop` event with no change to the referenced file
+must preserve the memory's signature, `active` status, and retrieval eligibility.
 
 ## User Stories
 
-1. Como usuário, quero consultar memória sem invalidá-la para que leitura não
-   seja confundida com mudança semântica.
-2. Como agente, quero receber apenas a versão ativa mais recente para não usar
-   fatos obsoletos.
-3. Como mantenedor, quero um teste de regressão no ciclo público de hooks para
-   detectar falsos positivos de staleness.
+1. As a user, I want to query memory without invalidating it, so that reading is not confused with semantic change.
+2. As an agent, I want to receive only the most recent active version, so that I do not use obsolete facts.
+3. As a maintainer, I want a regression test through the public hook cycle, so that false-positive staleness is detected.
 
 ## Observable Test Seam
 
-O seam confirmado é o ciclo público `UserPromptSubmit → Stop`, executado pelos
-comandos reais de hook em um repositório Git temporário. O arquivo referenciado
-já estará modificado antes do início do turno e haverá uma memória stale e uma
-ativa para o mesmo ref, reproduzindo o estado de trabalho real. O arquivo
-permanecerá byte a byte igual entre os dois hooks.
+The confirmed seam is the public `UserPromptSubmit → Stop` cycle, executed by
+the real hook commands in a temporary Git repository. The referenced file is
+already modified before the turn begins, and the corpus contains both a stale
+memory and an active memory for the same ref, reproducing the real working state.
+The file remains byte-for-byte identical between the two hooks.
 
 ## Expected Behavior
 
-- Uma memória ativa cuja assinatura corresponde ao símbolo atual continua
-  `active` após um turno somente leitura.
-- Mudanças preexistentes no worktree não são atribuídas ao turno atual.
-- A memória continua sendo recuperada para uma consulta pelo ref exato.
-- Memórias stale continuam excluídas e consultas sem relação continuam vazias.
+- An active memory whose signature matches the current symbol remains `active` after a read-only turn.
+- Pre-existing working-tree changes are not attributed to the current turn.
+- The memory remains retrievable through an exact-ref query.
+- Stale memories remain excluded, and unrelated queries remain empty.
 
 ## Implementation Constraints
 
-- Git continua obrigatório e é a única fonte de identidade do worktree.
-- Não enfraquecer a detecção de mudanças semânticas feitas durante o turno.
-- Não adicionar estado global, heurística semântica ou chamadas a outro LLM.
-- Manter hooks não bloqueantes e writes atômicos.
+- Git remains mandatory and is the only source of working-tree identity.
+- Do not weaken detection of semantic changes made during the turn.
+- Do not add global state, semantic heuristics, or calls to another LLM.
+- Keep hooks non-blocking and writes atomic.
 
 ## Testing Decisions
 
-- Primeiro teste: arquivo tracked já dirty, uma memória stale com assinatura
-  anterior e uma ativa assinada contra o conteúdo atual, ciclo de hooks sem
-  novas edições; observar falha antes da correção e depois exigir que somente a
-  memória atual permaneça `active` e recuperável.
-- Executar o teste focado em red e green, a suíte relevante e todos os gates.
-- Repetir a validação no plugin instalado após atualizar seu cachebuster.
+- First test: a tracked file already dirty, an older stale memory with its previous signature, an active memory signed against current content, and a hook cycle with no new edits; observe failure before the fix and then require that only the current memory remain `active` and retrievable.
+- Run the focused test in red and green, the relevant suite, and every quality gate.
+- Repeat validation against the installed plugin after updating its cachebuster.
 
 ## Out of Scope
 
-- Alterar o ranking BM25, o orçamento de contexto ou a identidade de memórias.
-- Remover o histórico stale.
-- Criar fallback para arquivos fora do Git ou linguagens não suportadas.
+- Changing BM25 ranking, the context budget, or memory identity.
+- Removing stale history.
+- Creating a fallback for files outside Git or unsupported languages.

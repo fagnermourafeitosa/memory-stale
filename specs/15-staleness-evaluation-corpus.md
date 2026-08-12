@@ -1,68 +1,67 @@
-# 15 — Corpus de avaliação de staleness
+# 15 — Staleness evaluation corpus
 
 ## Problem Statement
 
-O lifecycle usa mudança estrutural como proxy conservador de revalidação, mas o
-projeto ainda não mede quando esse proxy reage a mudanças semanticamente
-irrelevantes nem quando deixa de reagir porque a mudança ocorreu fora da
-evidência registrada. Sem um corpus rotulado, decisões sobre granularidade,
-evidence sets ou dependências transitivas permanecem anedóticas e não há baseline
-para avaliar se a arquitetura melhora o diferencial do produto.
+The lifecycle uses structural change as a conservative proxy for revalidation,
+but the project does not measure when that proxy reacts to semantically
+irrelevant changes or fails to react because a change occurred outside recorded
+evidence. Without a labeled corpus, decisions about granularity, evidence sets,
+or transitive dependencies remain anecdotal, and there is no baseline for
+evaluating whether the architecture improves the product's differentiator.
 
 ## Solution
 
-Adicionar um corpus pequeno, versionado e revisável de cenários before/after com
-claims, evidências registradas, resultado semântico rotulado e resultado esperado
-do lifecycle. Um avaliador determinístico calculará métricas separadas para
-revalidações semanticamente desnecessárias e mudanças semânticas não detectadas.
-As labels serão exemplos independentes escritos por humanos; nenhum LLM será
-chamado para julgar verdade durante a avaliação.
+Add a small, versioned, reviewable corpus of before-and-after scenarios with
+claims, recorded evidence, a labeled semantic outcome, and the expected
+lifecycle result. A deterministic evaluator calculates separate metrics for
+semantically unnecessary revalidation and undetected semantic change. Labels
+are independent human-authored examples; no LLM judges truth during evaluation.
 
 ## User Stories
 
-1. Como mantenedor, quero medir revalidações desnecessárias, para que eu conheça o custo da heurística conservadora.
-2. Como mantenedor, quero medir mudanças semânticas perdidas, para que eu conheça o risco de provenance incompleta.
-3. Como contribuidor, quero cenários reproduzíveis, para que uma mudança no indexador ou lifecycle possa ser comparada ao baseline.
-4. Como avaliador, quero separar comportamento determinístico e verdade rotulada, para que as métricas não confundam contrato com semântica.
-5. Como mantenedor, quero cobrir todas as gramáticas suportadas, para que melhorias não sejam inferidas a partir de uma única linguagem.
-6. Como usuário, quero que instrumentation e refactors equivalentes apareçam nas medições, para que casos comuns de falso stale sejam visíveis.
-7. Como usuário, quero que mudanças em dependências e configuração apareçam nas medições, para que falsos negativos arquiteturais sejam visíveis.
-8. Como contribuidor, quero atualizar deliberadamente labels e baselines, para que regressões não sejam escondidas por expectativas recomputadas.
+1. As a maintainer, I want to measure unnecessary revalidation, so that I understand the cost of the conservative heuristic.
+2. As a maintainer, I want to measure missed semantic changes, so that I understand the risk of incomplete provenance.
+3. As a contributor, I want reproducible scenarios, so that indexer or lifecycle changes can be compared with a baseline.
+4. As an evaluator, I want to separate deterministic behavior from labeled truth, so that metrics do not confuse contract with semantics.
+5. As a maintainer, I want coverage of every supported grammar, so that improvements are not inferred from one language.
+6. As a user, I want instrumentation and equivalent refactors represented in measurements, so that common false-stale cases are visible.
+7. As a user, I want dependency and configuration changes represented in measurements, so that architectural false negatives are visible.
+8. As a contributor, I want labels and baselines updated deliberately, so that recomputed expectations do not hide regressions.
 
 ## Implementation Decisions
 
-- Cada cenário conterá estado anterior, estado posterior, claim independente, evidence snapshot registrado e uma label semântica `preserved` ou `changed`.
-- A expectativa semântica será literal e revisada; nunca será calculada pelo mesmo algoritmo usado pelo produto.
-- O avaliador executará o lifecycle público sobre os fixtures e registrará se a revisão permaneceu `active` ou passou a `stale`.
-- A métrica `unnecessary_revalidation_rate` contará claims rotuladas `preserved` que o motor marcou `stale`.
-- A métrica `missed_semantic_change_rate` contará claims rotuladas `changed` que o motor manteve `active`.
-- As métricas semânticas avaliarão trade-offs do produto; elas não redefinirão `stale` como falso nem tornarão uma revalidação conservadora um bug por si só.
-- O corpus cobrirá, no mínimo, instrumentation, logging, métricas, refactor equivalente, mudança de literal relevante, mudança de controle de fluxo, rename/delete, mudança em dependência indireta, configuração, comentários e formatação.
-- Cada gramática suportada terá fixtures de mudança preservadora e mudança semântica local. Casos transversais poderão começar pelas linguagens que expressem melhor o cenário, sem alegar cobertura universal.
-- Resultados baseline serão versionados e mudanças deverão ser explicadas junto com alterações intencionais do comportamento.
-- O avaliador será uma superfície de desenvolvimento/teste e não um CLI humano como superfície primária do produto.
-- O corpus não chamará outro modelo, não usará embeddings e não dependerá de rede.
+- Each scenario contains prior state, subsequent state, an independent claim, a recorded evidence snapshot, and a semantic label of `preserved` or `changed`.
+- The semantic expectation is literal and reviewed; it is never calculated by the same algorithm as the product.
+- The evaluator runs the public lifecycle against fixtures and records whether the revision remained `active` or became `stale`.
+- `unnecessary_revalidation_rate` counts claims labeled `preserved` that the engine marked `stale`.
+- `missed_semantic_change_rate` counts claims labeled `changed` that the engine kept `active`.
+- Semantic metrics evaluate product trade-offs; they do not redefine `stale` as false or make conservative revalidation a bug by itself.
+- At minimum, the corpus covers instrumentation, logging, metrics, equivalent refactoring, relevant literal changes, control-flow changes, rename or deletion, indirect dependency changes, configuration, comments, and formatting.
+- Every supported grammar has fixtures for a preserving change and a local semantic change. Cross-cutting cases may begin with languages that express the scenario best without claiming universal coverage.
+- Baseline results are versioned, and changes require an explanation alongside intentional behavior adjustments.
+- The evaluator is a development and test surface, not a human-facing CLI as the primary product surface.
+- The corpus does not call another model, use embeddings, or depend on the network.
 
 ## Testing Decisions
 
-- Seam mais alto confirmado: avaliador determinístico consumindo o corpus versionado e o lifecycle público, executado pela suíte normal do projeto.
-- O schema do corpus será validado com mensagens acionáveis para cenário incompleto, label inválida ou evidence locator inconsistente.
-- Testes provarão as fórmulas com um conjunto mínimo de resultados literais, sem recomputar expectativas pelo algoritmo de produção.
-- Um cenário de instrumentation deverá demonstrar revalidação semanticamente desnecessária no baseline estrutural.
-- Um cenário de política MFA indireta deverá demonstrar mudança semântica perdida enquanto somente a ref local estiver registrada.
-- Fixtures de comentários e formatação continuarão comprovando ausência de mudança estrutural para todas as gramáticas suportadas.
-- A suíte deverá distinguir regressão mecânica do lifecycle de mudança deliberada nas métricas semânticas.
+- Highest seam confirmed: a deterministic evaluator consumes the versioned corpus and the public lifecycle and runs within the normal project suite.
+- Corpus schema validation provides actionable messages for incomplete scenarios, invalid labels, or inconsistent evidence locators.
+- Tests prove formulas with a minimal set of literal results without recomputing expectations through the production algorithm.
+- An instrumentation scenario demonstrates semantically unnecessary revalidation under the structural baseline.
+- An indirect MFA policy scenario demonstrates a missed semantic change while only the local ref is recorded.
+- Comment and formatting fixtures continue to prove the absence of structural change for every supported grammar.
+- The suite distinguishes a mechanical lifecycle regression from a deliberate change to semantic metrics.
 
 ## Out of Scope
 
-- Otimizar automaticamente o lifecycle para melhorar as métricas.
-- Usar um LLM como juiz das labels.
-- Definir thresholds de qualidade como promessa pública antes de existir baseline.
-- Adicionar evidence sets, tipos de evidência ou dependency graph.
-- Medir qualidade de retrieval lexical ou semântico.
-- Transformar o avaliador em serviço, dashboard remoto ou CLI principal.
+- Automatically optimizing the lifecycle to improve metrics.
+- Using an LLM as the label judge.
+- Defining quality thresholds as a public promise before a baseline exists.
+- Adding evidence sets, evidence types, or a dependency graph.
+- Measuring lexical or semantic retrieval quality.
+- Turning the evaluator into a service, remote dashboard, or primary CLI.
 
 ## Further Notes
 
-- Esta spec depende das definições da spec 13 e deve executar sobre o modelo revisionado da spec 14.
-- O corpus orientará a prioridade das specs seguintes sem bloquear a correção já conhecida de evidence revisions.
+- This spec depends on the definitions in spec 13 and runs against the revisioned model from spec 14.
+- The corpus guides the priority of later specs without blocking the known evidence-revision fix.
