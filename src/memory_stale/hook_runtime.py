@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TextIO, TypedDict, cast
 
@@ -131,8 +132,38 @@ def _changes_since(
     return changes
 
 
-def _run_lifecycle(_changes: list[ChangedPath], _ledger: list[LedgerEntry]) -> None:
-    """Lifecycle integration boundary implemented by spec 04."""
+def _run_lifecycle(
+    repository: Path,
+    changes: list[ChangedPath],
+    _ledger: list[LedgerEntry],
+    captures: list[object],
+) -> None:
+    from memory_stale.lifecycle import RefEvidence, reconcile
+    from memory_stale.memory_store import MemoryStore
+    from memory_stale.symbol_index import InvalidSyntaxError, SymbolIndexer, SymbolNotFoundError
+
+    store = MemoryStore(repository)
+    memories = store.load_all()
+    changed_paths = {change["path"] for change in changes}
+    indexer = SymbolIndexer(repository)
+    evidence: dict[str, RefEvidence] = {}
+    for memory in memories:
+        for ref, expected in memory.signatures.items():
+            path_text = ref.rpartition(":")[0]
+            if path_text not in changed_paths:
+                evidence[ref] = RefEvidence(expected)
+                continue
+            try:
+                evidence[ref] = RefEvidence(indexer.signature(ref))
+            except SymbolNotFoundError as error:
+                reason = "file_missing" if "file not found" in str(error) else "symbol_missing"
+                evidence[ref] = RefEvidence(None, reason)
+            except (InvalidSyntaxError, RuntimeError):
+                evidence[ref] = RefEvidence(None, "unresolvable")
+    capture_mappings = [
+        cast(Mapping[str, object], item) for item in captures if isinstance(item, dict)
+    ]
+    store.write_all(reconcile(memories, capture_mappings, evidence))
 
 
 def _read_payload(stream: TextIO) -> dict[str, object]:
@@ -245,7 +276,7 @@ def run_stop(
             return 0
         state = _read_task(task_path)
         changes = _changes_since(state["baseline"], _snapshot(repository))
-        _run_lifecycle(changes, state["ledger"])
+        _run_lifecycle(repository, changes, state["ledger"], state["captures"])
         task_path.unlink()
         json.dump({}, output_stream)
         output_stream.write("\n")

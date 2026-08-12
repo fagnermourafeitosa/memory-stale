@@ -24,6 +24,9 @@ Implementar motor puro que recebe memórias, ledger e captures e devolve operaç
 
 ## Testing Decisions
 
+- Seam confirmado pela autorização contínua: uma função pública pura recebe
+  corpus, captures e estados atuais das refs e devolve o corpus reconciliado;
+  o store Markdown é testado pelo diretório público persistido.
 - Testar criação, múltiplas refs, cada razão de stale, idempotência e escrita atômica.
 - Testar motor como seam único com entradas/saídas puras.
 

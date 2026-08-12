@@ -104,6 +104,26 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
     assert len(capture["signatures"]["auth.py:login"]) == 64
     assert not (repository / ".agents" / "skills" / ".agent-memory" / "memories").exists()
 
+    environment = os.environ.copy()
+    environment.update({"PLUGIN_ROOT": str(PLUGIN_ROOT), "PLUGIN_DATA": str(PLUGIN_ROOT)})
+    config = json.loads((PLUGIN_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
+    stop_command = config["hooks"]["Stop"][0]["hooks"][0]["command"]
+    stopped = subprocess.run(
+        stop_command,
+        cwd=repository,
+        env=environment,
+        input=json.dumps({"turn_id": "turn-1", "cwd": str(repository)}),
+        shell=True,
+        capture_output=True,
+        text=True,
+    )
+    assert stopped.returncode == 0, stopped.stderr
+    memories = list((repository / ".agents" / "skills" / ".agent-memory" / "memories").glob("*.md"))
+    assert len(memories) == 1
+    assert "Login validates MFA before creating a session." in memories[0].read_text(
+        encoding="utf-8"
+    )
+
 
 def test_capture_rejects_invalid_or_unchanged_refs_and_is_idempotent(tmp_path: Path) -> None:
     repository = _repository(tmp_path)

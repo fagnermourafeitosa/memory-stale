@@ -4,6 +4,10 @@ import subprocess
 from pathlib import Path
 from typing import cast
 
+from memory_stale.lifecycle import Memory
+from memory_stale.memory_store import MemoryStore
+from memory_stale.symbol_index import SymbolIndexer
+
 PLUGIN_ROOT = Path(__file__).parents[1]
 
 
@@ -300,3 +304,38 @@ def test_followup_hooks_report_corrupt_task_state_without_blocking(tmp_path: Pat
     assert stop_result.stderr == ""
     stop_message = json.loads(stop_result.stdout)["systemMessage"]
     assert stop_message.startswith("Memory Stale Stop failed: JSONDecodeError:")
+
+
+def test_stop_marks_memory_stale_when_task_changes_its_symbol(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path)
+    source = repository / "service.py"
+    source.write_text("def compute():\n    return 1\n", encoding="utf-8")
+    _run_git(repository, "add", "service.py")
+    _run_git(repository, "commit", "--quiet", "-m", "add service")
+    signature = SymbolIndexer(repository).signature("service.py:compute")
+    store = MemoryStore(repository)
+    store.write_all(
+        [
+            Memory(
+                "memory-1",
+                "behavior",
+                "active",
+                "Compute returns one.",
+                "Callers rely on it.",
+                {"service.py:compute": signature},
+            )
+        ]
+    )
+    assert (
+        _run_hook(
+            "UserPromptSubmit", repository, {"turn_id": "turn-2", "cwd": str(repository)}
+        ).returncode
+        == 0
+    )
+    source.write_text("def compute():\n    return 2\n", encoding="utf-8")
+
+    result = _run_hook("Stop", repository, {"turn_id": "turn-2", "cwd": str(repository)})
+
+    assert result.returncode == 0
+    assert store.load_all()[0].status == "stale"
+    assert store.load_all()[0].stale_reasons == {"service.py:compute": "changed"}
