@@ -18,6 +18,9 @@
 3. **[2026-08-11] Preserve project ideation in Markdown**
    Do instead: capture agreed product concepts in a clearly named project Markdown file before implementation.
 
+4. **[2026-08-12] Budget two minutes for the repository evaluation**
+   Do instead: use focused evaluator tests during red-green cycles, then run the 100-trial end-to-end corpus once in the final full suite.
+
 ## User Directives
 
 1. **[2026-08-11] Use TDD for all production behavior**

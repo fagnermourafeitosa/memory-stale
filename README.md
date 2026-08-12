@@ -244,7 +244,9 @@ than redefining evidence staleness as claim truth.
 ## Repository-scale lifecycle evaluation
 
 `evaluator/corpus/repository-lifecycle-corpus.yaml` is a separate, versioned
-evaluation of the full plugin lifecycle in temporary Git repositories. Every labeled trial creates
+evaluation of the full plugin lifecycle in temporary Git repositories. Its 100
+explicitly labeled, reviewable trials are balanced between 50 `changed` and 50 `preserved`
+labels. Every trial records a semantic case group and a label rationale, creates
 an initial commit, captures a claim through the real `memory.capture` MCP
 process, applies a subsequent Git change, completes the real `Stop` hook, and
 observes both persisted Markdown status and later `UserPromptSubmit` context.
@@ -257,17 +259,27 @@ complete confusion matrix before rates: true stale (`changed → stale`), false
 stale (`preserved → stale`), missed semantic change (`changed → active`), and
 true active (`preserved → active`). It also records stale recall, stale
 precision, specificity, unnecessary-revalidation rate,
-missed-semantic-change rate, and overall accuracy, with descriptive Wilson 95%
-intervals produced by the evaluator. The corpus is curated rather than randomly
-sampled, so these intervals describe this labeled set and are not population
-estimates.
+missed-semantic-change rate, and the aggregate corpus score. The current matrix
+is 38 true stale, 26 false stale, 12 missed changes, and 24 true active: a 62%
+aggregate corpus score, 76% stale recall, and 48% specificity. The unweighted
+macro-family score is 58.3%. Per-family matrices keep repeated grammar variants
+from hiding the intentionally difficult conservative-revalidation and
+incomplete-provenance families.
+
+These values are regression measurements for this curated corpus, not an
+estimate of accuracy on all repositories. Wilson 95% intervals are retained as
+descriptions of the finite labeled set, but the trials are neither random nor
+independent population samples. The evaluator therefore reports counts first
+and does not present an interval as evidence of real-world generalization.
 
 Capture failures, hook failures, unresolved locators, and retrieval mismatches
 remain separate operational outcomes. They are never counted as favorable stale
-results or mixed into the semantic matrix. The corpus includes a changed and a
-preserved trial for every supported grammar, plus deliberate instrumentation
-false-stale and incomplete-provenance false-active cases; adding a trial or
-changing its expected outcome requires a reviewed baseline explanation.
+results or mixed into the semantic matrix, while `attempted_count` prevents them
+from disappearing from the report. The corpus covers all supported grammars and
+includes direct changes, preserving refactors, fully defined instrumentation,
+dependencies actually consumed by source, explicit evidence graphs, and
+repository-shape changes. Adding a trial or changing its expected outcome
+requires a reviewed rationale and baseline explanation.
 
 Project configuration lives at:
 

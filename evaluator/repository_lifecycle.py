@@ -25,6 +25,8 @@ class RepositoryTrial:
 
     identifier: str
     family: str
+    semantic_case: str
+    label_rationale: str
     label: str
     initial_files: dict[str, str]
     capture_files: dict[str, str]
@@ -48,6 +50,7 @@ class TrialOutcome:
     """The persisted lifecycle and later availability observations for one trial."""
 
     identifier: str
+    family: str
     label: str
     lifecycle_status: str
     retrieval_status: str
@@ -86,22 +89,36 @@ class EvaluationMetrics:
 
 
 @dataclass(frozen=True)
+class FamilyEvaluation:
+    """One family's classifiable observations and unweighted accuracy input."""
+
+    family: str
+    sample_count: int
+    matrix: ConfusionMatrix
+    accuracy: RateMetric
+
+
+@dataclass(frozen=True)
 class RepositoryEvaluationResult:
     """Deterministic, classifiable outcomes and separately retained failures."""
 
     corpus_version: int
+    attempted_count: int
     sample_count: int
     trials: tuple[TrialOutcome, ...]
     matrix: ConfusionMatrix
     metrics: EvaluationMetrics
+    families: tuple[FamilyEvaluation, ...]
+    macro_family_accuracy: float | None
     operational_outcomes: tuple[OperationalOutcome, ...]
 
 
 def load_repository_corpus(path: Path) -> tuple[int, tuple[RepositoryTrial, ...]]:
     """Load a versioned repository corpus without inferring semantic labels."""
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(loaded, dict) or loaded.get("version") != 1:
-        raise RepositoryCorpusError("repository corpus version must be 1")
+    if not isinstance(loaded, dict) or loaded.get("version") not in {1, 2}:
+        raise RepositoryCorpusError("repository corpus version must be 1 or 2")
+    version = cast(int, loaded["version"])
     raw_trials = loaded.get("trials")
     if not isinstance(raw_trials, list) or not raw_trials:
         raise RepositoryCorpusError("repository corpus trials must be a non-empty list")
@@ -122,6 +139,8 @@ def load_repository_corpus(path: Path) -> tuple[int, tuple[RepositoryTrial, ...]
             RepositoryTrial(
                 identifier=identifier,
                 family=_required_string(raw_trial, "family", identifier),
+                semantic_case=_required_string(raw_trial, "semantic_case", identifier),
+                label_rationale=_required_string(raw_trial, "label_rationale", identifier),
                 label=label,
                 initial_files=_sources(raw_trial.get("initial_files"), identifier, "initial_files"),
                 capture_files=_sources(raw_trial.get("capture_files"), identifier, "capture_files"),
@@ -133,7 +152,15 @@ def load_repository_corpus(path: Path) -> tuple[int, tuple[RepositoryTrial, ...]
                 ),
             )
         )
-    return 1, tuple(sorted(trials, key=lambda trial: trial.identifier))
+    cases_by_family: dict[str, list[str]] = {}
+    for trial in trials:
+        cases_by_family.setdefault(trial.family, []).append(trial.semantic_case)
+    for family, cases in cases_by_family.items():
+        if len(cases) > 1 and len(set(cases)) < 2:
+            raise RepositoryCorpusError(
+                f"{family}: multi-sample families require distinct semantic cases"
+            )
+    return version, tuple(sorted(trials, key=lambda trial: trial.identifier))
 
 
 def evaluate_repository_corpus(
@@ -153,12 +180,20 @@ def evaluate_repository_corpus(
         operational.extend(failures)
     ordered_outcomes = tuple(sorted(outcomes, key=lambda outcome: outcome.identifier))
     matrix = _matrix(ordered_outcomes)
+    families = _families(ordered_outcomes)
     return RepositoryEvaluationResult(
         corpus_version=version,
+        attempted_count=len(trials),
         sample_count=len(ordered_outcomes),
         trials=ordered_outcomes,
         matrix=matrix,
         metrics=_metrics(matrix),
+        families=families,
+        macro_family_accuracy=(
+            sum(cast(float, family.accuracy.rate) for family in families) / len(families)
+            if families
+            else None
+        ),
         operational_outcomes=tuple(
             sorted(
                 operational, key=lambda outcome: (outcome.identifier, outcome.kind, outcome.detail)
@@ -170,19 +205,36 @@ def evaluate_repository_corpus(
 def assert_repository_baseline(result: RepositoryEvaluationResult, baseline_path: Path) -> None:
     """Require a checked-in baseline to state the exact observed evaluation result."""
     loaded = yaml.safe_load(baseline_path.read_text(encoding="utf-8"))
-    if not isinstance(loaded, dict) or loaded.get("version") != 1:
-        raise RepositoryCorpusError("repository baseline version must be 1")
+    if not isinstance(loaded, dict) or loaded.get("version") not in {1, 2}:
+        raise RepositoryCorpusError("repository baseline version must be 1 or 2")
     baseline = cast(dict[object, object], loaded)
+    baseline_version = cast(int, baseline["version"])
     if baseline.get("corpus_version") != result.corpus_version:
         raise RepositoryCorpusError("repository baseline corpus_version differs")
     if baseline.get("sample_count") != result.sample_count:
         raise RepositoryCorpusError("repository baseline sample_count differs")
+    if baseline_version == 2 and baseline.get("attempted_count") != result.attempted_count:
+        raise RepositoryCorpusError("repository baseline attempted_count differs")
     _assert_mapping(baseline.get("matrix"), _matrix_mapping(result.matrix), "matrix")
     raw_metrics = baseline.get("metrics")
     if not isinstance(raw_metrics, dict):
         raise RepositoryCorpusError("repository baseline metrics must be an object")
     for name, metric in _metric_mapping(result.metrics).items():
         _assert_mapping(raw_metrics.get(name), metric, f"metrics.{name}")
+    if baseline_version == 2:
+        expected_families = [
+            {
+                "family": item.family,
+                "sample_count": item.sample_count,
+                "matrix": _matrix_mapping(item.matrix),
+                "accuracy": _metric_value(item.accuracy),
+            }
+            for item in result.families
+        ]
+        if baseline.get("families") != expected_families:
+            raise RepositoryCorpusError("repository baseline families differs")
+        if baseline.get("macro_family_accuracy") != result.macro_family_accuracy:
+            raise RepositoryCorpusError("repository baseline macro_family_accuracy differs")
     expected_operational = [
         {"id": item.identifier, "kind": item.kind, "detail": item.detail}
         for item in result.operational_outcomes
@@ -192,6 +244,7 @@ def assert_repository_baseline(result: RepositoryEvaluationResult, baseline_path
     expected_trials = [
         {
             "id": item.identifier,
+            **({"family": item.family} if baseline_version == 2 else {}),
             "label": item.label,
             "lifecycle_status": item.lifecycle_status,
             "retrieval_status": item.retrieval_status,
@@ -269,7 +322,12 @@ def _run_trial(
         return None, [
             _failure(trial, "retrieval_miss", f"{lifecycle_status} claim availability mismatch")
         ]
-    return TrialOutcome(trial.identifier, trial.label, lifecycle_status, retrieval_status), failures
+    return (
+        TrialOutcome(
+            trial.identifier, trial.family, trial.label, lifecycle_status, retrieval_status
+        ),
+        failures,
+    )
 
 
 def _matrix(outcomes: tuple[TrialOutcome, ...]) -> ConfusionMatrix:
@@ -291,6 +349,26 @@ def _matrix(outcomes: tuple[TrialOutcome, ...]) -> ConfusionMatrix:
             for outcome in outcomes
         ),
     )
+
+
+def _families(outcomes: tuple[TrialOutcome, ...]) -> tuple[FamilyEvaluation, ...]:
+    names = sorted({outcome.family for outcome in outcomes})
+    results: list[FamilyEvaluation] = []
+    for name in names:
+        family_outcomes = tuple(outcome for outcome in outcomes if outcome.family == name)
+        matrix = _matrix(family_outcomes)
+        results.append(
+            FamilyEvaluation(
+                family=name,
+                sample_count=len(family_outcomes),
+                matrix=matrix,
+                accuracy=_rate(
+                    matrix.true_stale + matrix.true_active,
+                    len(family_outcomes),
+                ),
+            )
+        )
+    return tuple(results)
 
 
 def _metrics(matrix: ConfusionMatrix) -> EvaluationMetrics:
