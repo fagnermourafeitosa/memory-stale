@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# uv / Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Test and quality caches
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Generated local reports
+memory-report.html
