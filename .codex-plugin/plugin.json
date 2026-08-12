@@ -12,6 +12,7 @@
     "git"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Memory Stale",
     "shortDescription": "Keep Codex project memory aligned with code.",

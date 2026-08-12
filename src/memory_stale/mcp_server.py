@@ -1,0 +1,150 @@
+"""Local stdio MCP server for Memory Stale."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from typing import TextIO, cast
+
+from memory_stale.hook_runtime import _atomic_json_write, _repository_root, _snapshot
+
+KINDS = {"behavior", "contract", "constraint", "architecture", "operation"}
+
+
+def _tool_result(text: str, *, error: bool = False) -> dict[str, object]:
+    return {"content": [{"type": "text", "text": text}], "isError": error}
+
+
+def _active_task(repository: Path) -> Path:
+    git_dir = Path(
+        __import__("subprocess")
+        .run(
+            ["git", "-C", str(repository), "rev-parse", "--absolute-git-dir"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        .stdout.strip()
+    )
+    tasks = list((git_dir / "memory-stale" / "tasks").glob("*.json"))
+    if len(tasks) != 1:
+        raise ValueError("memory.capture requires exactly one active turn")
+    return tasks[0]
+
+
+def _string(arguments: dict[str, object], name: str) -> str:
+    value = arguments.get(name)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} is required")
+    return value.strip()
+
+
+def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
+    kind = _string(arguments, "kind")
+    if kind not in KINDS:
+        raise ValueError(f"kind must be one of: {', '.join(sorted(KINDS))}")
+    claim = _string(arguments, "claim")
+    durability_reason = _string(arguments, "durability_reason")
+    refs_value = arguments.get("refs")
+    if not isinstance(refs_value, list) or not refs_value:
+        raise ValueError("refs is required")
+    refs = [ref_value for ref_value in refs_value if isinstance(ref_value, str) and ref_value]
+    if len(refs) != len(refs_value):
+        raise ValueError("refs must contain non-empty strings")
+    repository = _repository_root(cwd)
+    task_path = _active_task(repository)
+    task = cast(dict[str, object], json.loads(task_path.read_text(encoding="utf-8")))
+    baseline = cast(dict[str, object], task["baseline"])
+    current = _snapshot(repository)
+    for ref in refs:
+        path_text, separator, _symbol = ref.rpartition(":")
+        if not separator or not path_text or baseline.get(path_text) == current.get(path_text):
+            raise ValueError(f"ref did not change in this turn: {ref}")
+    candidate = {
+        "kind": kind,
+        "claim": claim,
+        "refs": refs,
+        "durability_reason": durability_reason,
+    }
+    captures = cast(list[object], task.setdefault("captures", []))
+    key = (kind, " ".join(claim.casefold().split()), tuple(sorted(refs)))
+    for existing in captures:
+        if isinstance(existing, dict):
+            existing_key = (
+                existing.get("kind"),
+                " ".join(str(existing.get("claim", "")).casefold().split()),
+                tuple(sorted(cast(list[str], existing.get("refs", [])))),
+            )
+            if existing_key == key:
+                return _tool_result("Capture already staged for this turn.")
+    captures.append(candidate)
+    _atomic_json_write(task_path, task)
+    return _tool_result("Capture staged for lifecycle validation.")
+
+
+def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None:
+    request_id = request.get("id")
+    method = request.get("method")
+    if request_id is None:
+        return None
+    if method == "initialize":
+        result: object = {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": "memory-stale", "version": "0.1.0"},
+        }
+    elif method == "tools/list":
+        result = {
+            "tools": [
+                {
+                    "name": "memory.capture",
+                    "description": "Stage durable code-anchored project memory.",
+                    "inputSchema": {
+                        "type": "object",
+                        "required": ["kind", "claim", "refs", "durability_reason"],
+                        "properties": {
+                            "kind": {"type": "string", "enum": sorted(KINDS)},
+                            "claim": {"type": "string"},
+                            "refs": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                            "durability_reason": {"type": "string"},
+                        },
+                        "additionalProperties": False,
+                    },
+                }
+            ]
+        }
+    elif method == "tools/call":
+        params = request.get("params")
+        if not isinstance(params, dict) or params.get("name") != "memory.capture":
+            result = _tool_result("Unknown tool.", error=True)
+        else:
+            arguments = params.get("arguments")
+            try:
+                if not isinstance(arguments, dict):
+                    raise ValueError("arguments must be an object")
+                result = _capture(cast(dict[str, object], arguments), cwd)
+            except Exception as error:
+                result = _tool_result(str(error), error=True)
+    else:
+        return {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {"code": -32601, "message": "Method not found"},
+        }
+    return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+
+def serve(input_stream: TextIO = sys.stdin, output_stream: TextIO = sys.stdout) -> int:
+    cwd = Path.cwd()
+    for line in input_stream:
+        request = cast(dict[str, object], json.loads(line))
+        response = _dispatch(request, cwd)
+        if response is not None:
+            output_stream.write(json.dumps(response) + "\n")
+            output_stream.flush()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(serve())

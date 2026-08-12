@@ -27,6 +27,7 @@ class TaskState(TypedDict):
     repository: str
     baseline: dict[str, FileSnapshot]
     ledger: list[LedgerEntry]
+    captures: list[object]
 
 
 class ChangedPath(TypedDict):
@@ -178,6 +179,7 @@ def run_user_prompt_submit(
             "repository": str(repository),
             "baseline": _snapshot(repository),
             "ledger": [],
+            "captures": [],
         }
         _atomic_json_write(_task_path(repository, turn_id), state)
         json.dump(
