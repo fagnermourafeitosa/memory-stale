@@ -2,8 +2,8 @@
 
 Automatic, code-anchored project memory for Codex.
 
-Memory Stale gives Codex relevant knowledge before a task and invalidates that
-knowledge when the code supporting it changes. It runs as a Codex plugin through
+Memory Stale gives Codex relevant knowledge before a task and requires
+revalidation when the recorded code evidence changes. It runs as a Codex plugin through
 lifecycle hooks, a bundled skill, and a local MCP server. There is no separate
 human-facing CLI, second LLM, remote service, vector database, or manual
 `remember` command.
@@ -15,7 +15,7 @@ human-facing CLI, second LLM, remote service, vector database, or manual
 
 ## Why it exists
 
-Persistent memory is useful only while it remains true.
+Persistent memory is useful only while its recorded evidence remains unchanged.
 
 Suppose an agent remembers that `AuthService.login` accepts only a password. If
 that method later gains MFA validation, the old fact becomes dangerous: it is
@@ -23,15 +23,20 @@ easy to retrieve, confidently stated, and no longer supported by the code.
 
 Memory Stale connects each durable claim to the exact code symbols that support
 it. Git identifies the working tree, tree-sitter provides structural signatures,
-and deterministic lifecycle rules decide whether a memory is still valid.
+and deterministic lifecycle rules decide whether its recorded evidence still
+matches the capture.
 
 ```text
-active memory + unchanged symbol  → available to future Codex tasks
-active memory + changed symbol    → stale and excluded from normal context
-new durable behavior              → captured as a new active memory
+active memory + unchanged evidence → available to future Codex tasks
+active memory + changed evidence   → stale and excluded pending revalidation
+new durable behavior               → captured as a new active memory
 ```
 
-The stale record remains available for audit; it is never silently rewritten as
+`active` means every recorded item of evidence still matches its captured
+fingerprint. It does not prove that the claim is true or that its provenance is
+complete. `stale` means recorded evidence changed, disappeared, or could not be
+resolved, so the claim requires revalidation; it does not prove the claim false.
+The stale record remains available for audit and is never silently rewritten as
 if it had always contained the new behavior.
 
 ## A 60-second example
@@ -46,7 +51,7 @@ Login validates password and MFA before creating a session.
 During that turn, Codex stages the claim with `memory.capture`. The local tool
 verifies that the referenced symbol exists and changed during the task, then
 computes its structural signature. At `Stop`, Memory Stale reconciles existing
-evidence and writes the valid capture as an active Markdown memory.
+evidence and writes the validated capture as an active Markdown memory.
 
 On a later task mentioning `src/auth.py:AuthService.login`, Codex receives:
 
@@ -135,8 +140,8 @@ Memory maintenance is automatic:
 2. `PostToolUse` records task activity while Codex works.
 3. Codex calls `memory.capture` only for durable facts supported by changed code.
 4. `Stop` compares the final workspace with the task-start snapshot, validates
-   refs and signatures, persists valid captures, and marks affected memories
-   stale.
+   refs and signatures, persists captures whose recorded evidence resolves, and
+   marks affected memories stale for revalidation.
 
 You do not call `memory.capture` yourself. Ask Codex to work normally. The
 bundled skill decides when a fact is durable enough to propose, while the local
@@ -231,7 +236,8 @@ For an explicit repository-wide audit, invoke:
 ```
 
 The deterministic `memory.dream` tool checks current symbol evidence, reports
-stale or broken items, and marks newly invalid active memories stale. The same
+stale or broken items, and marks active memories whose evidence no longer
+matches as stale for revalidation. The same
 Codex instance can then review those results and use `memory.capture` for new
 durable facts. Dream does not launch another LLM and does not rewrite healthy
 active memories without evidence.
@@ -243,7 +249,7 @@ are implementation surfaces, not a separate end-user CLI.
 
 - `memory.capture` stages a durable claim anchored to symbols changed during the
   active turn.
-- `memory.dream` performs an explicit wide staleness audit.
+- `memory.dream` performs an explicit wide evidence-revalidation audit.
 - `memory.report` writes the optional static HTML health report.
 
 Capture kinds are `behavior`, `contract`, `constraint`, `architecture`, and
@@ -257,9 +263,9 @@ signatures. Signatures include syntax structure and real tokens while ignoring
 whitespace and comments.
 
 - Logic, identifiers, literals, parameters, or structural changes make a memory
-  stale.
-- Deleting or renaming a symbol makes its memory stale.
-- Deleting its file makes its memory stale.
+  stale and require its claim to be revalidated.
+- Deleting or renaming a symbol makes its recorded evidence stale.
+- Deleting its file makes its recorded evidence stale.
 - Formatting and comment-only changes do not make it stale.
 
 V1 supports TypeScript, JavaScript, Python, Go, Java, Kotlin, and Rust. There is
@@ -332,7 +338,7 @@ implemented and covered by integration or end-to-end tests:
 
 - installable local Codex plugin with isolated `uv` bootstrap;
 - bundled skill, lifecycle hooks, and three local MCP tools;
-- Markdown memory store and `active → stale` lifecycle;
+- Markdown memory store and `active → stale` evidence-revalidation lifecycle;
 - structural indexing for all seven v1 languages;
 - deterministic retrieval with exact-ref priority and context budgets;
 - Dream reconciliation, project configuration, and HTML reporting;
@@ -346,7 +352,8 @@ stable release.
 
 - There is no published marketplace release or one-command public installation.
 - Codex provides the semantic judgment about whether prose is durable; the local
-  engine validates evidence but cannot prove semantic value.
+  engine checks recorded evidence but cannot prove claim truth, semantic value,
+  or provenance completeness.
 - Retrieval is lexical and structural. A query with no shared language or refs
   may miss a conceptually related memory.
 - Exact deduplication does not merge semantically equivalent wording.

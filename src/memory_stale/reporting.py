@@ -66,7 +66,10 @@ def _render(memories: list[Memory]) -> str:
         '<!doctype html><html><head><meta charset="utf-8"><title>Memory Stale</title>'
         "<style>body{font-family:system-ui;margin:2rem}table{border-collapse:collapse;width:100%}"
         "th,td{border:1px solid #ccc;padding:.5rem;text-align:left;vertical-align:top}</style>"
-        "</head><body><h1>Memory Stale report</h1><table><thead><tr><th>Status</th>"
+        "</head><body><h1>Memory Stale report</h1>"
+        "<p><code>active</code> means recorded evidence is unchanged; "
+        "<code>stale</code> means evidence requires revalidation. Neither state "
+        "proves claim truth or falsehood.</p><table><thead><tr><th>Status</th>"
         "<th>Kind</th><th>Claim</th><th>Durability</th><th>Refs</th><th>Reasons</th>"
         f"</tr></thead><tbody>{body}</tbody></table></body></html>\n"
     )

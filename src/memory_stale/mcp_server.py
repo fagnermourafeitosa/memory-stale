@@ -107,7 +107,10 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
             "tools": [
                 {
                     "name": "memory.capture",
-                    "description": "Stage durable code-anchored project memory.",
+                    "description": (
+                        "Stage durable code-anchored project memory. Active means "
+                        "recorded evidence is unchanged; stale requires revalidation."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "required": ["kind", "claim", "refs", "durability_reason"],
@@ -122,7 +125,7 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
                 },
                 {
                     "name": "memory.dream",
-                    "description": "Audit stale and broken project memory.",
+                    "description": "Audit project memory whose evidence requires revalidation.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {},

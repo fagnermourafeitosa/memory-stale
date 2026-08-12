@@ -5,9 +5,13 @@ description: Maintain deterministic, code-anchored project memory through the bu
 
 # Memory Stale
 
-Memory Stale runs automatically during Codex turns. Treat its injected active
-memories as project context, while continuing to verify claims against the
-current code before making changes.
+Memory Stale runs automatically during Codex turns. An injected `active` memory
+means only that its recorded evidence still matches the capture; it does not
+prove claim truth or complete provenance. A `stale` memory requires
+revalidation because evidence changed, disappeared, or could not be resolved;
+it does not prove the claim false. Treat active memories as project context,
+while continuing to verify claims against the current code before making
+changes.
 
 The plugin requires a Git working tree. If a hook reports that Memory Stale is
 inactive or encountered an error, continue the user's task normally and surface

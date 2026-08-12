@@ -1,5 +1,7 @@
 # 13 — Staleness requires revalidation
 
+**Status: Done (2026-08-11)**
+
 ## Problem Statement
 
 The product currently associates a memory with structural signatures and marks
