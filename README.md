@@ -39,6 +39,34 @@ resolved, so the claim requires revalidation; it does not prove the claim false.
 The stale record remains available for audit and is never silently rewritten as
 if it had always contained the new behavior.
 
+## How it relates to LLM-Wiki
+
+Memory Stale is persistent memory. It captures durable claims, stores them as
+Git-reviewable Markdown, retrieves relevant active claims in later Codex tasks,
+and preserves immutable evidence revisions. It is not merely an invalidation
+tool.
+
+LLM-Wiki, in the sense of the Karpathy pattern, is also persistent memory: an
+LLM incrementally compiles sources and conversations into an interlinked wiki
+and maintains it as new information arrives. Memory Stale does not claim that
+such a wiki cannot update its knowledge after code changes.
+
+The distinction is the enforcement point. A wiki relies on an LLM maintenance
+pass to recognize a changed source and update its page. Memory Stale records the
+specific code evidence supporting a claim; if that evidence diverges, the
+revision is deterministically marked `stale` and is excluded from ordinary
+context until Codex revalidates and captures a new revision.
+
+Memory Stale is therefore a specialized, complementary form of LLM-Wiki-style
+memory for evolving software repositories: an integrity layer for
+code-anchored facts. A broad wiki can own research, documents, session history,
+and exploratory knowledge; Memory Stale supplies provenance and freshness
+enforcement for claims that must stay supported by the current code.
+
+Neither state is a truth proof. `active` means the recorded evidence still
+matches, not that the claim is universally true or complete. `stale` means that
+the recorded support changed, not that the claim is false.
+
 ## A 60-second example
 
 Imagine Codex changes `src/auth.py:AuthService.login` and establishes this
