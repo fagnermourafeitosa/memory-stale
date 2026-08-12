@@ -74,6 +74,7 @@ warn_unused_configs = true
 [tool.coverage.run]
 branch = true
 source = ["memory_stale"]
+patch = ["subprocess"]
 
 [tool.coverage.report]
 fail_under = 90

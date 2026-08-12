@@ -248,13 +248,15 @@ why it is inactive and performs no memory operations.
 
 ## Project status
 
-Memory Stale is pre-alpha. The product contract and architecture are defined,
-but no installable release is available yet. Storage formats, configuration,
-and plugin interfaces may change before `0.1.0`.
+Memory Stale is pre-alpha. The plugin manifest, bundled skill, and lifecycle
+hook runtime are implemented for local development. The memory engine, MCP
+capture tool, retrieval, and installable release are still pending. Storage
+formats, configuration, and plugin interfaces may change before `0.1.0`.
 
 ## Current limitations
 
-- There is no installable release yet.
+- There is no complete installable release yet; the current plugin package is a
+  development scaffold without the memory engine or MCP capture tool.
 - Only the seven languages listed above are supported in v1.
 - Syntax that tree-sitter cannot resolve cannot be used as memory evidence.
 - All refs in a new capture must have changed in the current task. This favors
