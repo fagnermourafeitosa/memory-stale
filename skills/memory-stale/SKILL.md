@@ -18,3 +18,7 @@ tool. Review only the stale or broken items it reports. Use `memory.capture` for
 new durable facts supported by code; never rewrite a healthy active memory
 without verifiable evidence. Report created memories, newly stale memories, and
 errors at the end of the same flow.
+
+When the user asks for the memory health report, call `memory.report` and return
+the generated local path. Do not generate the report on ordinary turns unless
+project configuration enables automatic reporting.

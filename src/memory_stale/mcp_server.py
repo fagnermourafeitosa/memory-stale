@@ -9,6 +9,8 @@ from typing import TextIO, cast
 
 from memory_stale.dream import dream
 from memory_stale.hook_runtime import _atomic_json_write, _repository_root, _snapshot
+from memory_stale.memory_store import MemoryStore
+from memory_stale.reporting import write_report
 from memory_stale.symbol_index import SymbolIndexer
 
 KINDS = {"behavior", "contract", "constraint", "architecture", "operation"}
@@ -127,11 +129,24 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
                         "additionalProperties": False,
                     },
                 },
+                {
+                    "name": "memory.report",
+                    "description": "Generate the project memory HTML report.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                },
             ]
         }
     elif method == "tools/call":
         params = request.get("params")
-        if isinstance(params, dict) and params.get("name") == "memory.dream":
+        if isinstance(params, dict) and params.get("name") == "memory.report":
+            repository = _repository_root(cwd)
+            path = write_report(repository, MemoryStore(repository).load_all(), requested=True)
+            result = _tool_result(f"Report written to {path}")
+        elif isinstance(params, dict) and params.get("name") == "memory.dream":
             summary = dream(_repository_root(cwd))
             result = _tool_result(
                 json.dumps(

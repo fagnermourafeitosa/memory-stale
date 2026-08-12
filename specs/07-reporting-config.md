@@ -23,6 +23,9 @@ Ler configuração do projeto e gerar HTML apenas por pedido ou quando auto-repo
 
 ## Testing Decisions
 
+- Seam confirmado pela autorização contínua: configuração é carregada pela
+  função pública a partir da raiz do repositório e o relatório é observado no
+  arquivo HTML final, incluindo decisão explícita/automática de geração.
 - Testar defaults, override válido/inválido e ausência de config.
 - Testar HTML com corpus vazio, active, stale e caracteres escapados.
 - Testar que relatório não é produzido sem pedido/configuração.

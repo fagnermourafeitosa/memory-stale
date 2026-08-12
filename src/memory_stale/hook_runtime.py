@@ -214,11 +214,14 @@ def run_user_prompt_submit(
         }
         _atomic_json_write(_task_path(repository, turn_id), state)
         from memory_stale.memory_store import MemoryStore
+        from memory_stale.reporting import load_config
         from memory_stale.retrieval import retrieve
 
         prompt = payload.get("prompt")
         context = retrieve(
-            MemoryStore(repository).load_all(), prompt if isinstance(prompt, str) else "", 1500
+            MemoryStore(repository).load_all(),
+            prompt if isinstance(prompt, str) else "",
+            load_config(repository).context_budget,
         )
         json.dump(
             {
@@ -284,6 +287,10 @@ def run_stop(
         state = _read_task(task_path)
         changes = _changes_since(state["baseline"], _snapshot(repository))
         _run_lifecycle(repository, changes, state["ledger"], state["captures"])
+        from memory_stale.memory_store import MemoryStore
+        from memory_stale.reporting import write_report
+
+        write_report(repository, MemoryStore(repository).load_all())
         task_path.unlink()
         json.dump({}, output_stream)
         output_stream.write("\n")
