@@ -42,3 +42,5 @@ def test_html_report_escapes_content_and_is_explicit_by_default(tmp_path: Path) 
     assert "Use &lt;safe&gt; output." in html
     assert "Avoid &amp; bugs." in html
     assert "web.py:render" in html and "changed" in html
+    assert "Claim one" in html
+    assert "Observed commit" in html

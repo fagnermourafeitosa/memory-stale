@@ -1,5 +1,7 @@
 # 14 — Claims with versioned evidence revisions
 
+**Status: Done (2026-08-11)**
+
 ## Problem Statement
 
 Current persisted identity combines kind, normalized claim, and refs but omits

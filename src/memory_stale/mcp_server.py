@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TextIO, cast
 
@@ -57,6 +59,12 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
     if len(refs) != len(refs_value):
         raise ValueError("refs must contain non-empty strings")
     repository = _repository_root(cwd)
+    observed_commit = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     task_path = _active_task(repository)
     task = cast(dict[str, object], json.loads(task_path.read_text(encoding="utf-8")))
     baseline = cast(dict[str, object], task["baseline"])
@@ -74,6 +82,9 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         "refs": refs,
         "durability_reason": durability_reason,
         "signatures": signatures,
+        "schema_version": 2,
+        "observed_commit": observed_commit,
+        "observed_at": datetime.now(timezone.utc).isoformat(),
     }
     captures = cast(list[object], task.setdefault("captures", []))
     key = (kind, " ".join(claim.casefold().split()), tuple(sorted(refs)))

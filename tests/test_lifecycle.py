@@ -73,3 +73,43 @@ def test_lifecycle_is_idempotent_and_preserves_stale_history(tmp_path: Path) -> 
     ]
     assert reconcile(stale, [], {}) == stale
     assert MemoryStore(tmp_path).load_all() == []
+
+
+def test_legacy_markdown_migrates_to_one_versioned_revision_without_losing_history(
+    tmp_path: Path,
+) -> None:
+    store = MemoryStore(tmp_path)
+    store.directory.mkdir(parents=True)
+    legacy = store.directory / "legacy-id.md"
+    legacy.write_text(
+        "---\n"
+        "id: legacy-id\n"
+        "kind: behavior\n"
+        "status: stale\n"
+        "durability_reason: Preserve the guard.\n"
+        "signatures:\n"
+        "  auth.py:login: old-signature\n"
+        "stale_reasons:\n"
+        "  auth.py:login: changed\n"
+        "---\n\n"
+        "Login requires MFA.\n",
+        encoding="utf-8",
+    )
+
+    migrated = store.load_all()
+
+    assert len(migrated) == 1
+    revision = migrated[0]
+    assert revision.schema_version == 2
+    assert revision.legacy_id == "legacy-id"
+    assert revision.id != "legacy-id"
+    assert revision.claim_id is not None
+    assert revision.status == "stale"
+    assert revision.stale_reasons == {"auth.py:login": "changed"}
+
+    store.write_all(migrated)
+
+    paths = list(store.directory.glob("*.md"))
+    assert [path.name for path in paths] == [f"{revision.id}.md"]
+    assert "schema_version: 2" in paths[0].read_text(encoding="utf-8")
+    assert store.load_all() == migrated

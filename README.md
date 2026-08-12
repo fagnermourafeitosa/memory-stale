@@ -190,6 +190,17 @@ Memories are plain Markdown with structured front matter:
 <repo>/.agents/skills/.agent-memory/memories/*.md
 ```
 
+Each file is an immutable evidence revision. It records a stable `claim_id`, a
+fingerprint-derived `revision_id`, `schema_version: 2`, and the observed Git
+commit and time when available. Re-capturing the same claim after its evidence
+changes preserves the earlier revision and restores one new `active` revision
+to normal context. Repeating an identical evidence revision is idempotent.
+
+Older pre-alpha files without `schema_version` are read as legacy records and
+migrated deterministically on their next write; their prior ID remains in
+front matter as migration provenance. The HTML report groups revision history
+by claim, while context retrieval uses only the current active revision.
+
 Project configuration lives at:
 
 ```text
@@ -339,6 +350,8 @@ implemented and covered by integration or end-to-end tests:
 - installable local Codex plugin with isolated `uv` bootstrap;
 - bundled skill, lifecycle hooks, and three local MCP tools;
 - Markdown memory store and `active → stale` evidence-revalidation lifecycle;
+- versioned claim/evidence revisions with deterministic legacy migration and
+  Git observation metadata;
 - structural indexing for all seven v1 languages;
 - deterministic retrieval with exact-ref priority and context budgets;
 - Dream reconciliation, project configuration, and HTML reporting;
@@ -356,7 +369,8 @@ stable release.
   or provenance completeness.
 - Retrieval is lexical and structural. A query with no shared language or refs
   may miss a conceptually related memory.
-- Exact deduplication does not merge semantically equivalent wording.
+- Exact deduplication does not merge semantically equivalent wording; it only
+  recognizes an identical claim scope and evidence fingerprint.
 - Stale memory is excluded rather than automatically repaired during ordinary
   turns. Dream provides explicit reconciliation.
 - Overloads, anonymous functions, generated code, macros, and partial classes
@@ -372,7 +386,6 @@ stable release.
 - Publish a versioned Codex marketplace package and documented upgrade path.
 - Add release packaging and installed-plugin smoke tests to CI.
 - Improve first-run bootstrap diagnostics and MCP capture observability.
-- Define storage schema versioning and migrations.
 - Add task-level diagnostics for missed or rejected captures.
 
 ### Later
@@ -382,7 +395,7 @@ stable release.
   macros, and partial classes.
 - Expand Dream with dry runs, review modes, and targeted scopes.
 - Add ranking evaluation datasets and retrieval quality metrics.
-- Add report history and memory diffs.
+- Add memory diffs beyond the existing claim-level revision history.
 - Evaluate an optional semantic retrieval layer only after deterministic ranking
   has measurable quality baselines.
 

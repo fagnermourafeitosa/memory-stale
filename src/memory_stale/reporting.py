@@ -47,30 +47,40 @@ def load_config(repository: Path) -> Config:
 
 def _render(memories: list[Memory]) -> str:
     rows = []
+    groups: dict[str, list[Memory]] = {}
     for memory in memories:
-        refs = "<br>".join(html.escape(ref) for ref in sorted(memory.signatures))
-        reasons = "<br>".join(
-            f"{html.escape(ref)}: {html.escape(reason)}"
-            for ref, reason in sorted((memory.stale_reasons or {}).items())
-        )
-        rows.append(
-            "<tr>"
-            f"<td>{html.escape(memory.status)}</td>"
-            f"<td>{html.escape(memory.kind)}</td>"
-            f"<td>{html.escape(memory.claim)}</td>"
-            f"<td>{html.escape(memory.durability_reason)}</td>"
-            f"<td>{refs}</td><td>{reasons}</td></tr>"
-        )
-    body = "".join(rows) or '<tr><td colspan="6">No memories.</td></tr>'
+        groups.setdefault(memory.claim_id or memory.id, []).append(memory)
+    for claim_id, revisions in sorted(groups.items()):
+        rows.append(f'<tr class="claim"><th colspan="9">Claim {html.escape(claim_id)}</th></tr>')
+        for memory in sorted(revisions, key=lambda revision: revision.id):
+            refs = "<br>".join(html.escape(ref) for ref in sorted(memory.signatures))
+            reasons = "<br>".join(
+                f"{html.escape(ref)}: {html.escape(reason)}"
+                for ref, reason in sorted((memory.stale_reasons or {}).items())
+            )
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(memory.id)}</td>"
+                f"<td>{html.escape(memory.status)}</td>"
+                f"<td>{html.escape(memory.kind)}</td>"
+                f"<td>{html.escape(memory.claim)}</td>"
+                f"<td>{html.escape(memory.durability_reason)}</td>"
+                f"<td>{refs}</td><td>{reasons}</td>"
+                f"<td>{html.escape(memory.observed_commit or '')}</td>"
+                f"<td>{html.escape(memory.observed_at or '')}</td></tr>"
+            )
+    body = "".join(rows) or '<tr><td colspan="9">No memories.</td></tr>'
     return (
         '<!doctype html><html><head><meta charset="utf-8"><title>Memory Stale</title>'
         "<style>body{font-family:system-ui;margin:2rem}table{border-collapse:collapse;width:100%}"
-        "th,td{border:1px solid #ccc;padding:.5rem;text-align:left;vertical-align:top}</style>"
+        "th,td{border:1px solid #ccc;padding:.5rem;text-align:left;vertical-align:top}"
+        ".claim th{background:#eee}</style>"
         "</head><body><h1>Memory Stale report</h1>"
         "<p><code>active</code> means recorded evidence is unchanged; "
         "<code>stale</code> means evidence requires revalidation. Neither state "
-        "proves claim truth or falsehood.</p><table><thead><tr><th>Status</th>"
+        "proves claim truth or falsehood.</p><table><thead><tr><th>Revision</th><th>Status</th>"
         "<th>Kind</th><th>Claim</th><th>Durability</th><th>Refs</th><th>Reasons</th>"
+        "<th>Observed commit</th><th>Observed at</th>"
         f"</tr></thead><tbody>{body}</tbody></table></body></html>\n"
     )
 
