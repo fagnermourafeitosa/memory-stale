@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from memory_stale.evidence import resolve_item
 from memory_stale.symbol_index import (
     InvalidSyntaxError,
     SymbolIndexer,
@@ -69,6 +70,21 @@ def test_symbol_signatures_ignore_trivia_but_detect_semantic_changes(
 
     path.write_text(semantic, encoding="utf-8")
     assert indexer.signature(f"{filename}:compute") != first
+
+
+@pytest.mark.parametrize(("filename", "initial", "trivia", "semantic"), CASES)
+def test_test_evidence_uses_each_supported_structural_grammar(
+    tmp_path: Path, filename: str, initial: str, trivia: str, semantic: str
+) -> None:
+    path = tmp_path / filename
+    path.write_text(initial, encoding="utf-8")
+    first = resolve_item(tmp_path, "test", "supporting", f"{filename}:compute").fingerprint
+
+    path.write_text(trivia, encoding="utf-8")
+    assert resolve_item(tmp_path, "test", "supporting", f"{filename}:compute").fingerprint == first
+
+    path.write_text(semantic, encoding="utf-8")
+    assert resolve_item(tmp_path, "test", "supporting", f"{filename}:compute").fingerprint != first
 
 
 def test_unsupported_language_is_rejected_without_file_fallback(tmp_path: Path) -> None:

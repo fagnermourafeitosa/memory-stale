@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from memory_stale.dream import dream
+from memory_stale.evidence import EvidenceItem
 from memory_stale.lifecycle import Memory
 from memory_stale.memory_store import MemoryStore
 from memory_stale.symbol_index import SymbolIndexer
@@ -19,7 +20,7 @@ def test_dream_limits_audit_to_stale_and_broken_evidence(tmp_path: Path) -> None
                 "active",
                 "Healthy remains true.",
                 "Stable.",
-                {"service.py:healthy": signature},
+                (EvidenceItem("symbol", "primary", "service.py:healthy", signature),),
             ),
             Memory(
                 "broken",
@@ -27,7 +28,7 @@ def test_dream_limits_audit_to_stale_and_broken_evidence(tmp_path: Path) -> None
                 "active",
                 "Missing code fact.",
                 "Audit it.",
-                {"missing.py:gone": "old"},
+                (EvidenceItem("symbol", "primary", "missing.py:gone", "old"),),
             ),
             Memory(
                 "old",
@@ -35,8 +36,8 @@ def test_dream_limits_audit_to_stale_and_broken_evidence(tmp_path: Path) -> None
                 "stale",
                 "Old fact.",
                 "Review it.",
-                {"service.py:healthy": "old"},
-                {"service.py:healthy": "changed"},
+                (EvidenceItem("symbol", "primary", "service.py:healthy", "old"),),
+                {"symbol:service.py:healthy": "changed"},
             ),
         ]
     )
@@ -48,4 +49,4 @@ def test_dream_limits_audit_to_stale_and_broken_evidence(tmp_path: Path) -> None
     assert summary.errors == []
     memories = {memory.id: memory for memory in store.load_all()}
     assert memories["healthy"].status == "active"
-    assert memories["broken"].stale_reasons == {"missing.py:gone": "file_missing"}
+    assert memories["broken"].stale_reasons == {"symbol:missing.py:gone": "file_missing"}

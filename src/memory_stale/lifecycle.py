@@ -5,6 +5,9 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from typing import cast
+
+from memory_stale.evidence import EvidenceItem
 
 
 @dataclass(frozen=True)
@@ -20,27 +23,36 @@ class Memory:
     status: str
     claim: str
     durability_reason: str
-    signatures: dict[str, str]
+    evidence: tuple[EvidenceItem, ...]
     stale_reasons: dict[str, str] | None = None
-    schema_version: int = 2
+    schema_version: int = 3
     claim_id: str | None = None
     observed_commit: str | None = None
     observed_at: str | None = None
     legacy_id: str | None = None
+
+    @property
+    def signatures(self) -> dict[str, str]:
+        """Compatibility view for consumers that display evidence fingerprints."""
+        return {item.key: item.fingerprint for item in self.evidence}
 
 
 def _identifier(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:20]
 
 
-def _claim_id(kind: str, claim: str, signatures: Mapping[str, str]) -> str:
+def _claim_id(kind: str, claim: str, evidence: Sequence[EvidenceItem]) -> str:
     normalized_claim = " ".join(claim.casefold().split())
-    canonical_scope = "\0".join(sorted(signatures))
-    return _identifier(f"{kind}\0{normalized_claim}\0{canonical_scope}")
+    primary_scope = "\0".join(
+        f"{item.type}\0{item.locator}" for item in evidence if item.role == "primary"
+    )
+    return _identifier(f"{kind}\0{normalized_claim}\0{primary_scope}")
 
 
-def _revision_id(claim_id: str, signatures: Mapping[str, str]) -> str:
-    fingerprints = "\0".join(f"{ref}\0{signature}" for ref, signature in sorted(signatures.items()))
+def _revision_id(claim_id: str, evidence: Sequence[EvidenceItem]) -> str:
+    fingerprints = "\0".join(
+        f"{item.type}\0{item.role}\0{item.locator}\0{item.fingerprint}" for item in evidence
+    )
     return _identifier(f"{claim_id}\0{fingerprints}")
 
 
@@ -48,23 +60,52 @@ def _capture_memory(capture: Mapping[str, object]) -> Memory:
     kind = str(capture["kind"])
     claim = str(capture["claim"])
     durability_reason = str(capture["durability_reason"])
-    signatures_value = capture["signatures"]
-    if not isinstance(signatures_value, dict):
-        raise ValueError("capture signatures must be an object")
-    signatures = {str(ref): str(signature) for ref, signature in signatures_value.items()}
-    claim_id = _claim_id(kind, claim, signatures)
-    revision_id = _revision_id(claim_id, signatures)
+    evidence_value = capture.get("evidence")
+    if not isinstance(evidence_value, list):
+        raise ValueError("capture evidence must be an array")
+    evidence = _stored_items(evidence_value)
+    claim_id = _claim_id(kind, claim, evidence)
+    revision_id = _revision_id(claim_id, evidence)
     return Memory(
         id=revision_id,
         kind=kind,
         status="active",
         claim=claim,
         durability_reason=durability_reason,
-        signatures=signatures,
+        evidence=evidence,
         claim_id=claim_id,
         observed_commit=_optional_string(capture, "observed_commit"),
         observed_at=_optional_string(capture, "observed_at"),
     )
+
+
+def _stored_items(value: list[object]) -> tuple[EvidenceItem, ...]:
+    items: list[EvidenceItem] = []
+    for raw in value:
+        if not isinstance(raw, dict):
+            raise ValueError("capture evidence item must be an object")
+        item = cast(dict[str, object], raw)
+        items.append(
+            EvidenceItem(
+                _evidence_string(item, "type"),
+                _evidence_string(item, "role"),
+                _evidence_string(item, "locator"),
+                _evidence_string(item, "fingerprint"),
+            )
+        )
+    canonical = tuple(sorted(items))
+    if not canonical or not any(item.role == "primary" for item in canonical):
+        raise ValueError("capture evidence requires a primary item")
+    if len({(item.type, item.locator) for item in canonical}) != len(canonical):
+        raise ValueError("capture evidence must not contain duplicate locators")
+    return canonical
+
+
+def _evidence_string(item: Mapping[str, object], name: str) -> str:
+    value = item.get(name)
+    if not isinstance(value, str) or not value:
+        raise ValueError("capture evidence item is invalid")
+    return value
 
 
 def _optional_string(capture: Mapping[str, object], name: str) -> str | None:
@@ -81,19 +122,32 @@ def migrate_legacy_memory(
     durability_reason: str,
     signatures: dict[str, str],
     stale_reasons: dict[str, str] | None,
+    observed_commit: str | None = None,
+    observed_at: str | None = None,
 ) -> Memory:
-    """Create the versioned representation of one pre-schema memory."""
-    claim_id = _claim_id(kind, claim, signatures)
-    revision_id = _revision_id(claim_id, signatures)
+    """Migrate implicit symbol refs into primary typed evidence."""
+    evidence = tuple(
+        EvidenceItem("symbol", "primary", locator, fingerprint)
+        for locator, fingerprint in sorted(signatures.items())
+    )
+    claim_id = _claim_id(kind, claim, evidence)
+    revision_id = _revision_id(claim_id, evidence)
+    remapped_reasons = (
+        {f"symbol:{locator}": reason for locator, reason in stale_reasons.items()}
+        if stale_reasons
+        else None
+    )
     return Memory(
         id=revision_id,
         kind=kind,
         status=status,
         claim=claim,
         durability_reason=durability_reason,
-        signatures=signatures,
-        stale_reasons=stale_reasons,
+        evidence=evidence,
+        stale_reasons=remapped_reasons,
         claim_id=claim_id,
+        observed_commit=observed_commit,
+        observed_at=observed_at,
         legacy_id=legacy_id if legacy_id != revision_id else None,
     )
 
@@ -109,12 +163,12 @@ def reconcile(
             result.append(memory)
             continue
         reasons: dict[str, str] = {}
-        for ref, expected in memory.signatures.items():
-            current = evidence.get(ref)
+        for item in memory.evidence:
+            current = evidence.get(item.key)
             if current is None or current.signature is None:
-                reasons[ref] = current.reason if current and current.reason else "unresolvable"
-            elif current.signature != expected:
-                reasons[ref] = "changed"
+                reasons[item.key] = current.reason if current and current.reason else "unresolvable"
+            elif current.signature != item.fingerprint:
+                reasons[item.key] = "changed"
         result.append(
             replace(memory, status="stale", stale_reasons=dict(sorted(reasons.items())))
             if reasons

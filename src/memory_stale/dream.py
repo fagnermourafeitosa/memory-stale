@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from memory_stale.evidence import EvidenceError, resolve_stored_item
 from memory_stale.lifecycle import RefEvidence, reconcile
 from memory_stale.memory_store import MemoryStore
-from memory_stale.symbol_index import SymbolIndexer, SymbolIndexError, SymbolNotFoundError
 
 
 @dataclass(frozen=True)
@@ -20,28 +20,23 @@ class DreamSummary:
 def dream(repository: Path) -> DreamSummary:
     store = MemoryStore(repository)
     memories = store.load_all()
-    indexer = SymbolIndexer(repository)
     evidence: dict[str, RefEvidence] = {}
     affected: set[str] = {memory.id for memory in memories if memory.status == "stale"}
     errors: list[str] = []
     for memory in memories:
         if memory.status != "active":
             continue
-        for ref, expected in memory.signatures.items():
+        for item in memory.evidence:
             try:
-                current = indexer.signature(ref)
-                evidence[ref] = RefEvidence(current)
-                if current != expected:
+                current = resolve_stored_item(repository, item)
+                evidence[item.key] = RefEvidence(current)
+                if current != item.fingerprint:
                     affected.add(memory.id)
-            except SymbolNotFoundError as error:  # noqa: PERF203 - isolate each ref failure
-                reason = "file_missing" if "file not found" in str(error) else "symbol_missing"
-                evidence[ref] = RefEvidence(None, reason)
-                affected.add(memory.id)
-            except SymbolIndexError:
-                evidence[ref] = RefEvidence(None, "unresolvable")
+            except EvidenceError as error:  # noqa: PERF203 - isolate each item failure
+                evidence[item.key] = RefEvidence(None, _evidence_error_reason(error))
                 affected.add(memory.id)
             except Exception as error:
-                errors.append(f"{memory.id}:{ref}: {type(error).__name__}: {error}")
+                errors.append(f"{memory.id}:{item.key}: {type(error).__name__}: {error}")
     reconciled = reconcile(memories, [], evidence)
     previously_active = {memory.id for memory in memories if memory.status == "active"}
     marked_stale = sorted(
@@ -51,3 +46,12 @@ def dream(repository: Path) -> DreamSummary:
     )
     store.write_all(reconciled)
     return DreamSummary(sorted(affected), marked_stale, errors)
+
+
+def _evidence_error_reason(error: EvidenceError) -> str:
+    message = str(error)
+    if "file not found" in message:
+        return "file_missing"
+    if "locator not found" in message or "symbol not found" in message:
+        return "locator_missing"
+    return "unresolvable"

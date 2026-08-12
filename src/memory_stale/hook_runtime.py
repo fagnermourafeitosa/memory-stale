@@ -11,6 +11,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TextIO, TypedDict, cast
 
+from memory_stale.evidence import EvidenceError
+
 
 class FileSnapshot(TypedDict):
     status: str
@@ -138,34 +140,45 @@ def _run_lifecycle(
     _ledger: list[LedgerEntry],
     captures: list[object],
 ) -> None:
+    from memory_stale.evidence import resolve_stored_item
     from memory_stale.lifecycle import RefEvidence, reconcile
     from memory_stale.memory_store import MemoryStore
-    from memory_stale.symbol_index import InvalidSyntaxError, SymbolIndexer, SymbolNotFoundError
 
     store = MemoryStore(repository)
     memories = store.load_all()
     changed_paths = {change["path"] for change in changes}
-    indexer = SymbolIndexer(repository)
     evidence: dict[str, RefEvidence] = {}
     for memory in memories:
         if memory.status != "active":
             continue
-        for ref, expected in memory.signatures.items():
-            path_text = ref.rpartition(":")[0]
+        for item in memory.evidence:
+            path_text = _evidence_file(item.type, item.locator)
             if path_text not in changed_paths:
-                evidence[ref] = RefEvidence(expected)
+                evidence[item.key] = RefEvidence(item.fingerprint)
                 continue
             try:
-                evidence[ref] = RefEvidence(indexer.signature(ref))
-            except SymbolNotFoundError as error:
-                reason = "file_missing" if "file not found" in str(error) else "symbol_missing"
-                evidence[ref] = RefEvidence(None, reason)
-            except (InvalidSyntaxError, RuntimeError):
-                evidence[ref] = RefEvidence(None, "unresolvable")
+                evidence[item.key] = RefEvidence(resolve_stored_item(repository, item))
+            except EvidenceError as error:
+                evidence[item.key] = RefEvidence(None, _evidence_error_reason(error))
     capture_mappings = [
         cast(Mapping[str, object], item) for item in captures if isinstance(item, dict)
     ]
     store.write_all(reconcile(memories, capture_mappings, evidence))
+
+
+def _evidence_file(item_type: str, locator: str) -> str:
+    return (
+        locator.rpartition(":")[0] if item_type in {"symbol", "test"} else locator.partition("#")[0]
+    )
+
+
+def _evidence_error_reason(error: EvidenceError) -> str:
+    message = str(error)
+    if "file not found" in message:
+        return "file_missing"
+    if "locator not found" in message or "symbol not found" in message:
+        return "locator_missing"
+    return "unresolvable"
 
 
 def _read_payload(stream: TextIO) -> dict[str, object]:

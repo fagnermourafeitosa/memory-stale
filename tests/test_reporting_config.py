@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from memory_stale.evidence import EvidenceItem
 from memory_stale.lifecycle import Memory
 from memory_stale.reporting import ConfigError, load_config, write_report
 
@@ -32,8 +33,8 @@ def test_html_report_escapes_content_and_is_explicit_by_default(tmp_path: Path) 
         "stale",
         "Use <safe> output.",
         "Avoid & bugs.",
-        {"web.py:render": "sig"},
-        {"web.py:render": "changed"},
+        (EvidenceItem("symbol", "primary", "web.py:render", "sig"),),
+        {"symbol:web.py:render": "changed"},
     )
     assert write_report(tmp_path, [memory], requested=False) is None
     path = write_report(tmp_path, [memory], requested=True)

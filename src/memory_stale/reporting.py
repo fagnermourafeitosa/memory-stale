@@ -53,7 +53,10 @@ def _render(memories: list[Memory]) -> str:
     for claim_id, revisions in sorted(groups.items()):
         rows.append(f'<tr class="claim"><th colspan="9">Claim {html.escape(claim_id)}</th></tr>')
         for memory in sorted(revisions, key=lambda revision: revision.id):
-            refs = "<br>".join(html.escape(ref) for ref in sorted(memory.signatures))
+            evidence = "<br>".join(
+                html.escape(f"{item.type} · {item.role} · {item.locator} · {item.fingerprint}")
+                for item in memory.evidence
+            )
             reasons = "<br>".join(
                 f"{html.escape(ref)}: {html.escape(reason)}"
                 for ref, reason in sorted((memory.stale_reasons or {}).items())
@@ -65,7 +68,7 @@ def _render(memories: list[Memory]) -> str:
                 f"<td>{html.escape(memory.kind)}</td>"
                 f"<td>{html.escape(memory.claim)}</td>"
                 f"<td>{html.escape(memory.durability_reason)}</td>"
-                f"<td>{refs}</td><td>{reasons}</td>"
+                f"<td>{evidence}</td><td>{reasons}</td>"
                 f"<td>{html.escape(memory.observed_commit or '')}</td>"
                 f"<td>{html.escape(memory.observed_at or '')}</td></tr>"
             )
@@ -79,7 +82,7 @@ def _render(memories: list[Memory]) -> str:
         "<p><code>active</code> means recorded evidence is unchanged; "
         "<code>stale</code> means evidence requires revalidation. Neither state "
         "proves claim truth or falsehood.</p><table><thead><tr><th>Revision</th><th>Status</th>"
-        "<th>Kind</th><th>Claim</th><th>Durability</th><th>Refs</th><th>Reasons</th>"
+        "<th>Kind</th><th>Claim</th><th>Durability</th><th>Evidence</th><th>Reasons</th>"
         "<th>Observed commit</th><th>Observed at</th>"
         f"</tr></thead><tbody>{body}</tbody></table></body></html>\n"
     )

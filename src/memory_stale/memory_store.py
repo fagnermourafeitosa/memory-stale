@@ -8,6 +8,7 @@ from typing import cast
 
 import yaml
 
+from memory_stale.evidence import EvidenceItem
 from memory_stale.lifecycle import Memory, migrate_legacy_memory
 
 
@@ -39,7 +40,15 @@ class MemoryStore:
             "kind": memory.kind,
             "status": memory.status,
             "durability_reason": memory.durability_reason,
-            "signatures": memory.signatures,
+            "evidence": [
+                {
+                    "type": item.type,
+                    "role": item.role,
+                    "locator": item.locator,
+                    "fingerprint": item.fingerprint,
+                }
+                for item in memory.evidence
+            ],
             "stale_reasons": memory.stale_reasons,
             "observed_commit": memory.observed_commit,
             "observed_at": memory.observed_at,
@@ -56,28 +65,28 @@ class MemoryStore:
         text = path.read_text(encoding="utf-8")
         _opening, front_matter, claim = text.split("---", 2)
         data = cast(dict[str, object], yaml.safe_load(front_matter))
-        signatures = cast(dict[str, str], data["signatures"])
         stale_reasons = cast(dict[str, str] | None, data.get("stale_reasons"))
         schema_version = data.get("schema_version")
-        if schema_version is None:
+        if schema_version != 3:
+            signatures = cast(dict[str, str], data["signatures"])
             return migrate_legacy_memory(
-                legacy_id=str(data["id"]),
+                legacy_id=str(data.get("revision_id", data.get("id"))),
                 kind=str(data["kind"]),
                 status=str(data["status"]),
                 claim=claim.strip(),
                 durability_reason=str(data["durability_reason"]),
                 signatures=signatures,
                 stale_reasons=stale_reasons,
+                observed_commit=_optional_string(data, "observed_commit"),
+                observed_at=_optional_string(data, "observed_at"),
             )
-        if not isinstance(schema_version, int) or isinstance(schema_version, bool):
-            raise ValueError(f"invalid schema_version in {path}")
         return Memory(
             id=str(data["revision_id"]),
             kind=str(data["kind"]),
             status=str(data["status"]),
             claim=claim.strip(),
             durability_reason=str(data["durability_reason"]),
-            signatures=signatures,
+            evidence=_evidence(data, path),
             stale_reasons=stale_reasons,
             schema_version=schema_version,
             claim_id=_optional_string(data, "claim_id") or str(data["revision_id"]),
@@ -85,6 +94,38 @@ class MemoryStore:
             observed_at=_optional_string(data, "observed_at"),
             legacy_id=_optional_string(data, "legacy_id"),
         )
+
+
+def _evidence(data: dict[str, object], path: Path) -> tuple[EvidenceItem, ...]:
+    raw_items = data.get("evidence")
+    if not isinstance(raw_items, list) or not raw_items:
+        raise ValueError(f"invalid evidence in {path}")
+    items: list[EvidenceItem] = []
+    for raw in raw_items:
+        if not isinstance(raw, dict):
+            raise ValueError(f"invalid evidence item in {path}")
+        item = cast(dict[str, object], raw)
+        items.append(
+            EvidenceItem(
+                _evidence_string(item, "type", path),
+                _evidence_string(item, "role", path),
+                _evidence_string(item, "locator", path),
+                _evidence_string(item, "fingerprint", path),
+            )
+        )
+    canonical = tuple(sorted(items))
+    if len({(item.type, item.locator) for item in canonical}) != len(canonical):
+        raise ValueError(f"duplicate evidence item in {path}")
+    if not any(item.role == "primary" for item in canonical):
+        raise ValueError(f"missing primary evidence in {path}")
+    return canonical
+
+
+def _evidence_string(data: dict[str, object], key: str, path: Path) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"invalid evidence item in {path}")
+    return value
 
 
 def _optional_string(data: dict[str, object], key: str) -> str | None:

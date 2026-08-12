@@ -28,6 +28,14 @@ it again. The engine preserves the prior evidence revision for audit and exposes
 only the new active revision in ordinary context. Repeating an identical
 revision is safe and idempotent.
 
+When capturing, provide an `evidence` array rather than legacy `refs`. Every
+item has `type`, `role`, and `locator`. Use at least one changed `primary` item;
+unchanged `supporting` items are permitted but must resolve. Supported types are
+`symbol`, `test`, `config`, and `schema`. Symbol and test locators use
+`path:symbol`; config and schema locators use an exact JSON Pointer such as
+`settings.yaml#/authentication/mfa`. Do not use whole-file evidence or invent a
+fallback when an item cannot resolve.
+
 When the user asks for the memory health report, call `memory.report` and return
 the generated local path. Do not generate the report on ordinary turns unless
 project configuration enables automatic reporting.

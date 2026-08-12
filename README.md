@@ -58,7 +58,7 @@ On a later task mentioning `src/auth.py:AuthService.login`, Codex receives:
 ```text
 Memory Stale active context:
 - Login validates password and MFA before creating a session.
-  Refs: src/auth.py:AuthService.login
+  Evidence: src/auth.py:AuthService.login
 ```
 
 If the method's logic changes, the old memory becomes `stale`. Formatting and
@@ -138,9 +138,10 @@ Memory maintenance is automatic:
 1. `UserPromptSubmit` retrieves relevant active memories and adds them to the
    Codex context.
 2. `PostToolUse` records task activity while Codex works.
-3. Codex calls `memory.capture` only for durable facts supported by changed code.
+3. Codex calls `memory.capture` only for durable facts with at least one changed
+   primary evidence item.
 4. `Stop` compares the final workspace with the task-start snapshot, validates
-   refs and signatures, persists captures whose recorded evidence resolves, and
+   typed evidence and fingerprints, persists captures whose recorded evidence resolves, and
    marks affected memories stale for revalidation.
 
 You do not call `memory.capture` yourself. Ask Codex to work normally. The
@@ -157,7 +158,7 @@ Do not store: "Added MFA to login."
 Do not store: "Changed auth.py and its tests."
 
 Store: "Login validates password and MFA before creating a session."
-Refs:  src/auth.py:AuthService.login
+Evidence: primary symbol src/auth.py:AuthService.login
 ```
 
 Trivial fixes, formatting changes, mechanical refactors, user prompts, and
@@ -172,7 +173,7 @@ Use a Git repository containing a supported language:
 2. If the result establishes a durable fact, ask Codex to confirm that Memory
    Stale captured it.
 3. Inspect `.agents/skills/.agent-memory/memories/` for an `active` Markdown
-   memory with the expected claim and ref.
+   memory with the expected claim and typed evidence item.
 4. Start a new task mentioning that exact path or symbol. The active claim
    should appear in Codex's injected context.
 5. Change the referenced symbol semantically. The previous memory should become
@@ -191,15 +192,15 @@ Memories are plain Markdown with structured front matter:
 ```
 
 Each file is an immutable evidence revision. It records a stable `claim_id`, a
-fingerprint-derived `revision_id`, `schema_version: 2`, and the observed Git
+fingerprint-derived `revision_id`, `schema_version: 3`, and the observed Git
 commit and time when available. Re-capturing the same claim after its evidence
 changes preserves the earlier revision and restores one new `active` revision
 to normal context. Repeating an identical evidence revision is idempotent.
 
-Older pre-alpha files without `schema_version` are read as legacy records and
-migrated deterministically on their next write; their prior ID remains in
-front matter as migration provenance. The HTML report groups revision history
-by claim, while context retrieval uses only the current active revision.
+Older records with implicit `signatures` are read as legacy primary `symbol`
+evidence and migrated deterministically on their next write; their prior ID
+remains in front matter as migration provenance. The HTML report groups revision
+history by claim, while context retrieval uses only the current active revision.
 
 ## Staleness evaluation corpus
 
@@ -247,7 +248,7 @@ Invalid configuration is surfaced as a structured, non-blocking plugin error.
 ## Memory health and Dream
 
 Ask Codex to generate the Memory Stale health report when you want an HTML view
-of active and stale memories, refs, durability reasons, and staleness reasons.
+of active and stale memories, typed evidence, durability reasons, and staleness reasons.
 Codex calls the local `memory.report` MCP tool and returns the configured path.
 The report is not generated on ordinary turns unless `auto_report` is enabled.
 
@@ -269,14 +270,26 @@ active memories without evidence.
 The local MCP server exposes three tools for the bundled skill and Codex. They
 are implementation surfaces, not a separate end-user CLI.
 
-- `memory.capture` stages a durable claim anchored to symbols changed during the
-  active turn.
+- `memory.capture` stages a durable claim anchored to typed evidence.
 - `memory.dream` performs an explicit wide evidence-revalidation audit.
 - `memory.report` writes the optional static HTML health report.
 
 Capture kinds are `behavior`, `contract`, `constraint`, `architecture`, and
-`operation`. Captures with the same normalized claim, kind, and refs are
-idempotent. Deduplication is exact and deterministic, not semantic.
+`operation`. Every capture has an `evidence` set. Each item contains `type`,
+`role`, and `locator`; it is persisted with a deterministic fingerprint. Roles
+are `primary` and `supporting`, and at least one primary item must change in the
+active turn. Captures with the same normalized claim, kind, and evidence scope
+are idempotent. Deduplication is exact and deterministic, not semantic.
+
+`symbol` and `test` locators use `path:symbol` and receive tree-sitter structural
+fingerprints. `config` locators select an exact JSON Pointer in JSON, YAML, or
+TOML, such as `settings.yaml#/authentication/mfa`. `schema` locators select an
+exact JSON Pointer in a JSON Schema or OpenAPI JSON/YAML document. Formatting
+and comments do not affect document fingerprints. Whole-document locators,
+unknown formats, invalid documents, and missing nodes are rejected; there is no
+raw file-hash fallback. Supporting items may be intact when captured, but any
+recorded item that changes, disappears, or becomes unresolvable makes the
+revision stale with an item-specific reason.
 
 ## Symbol-level staleness
 
@@ -294,9 +307,10 @@ V1 supports TypeScript, JavaScript, Python, Go, Java, Kotlin, and Rust. There is
 deliberately no file-level fallback. Unsupported languages and unresolved syntax
 are rejected instead of producing imprecise evidence.
 
-Every ref in a new capture must resolve in the final code and must have changed
-during the active task. A claim may reference multiple changed symbols; each ref
-is validated independently.
+Every typed evidence item in a new capture must resolve in the final state. At
+least one `primary` item must have changed during the active task; supporting
+items need not have changed. A partially invalid evidence set is rejected
+atomically with an item-specific error.
 
 ## Retrieval quality
 

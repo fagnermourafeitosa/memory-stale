@@ -46,8 +46,9 @@ def retrieve(memories: Sequence[Memory], prompt: str, budget: int = 1500) -> str
             )
         exact = sum(
             1
-            for ref in memory.signatures
-            if ref.casefold() in prompt_folded or ref.rpartition(":")[0].casefold() in prompt_folded
+            for item in memory.evidence
+            if item.locator.casefold() in prompt_folded
+            or item.locator.rpartition(":")[0].casefold() in prompt_folded
         )
         score += exact * 100.0
         if score > 0:
@@ -56,7 +57,9 @@ def retrieve(memories: Sequence[Memory], prompt: str, budget: int = 1500) -> str
     selected: list[str] = []
     used = 0
     for _score, memory in scored:
-        block = f"- {memory.claim}\n  Refs: {', '.join(sorted(memory.signatures))}"
+        block = (
+            f"- {memory.claim}\n  Evidence: {', '.join(item.locator for item in memory.evidence)}"
+        )
         cost = max(1, (len(block) + 3) // 4)
         if used + cost > budget:
             continue

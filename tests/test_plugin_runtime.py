@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import cast
 
+from memory_stale.evidence import EvidenceItem
 from memory_stale.lifecycle import Memory
 from memory_stale.memory_store import MemoryStore
 from memory_stale.symbol_index import SymbolIndexer
@@ -324,7 +325,7 @@ def test_stop_marks_memory_stale_when_task_changes_its_symbol(tmp_path: Path) ->
                 "active",
                 "Compute returns one.",
                 "Callers rely on it.",
-                {"service.py:compute": signature},
+                (EvidenceItem("symbol", "primary", "service.py:compute", signature),),
             )
         ]
     )
@@ -340,7 +341,7 @@ def test_stop_marks_memory_stale_when_task_changes_its_symbol(tmp_path: Path) ->
 
     assert result.returncode == 0
     assert store.load_all()[0].status == "stale"
-    assert store.load_all()[0].stale_reasons == {"service.py:compute": "changed"}
+    assert store.load_all()[0].stale_reasons == {"symbol:service.py:compute": "changed"}
 
 
 def test_read_only_turn_preserves_active_memory_for_preexisting_dirty_symbol(
@@ -362,8 +363,8 @@ def test_read_only_turn_preserves_active_memory_for_preexisting_dirty_symbol(
                 "stale",
                 "Compute returns one.",
                 "Historical behavior.",
-                {"service.py:compute": "old-signature"},
-                {"service.py:compute": "changed"},
+                (EvidenceItem("symbol", "primary", "service.py:compute", "old-signature"),),
+                {"symbol:service.py:compute": "changed"},
             ),
             Memory(
                 "memory-1",
@@ -371,7 +372,7 @@ def test_read_only_turn_preserves_active_memory_for_preexisting_dirty_symbol(
                 "active",
                 "Compute returns two.",
                 "Callers rely on it.",
-                {"service.py:compute": signature},
+                (EvidenceItem("symbol", "primary", "service.py:compute", signature),),
             ),
         ]
     )
@@ -405,7 +406,7 @@ def test_prompt_hook_injects_only_relevant_active_memory(tmp_path: Path) -> None
                 "active",
                 "Auth changes require review.",
                 "Security boundary.",
-                {"auth.py:login": "sig"},
+                (EvidenceItem("symbol", "primary", "auth.py:login", "sig"),),
             )
         ]
     )

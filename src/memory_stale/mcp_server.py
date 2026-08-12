@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import TextIO, cast
 
 from memory_stale.dream import dream
+from memory_stale.evidence import EvidenceError, parse_items, resolve_item
 from memory_stale.hook_runtime import _atomic_json_write, _repository_root, _snapshot
 from memory_stale.memory_store import MemoryStore
 from memory_stale.reporting import write_report
-from memory_stale.symbol_index import SymbolIndexer
 
 KINDS = {"behavior", "contract", "constraint", "architecture", "operation"}
 
@@ -52,12 +52,7 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         raise ValueError(f"kind must be one of: {', '.join(sorted(KINDS))}")
     claim = _string(arguments, "claim")
     durability_reason = _string(arguments, "durability_reason")
-    refs_value = arguments.get("refs")
-    if not isinstance(refs_value, list) or not refs_value:
-        raise ValueError("refs is required")
-    refs = [ref_value for ref_value in refs_value if isinstance(ref_value, str) and ref_value]
-    if len(refs) != len(refs_value):
-        raise ValueError("refs must contain non-empty strings")
+    parsed_evidence = parse_items(arguments.get("evidence"))
     repository = _repository_root(cwd)
     observed_commit = subprocess.run(
         ["git", "-C", str(repository), "rev-parse", "HEAD"],
@@ -69,37 +64,71 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
     task = cast(dict[str, object], json.loads(task_path.read_text(encoding="utf-8")))
     baseline = cast(dict[str, object], task["baseline"])
     current = _snapshot(repository)
-    indexer = SymbolIndexer(repository)
-    signatures: dict[str, str] = {}
-    for ref in refs:
-        path_text, separator, _symbol = ref.rpartition(":")
-        if not separator or not path_text or baseline.get(path_text) == current.get(path_text):
-            raise ValueError(f"ref did not change in this turn: {ref}")
-        signatures[ref] = indexer.signature(ref)
+    evidence = []
+    primary_changed = False
+    for index, (item_type, role, locator) in enumerate(parsed_evidence):
+        try:
+            path_text = _evidence_path(item_type, locator)
+            if role == "primary" and baseline.get(path_text) != current.get(path_text):
+                primary_changed = True
+            item = resolve_item(repository, item_type, role, locator)
+        except (EvidenceError, ValueError) as error:
+            raise ValueError(f"evidence[{index}]: {error}") from error
+        evidence.append(
+            {
+                "type": item.type,
+                "role": item.role,
+                "locator": item.locator,
+                "fingerprint": item.fingerprint,
+            }
+        )
+    if not primary_changed:
+        raise ValueError("at least one primary evidence item must change in this turn")
     candidate = {
         "kind": kind,
         "claim": claim,
-        "refs": refs,
+        "evidence": evidence,
         "durability_reason": durability_reason,
-        "signatures": signatures,
-        "schema_version": 2,
+        "schema_version": 3,
         "observed_commit": observed_commit,
         "observed_at": datetime.now(timezone.utc).isoformat(),
     }
     captures = cast(list[object], task.setdefault("captures", []))
-    key = (kind, " ".join(claim.casefold().split()), tuple(sorted(refs)))
+    key = (kind, " ".join(claim.casefold().split()), tuple(sorted(parsed_evidence)))
     for existing in captures:
         if isinstance(existing, dict):
             existing_key = (
                 existing.get("kind"),
                 " ".join(str(existing.get("claim", "")).casefold().split()),
-                tuple(sorted(cast(list[str], existing.get("refs", [])))),
+                tuple(
+                    sorted(
+                        (
+                            str(item.get("type")),
+                            str(item.get("role")),
+                            str(item.get("locator")),
+                        )
+                        for item in cast(list[object], existing.get("evidence", []))
+                        if isinstance(item, dict)
+                    )
+                ),
             )
             if existing_key == key:
                 return _tool_result("Capture already staged for this turn.")
     captures.append(candidate)
     _atomic_json_write(task_path, task)
     return _tool_result("Capture staged for lifecycle validation.")
+
+
+def _evidence_path(item_type: str, locator: str) -> str:
+    if item_type in {"symbol", "test"}:
+        path_text, separator, _symbol = locator.rpartition(":")
+        if not separator or not path_text:
+            raise ValueError(f"invalid symbol locator: {locator}")
+        return path_text
+    path_text, separator, _pointer = locator.partition("#")
+    if not separator or not path_text:
+        raise ValueError(f"invalid document locator: {locator}")
+    return path_text
 
 
 def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None:
@@ -124,11 +153,30 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
                     ),
                     "inputSchema": {
                         "type": "object",
-                        "required": ["kind", "claim", "refs", "durability_reason"],
+                        "required": ["kind", "claim", "evidence", "durability_reason"],
                         "properties": {
                             "kind": {"type": "string", "enum": sorted(KINDS)},
                             "claim": {"type": "string"},
-                            "refs": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                            "evidence": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "type": "object",
+                                    "required": ["type", "role", "locator"],
+                                    "properties": {
+                                        "type": {
+                                            "type": "string",
+                                            "enum": ["symbol", "config", "schema", "test"],
+                                        },
+                                        "role": {
+                                            "type": "string",
+                                            "enum": ["primary", "supporting"],
+                                        },
+                                        "locator": {"type": "string"},
+                                    },
+                                    "additionalProperties": False,
+                                },
+                            },
                             "durability_reason": {"type": "string"},
                         },
                         "additionalProperties": False,

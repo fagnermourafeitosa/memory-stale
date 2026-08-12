@@ -1,10 +1,16 @@
+from memory_stale.evidence import EvidenceItem
 from memory_stale.lifecycle import Memory
 from memory_stale.retrieval import retrieve
 
 
 def _memory(identifier: str, claim: str, ref: str, *, status: str = "active") -> Memory:
     return Memory(
-        identifier, "behavior", status, claim, "Future work relies on this.", {ref: "sig"}
+        identifier,
+        "behavior",
+        status,
+        claim,
+        "Future work relies on this.",
+        (EvidenceItem("symbol", "primary", ref, "sig"),),
     )
 
 

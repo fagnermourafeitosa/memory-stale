@@ -85,7 +85,9 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
                     "arguments": {
                         "kind": "behavior",
                         "claim": "Login validates MFA before creating a session.",
-                        "refs": ["auth.py:login"],
+                        "evidence": [
+                            {"type": "symbol", "role": "primary", "locator": "auth.py:login"}
+                        ],
                         "durability_reason": "Future authentication changes must preserve MFA.",
                     },
                 },
@@ -106,9 +108,9 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
     capture = task["captures"][0]
     assert capture["kind"] == "behavior"
     assert capture["claim"] == "Login validates MFA before creating a session."
-    assert capture["refs"] == ["auth.py:login"]
+    assert capture["evidence"][0]["locator"] == "auth.py:login"
     assert capture["durability_reason"] == "Future authentication changes must preserve MFA."
-    assert len(capture["signatures"]["auth.py:login"]) == 64
+    assert len(capture["evidence"][0]["fingerprint"]) == 64
     assert not (repository / ".agents" / "skills" / ".agent-memory" / "memories").exists()
 
     environment = os.environ.copy()
@@ -156,7 +158,7 @@ def test_capture_rejects_invalid_or_unchanged_refs_and_is_idempotent(tmp_path: P
     base_arguments: dict[str, object] = {
         "kind": "behavior",
         "claim": "Login returns whether authentication succeeds.",
-        "refs": ["auth.py:login"],
+        "evidence": [{"type": "symbol", "role": "primary", "locator": "auth.py:login"}],
         "durability_reason": "Callers depend on the boolean contract.",
     }
     try:

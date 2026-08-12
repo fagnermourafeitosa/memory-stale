@@ -109,14 +109,25 @@ def evaluate_corpus(corpus_path: Path, fixtures_root: Path) -> EvaluationResult:
             "kind": "behavior",
             "claim": f"Corpus scenario {scenario.identifier}",
             "durability_reason": "Labeled evaluation fixture.",
-            "signatures": {scenario.evidence: baseline_signature},
+            "evidence": [
+                {
+                    "type": "symbol",
+                    "role": "primary",
+                    "locator": scenario.evidence,
+                    "fingerprint": baseline_signature,
+                }
+            ],
         }
         captured = reconcile([], [capture], {})
         shutil.rmtree(root)
         root.mkdir()
         _write_sources(root, scenario.after)
         current_signature = SymbolIndexer(root).signature(scenario.evidence)
-        final = reconcile(captured, [], {scenario.evidence: RefEvidence(current_signature)})
+        final = reconcile(
+            captured,
+            [],
+            {f"symbol:{scenario.evidence}": RefEvidence(current_signature)},
+        )
         results.append(ScenarioResult(scenario.identifier, scenario.label, final[0].status))
     ordered = sorted(results, key=lambda result: result.identifier)
     preserved = [result for result in ordered if result.label == "preserved"]
