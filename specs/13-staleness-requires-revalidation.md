@@ -43,7 +43,7 @@ and `stale` does not prove falsehood.
 
 ## Testing Decisions
 
-- Highest seam confirmed: the plugin's observable public surfaces and the lifecycle already exercised by the installed harness.
+- Highest seam confirmed: the local integration's observable public surfaces and the lifecycle already exercised by the installed harness.
 - This is a contract and documentation change; no artificial red test will be created for editorial text.
 - Existing lifecycle and end-to-end tests continue to prove that changed evidence produces `stale` and that `stale` revisions do not enter context.
 - If MCP descriptions or rendered content change structurally, tests observe the complete public response rather than helper functions or internal calls.

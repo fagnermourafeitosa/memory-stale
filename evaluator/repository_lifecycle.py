@@ -1,4 +1,4 @@
-"""Repository-scale evaluation through the installed plugin boundaries."""
+"""Repository-scale evaluation through the local runtime boundaries."""
 
 from __future__ import annotations
 
@@ -166,7 +166,7 @@ def load_repository_corpus(path: Path) -> tuple[int, tuple[RepositoryTrial, ...]
 def evaluate_repository_corpus(
     corpus_path: Path,
     repositories_root: Path,
-    plugin_root: Path,
+    runtime_root: Path,
 ) -> RepositoryEvaluationResult:
     """Run labeled trials through hook commands and the MCP stdio process."""
     version, trials = load_repository_corpus(corpus_path)
@@ -174,7 +174,7 @@ def evaluate_repository_corpus(
     outcomes: list[TrialOutcome] = []
     operational: list[OperationalOutcome] = []
     for trial in trials:
-        outcome, failures = _run_trial(trial, repositories_root / trial.identifier, plugin_root)
+        outcome, failures = _run_trial(trial, repositories_root / trial.identifier, runtime_root)
         if outcome is not None:
             outcomes.append(outcome)
         operational.extend(failures)
@@ -258,7 +258,7 @@ def assert_repository_baseline(result: RepositoryEvaluationResult, baseline_path
 def _run_trial(
     trial: RepositoryTrial,
     repository: Path,
-    plugin_root: Path,
+    runtime_root: Path,
 ) -> tuple[TrialOutcome | None, list[OperationalOutcome]]:
     failures: list[OperationalOutcome] = []
     shutil.rmtree(repository, ignore_errors=True)
@@ -272,16 +272,16 @@ def _run_trial(
     _git(repository, "commit", "--quiet", "-m", "initial repository blueprint")
 
     capture_start = _hook(
-        plugin_root, repository, "UserPromptSubmit", "capture", trial.retrieval_prompt
+        runtime_root, repository, "UserPromptSubmit", "capture", trial.retrieval_prompt
     )
     if isinstance(capture_start, str):
         return None, [_failure(trial, "hook_failure", capture_start)]
     _replace_sources(repository, trial.capture_files, managed_paths)
-    capture_response = _capture(plugin_root, repository, trial.capture)
+    capture_response = _capture(runtime_root, repository, trial.capture)
     if isinstance(capture_response, str):
-        _hook(plugin_root, repository, "Stop", "capture")
+        _hook(runtime_root, repository, "Stop", "capture")
         return None, [_failure(trial, "capture_failure", capture_response)]
-    capture_stop = _hook(plugin_root, repository, "Stop", "capture")
+    capture_stop = _hook(runtime_root, repository, "Stop", "capture")
     if isinstance(capture_stop, str):
         return None, [_failure(trial, "hook_failure", capture_stop)]
     capture_status = _memory_status(repository, str(trial.capture["claim"]))
@@ -291,12 +291,12 @@ def _run_trial(
     _git(repository, "commit", "--quiet", "-m", "capture labeled claim")
 
     change_start = _hook(
-        plugin_root, repository, "UserPromptSubmit", "change", trial.retrieval_prompt
+        runtime_root, repository, "UserPromptSubmit", "change", trial.retrieval_prompt
     )
     if isinstance(change_start, str):
         return None, [_failure(trial, "hook_failure", change_start)]
     _replace_sources(repository, trial.change_files, managed_paths)
-    change_stop = _hook(plugin_root, repository, "Stop", "change")
+    change_stop = _hook(runtime_root, repository, "Stop", "change")
     if isinstance(change_stop, str):
         return None, [_failure(trial, "hook_failure", change_stop)]
     lifecycle_status, stale_reasons = _memory_observation(repository, str(trial.capture["claim"]))
@@ -308,7 +308,7 @@ def _run_trial(
         return None, [_failure(trial, "stale_reason_mismatch", str(stale_reasons))]
 
     retrieval = _hook(
-        plugin_root, repository, "UserPromptSubmit", "retrieval", trial.retrieval_prompt
+        runtime_root, repository, "UserPromptSubmit", "retrieval", trial.retrieval_prompt
     )
     if isinstance(retrieval, str):
         return None, [_failure(trial, "hook_failure", retrieval)]
@@ -519,32 +519,36 @@ def _git(repository: Path, *args: str) -> None:
 
 
 def _hook(
-    plugin_root: Path,
+    runtime_root: Path,
     repository: Path,
     event: str,
     turn_id: str,
     prompt: str | None = None,
 ) -> dict[str, object] | str:
-    config = json.loads((plugin_root / "hooks" / "hooks.json").read_text(encoding="utf-8"))
-    command = config["hooks"][event][0]["hooks"][0]["command"]
+    scripts = {
+        "UserPromptSubmit": "user_prompt_submit.py",
+        "PostToolUse": "post_tool_use.py",
+        "Stop": "stop.py",
+    }
     environment = os.environ.copy()
     environment.update(
         {
-            "PLUGIN_ROOT": str(plugin_root),
-            "PLUGIN_DATA": str(plugin_root / ".venv" / "plugin-test-data"),
             "MEMORY_STALE_SKIP_SYNC": "1",
-            "MEMORY_STALE_PROJECT_ENVIRONMENT": str(plugin_root / ".venv"),
+            "MEMORY_STALE_PROJECT_ENVIRONMENT": str(runtime_root / ".venv"),
         }
     )
     payload: dict[str, object] = {"turn_id": turn_id, "cwd": str(repository)}
     if prompt is not None:
         payload["prompt"] = prompt
     result = subprocess.run(
-        command,
+        [
+            "sh",
+            str(runtime_root / "scripts" / "run-python.sh"),
+            str(runtime_root / "hooks" / scripts[event]),
+        ],
         cwd=repository,
         env=environment,
         input=json.dumps(payload),
-        shell=True,
         capture_output=True,
         text=True,
         check=False,
@@ -559,14 +563,12 @@ def _hook(
     return message if isinstance(message, str) else output
 
 
-def _capture(plugin_root: Path, repository: Path, arguments: dict[str, object]) -> str | None:
+def _capture(runtime_root: Path, repository: Path, arguments: dict[str, object]) -> str | None:
     environment = os.environ.copy()
     environment.update(
         {
-            "PLUGIN_ROOT": str(plugin_root),
-            "PLUGIN_DATA": str(plugin_root / ".venv" / "plugin-test-data"),
             "MEMORY_STALE_SKIP_SYNC": "1",
-            "MEMORY_STALE_PROJECT_ENVIRONMENT": str(plugin_root / ".venv"),
+            "MEMORY_STALE_PROJECT_ENVIRONMENT": str(runtime_root / ".venv"),
         }
     )
     request = {
@@ -576,7 +578,7 @@ def _capture(plugin_root: Path, repository: Path, arguments: dict[str, object]) 
         "params": {"name": "memory.capture", "arguments": arguments},
     }
     result = subprocess.run(
-        ["sh", str(plugin_root / "scripts" / "run-python.sh"), "-m", "memory_stale.mcp_server"],
+        ["sh", str(runtime_root / "scripts" / "run-python.sh"), "-m", "memory_stale.mcp_server"],
         cwd=repository,
         env=environment,
         input=json.dumps(request) + "\n",

@@ -88,10 +88,10 @@ class InvalidSyntaxError(SymbolIndexError):
 class SymbolIndexer:
     def __init__(self, root: Path) -> None:
         self._root = root.resolve()
-        plugin_root = Path(__file__).resolve().parents[2]
+        package_root = Path(__file__).resolve().parents[2]
         cache = Path(
             os.environ.get(
-                "MEMORY_STALE_GRAMMAR_CACHE", plugin_root / ".venv" / "tree-sitter-cache"
+                "MEMORY_STALE_GRAMMAR_CACHE", package_root / ".venv" / "tree-sitter-cache"
             )
         )
         init(PackConfig(cache_dir=str(cache)))

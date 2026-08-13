@@ -9,7 +9,7 @@ from memory_stale.lifecycle import Memory
 from memory_stale.memory_store import MemoryStore
 from memory_stale.symbol_index import SymbolIndexer
 
-PLUGIN_ROOT = Path(__file__).parents[1]
+RUNTIME_ROOT = Path(__file__).parents[1]
 
 
 def _run_git(repository: Path, *args: str) -> None:
@@ -36,40 +36,30 @@ def _create_repository(tmp_path: Path) -> Path:
     return repository
 
 
-def _hook_command(event: str) -> str:
-    config = cast(
-        dict[str, object],
-        json.loads((PLUGIN_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8")),
-    )
-    hooks = config["hooks"]
-    assert isinstance(hooks, dict)
-    groups = hooks[event]
-    assert isinstance(groups, list)
-    group = groups[0]
-    assert isinstance(group, dict)
-    handlers = group["hooks"]
-    assert isinstance(handlers, list)
-    handler = handlers[0]
-    assert isinstance(handler, dict)
-    command = handler["command"]
-    assert isinstance(command, str)
-    return command
+def _hook_command(event: str) -> list[str]:
+    scripts = {
+        "UserPromptSubmit": "user_prompt_submit.py",
+        "PostToolUse": "post_tool_use.py",
+        "Stop": "stop.py",
+    }
+    return [
+        "sh",
+        str(RUNTIME_ROOT / "scripts" / "run-python.sh"),
+        str(RUNTIME_ROOT / "hooks" / scripts[event]),
+    ]
 
 
 def _run_hook(
     event: str, repository: Path, payload: dict[str, object]
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
-    environment["PLUGIN_ROOT"] = str(PLUGIN_ROOT)
-    environment["PLUGIN_DATA"] = str(PLUGIN_ROOT / ".venv" / "plugin-test-data")
     environment["MEMORY_STALE_SKIP_SYNC"] = "1"
-    environment["MEMORY_STALE_PROJECT_ENVIRONMENT"] = str(PLUGIN_ROOT / ".venv")
+    environment["MEMORY_STALE_PROJECT_ENVIRONMENT"] = str(RUNTIME_ROOT / ".venv")
     return subprocess.run(
         _hook_command(event),
         cwd=repository,
         env=environment,
         input=json.dumps(payload),
-        shell=True,
         capture_output=True,
         text=True,
         check=False,

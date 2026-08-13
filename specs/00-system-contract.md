@@ -15,8 +15,8 @@ Establish contracts, states, and the order of the following specs.
 
 ## Implementation Decisions
 
-- Product: Codex `memory-stale` plugin with a skill, local MCP server, and hooks.
-- Git is required; without Git, the plugin reports its state and does not operate.
+- Product: project-local Codex `memory-stale` skill with a local MCP server and hooks.
+- Git is required; without Git, the local integration reports its state and does not operate.
 - States: `active` and `stale`. A ref change marks memory stale; there is no implicit supersession.
 - No file-level or unsupported-language fallback.
 - Memory failures never block the Codex task.

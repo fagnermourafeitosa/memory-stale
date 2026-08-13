@@ -50,7 +50,7 @@ automatically.
 - Pushing or synchronizing the remote `main` branch.
 - Creating merge commits, rebasing, resolving conflicts, squashing, or deleting branches.
 - Changing the spec-first, dedicated-branch, or TDD workflows.
-- Implementing Memory Stale plugin behavior.
+- Implementing Memory Stale local integration behavior.
 
 ## Further Notes
 

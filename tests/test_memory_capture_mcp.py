@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from typing import cast
 
-PLUGIN_ROOT = Path(__file__).parents[1]
+RUNTIME_ROOT = Path(__file__).parents[1]
 
 
 def _git(repository: Path, *args: str) -> None:
@@ -28,20 +28,19 @@ def _start_turn(repository: Path) -> None:
     environment = os.environ.copy()
     environment.update(
         {
-            "PLUGIN_ROOT": str(PLUGIN_ROOT),
-            "PLUGIN_DATA": str(PLUGIN_ROOT / ".venv" / "plugin-test-data"),
             "MEMORY_STALE_SKIP_SYNC": "1",
-            "MEMORY_STALE_PROJECT_ENVIRONMENT": str(PLUGIN_ROOT / ".venv"),
+            "MEMORY_STALE_PROJECT_ENVIRONMENT": str(RUNTIME_ROOT / ".venv"),
         }
     )
-    config = json.loads((PLUGIN_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
-    command = config["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
     result = subprocess.run(
-        command,
+        [
+            "sh",
+            str(RUNTIME_ROOT / "scripts" / "run-python.sh"),
+            str(RUNTIME_ROOT / "hooks" / "user_prompt_submit.py"),
+        ],
         cwd=repository,
         env=environment,
         input=json.dumps({"turn_id": "turn-1", "cwd": str(repository)}),
-        shell=True,
         capture_output=True,
         text=True,
     )
@@ -63,7 +62,7 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
         "def login():\n    return validate_mfa()\n", encoding="utf-8"
     )
     environment = os.environ.copy()
-    environment["PYTHONPATH"] = str(PLUGIN_ROOT / "src")
+    environment["PYTHONPATH"] = str(RUNTIME_ROOT / "src")
     server = subprocess.Popen(
         [sys.executable, "-m", "memory_stale.mcp_server"],
         cwd=repository,
@@ -118,20 +117,19 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
     environment = os.environ.copy()
     environment.update(
         {
-            "PLUGIN_ROOT": str(PLUGIN_ROOT),
-            "PLUGIN_DATA": str(PLUGIN_ROOT / ".venv" / "plugin-test-data"),
             "MEMORY_STALE_SKIP_SYNC": "1",
-            "MEMORY_STALE_PROJECT_ENVIRONMENT": str(PLUGIN_ROOT / ".venv"),
+            "MEMORY_STALE_PROJECT_ENVIRONMENT": str(RUNTIME_ROOT / ".venv"),
         }
     )
-    config = json.loads((PLUGIN_ROOT / "hooks" / "hooks.json").read_text(encoding="utf-8"))
-    stop_command = config["hooks"]["Stop"][0]["hooks"][0]["command"]
     stopped = subprocess.run(
-        stop_command,
+        [
+            "sh",
+            str(RUNTIME_ROOT / "scripts" / "run-python.sh"),
+            str(RUNTIME_ROOT / "hooks" / "stop.py"),
+        ],
         cwd=repository,
         env=environment,
         input=json.dumps({"turn_id": "turn-1", "cwd": str(repository)}),
-        shell=True,
         capture_output=True,
         text=True,
     )
@@ -147,7 +145,7 @@ def test_capture_rejects_invalid_or_unchanged_refs_and_is_idempotent(tmp_path: P
     repository = _repository(tmp_path)
     _start_turn(repository)
     environment = os.environ.copy()
-    environment["PYTHONPATH"] = str(PLUGIN_ROOT / "src")
+    environment["PYTHONPATH"] = str(RUNTIME_ROOT / "src")
     server = subprocess.Popen(
         [sys.executable, "-m", "memory_stale.mcp_server"],
         cwd=repository,

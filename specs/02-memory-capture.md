@@ -10,13 +10,13 @@ Provide a local `memory.capture` MCP tool through which Codex records a memory c
 
 ## User Stories
 
-1. As Codex, I want to send a structured final decision to the plugin.
+1. As Codex, I want to send a structured final decision to the local integration.
 2. As a maintainer, I want to reject claims without evidence in changed code.
 3. As a user, I want the initial request and diff summary not to become memory.
 
 ## Implementation Decisions
 
-- The local MCP server uses stdio JSON-RPC transport and is declared by the plugin in `.mcp.json`; the process uses the current Git repository and the single active turn to locate its ephemeral ledger.
+- The local MCP server uses stdio JSON-RPC transport and is declared in the target project's `.mcp.json`; the process uses the current Git repository and the single active turn to locate its ephemeral ledger.
 - Required input: `kind`, `claim`, `refs`, and `durability_reason`.
 - `kind`: `behavior`, `contract`, `constraint`, `architecture`, or `operation`.
 - The skill requires a checklist: durable behavior, real risk of future error, evidence in the final code, and more than task history.

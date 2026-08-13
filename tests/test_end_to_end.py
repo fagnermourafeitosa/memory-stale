@@ -1,15 +1,15 @@
 from pathlib import Path
 from typing import cast
 
-from plugin_harness import PluginHarness
+from local_harness import LocalHarness
 
 from memory_stale.memory_store import MemoryStore
 
-PLUGIN_ROOT = Path(__file__).parents[1]
+RUNTIME_ROOT = Path(__file__).parents[1]
 
 
 def test_full_context_capture_lifecycle_and_persistence_flow(tmp_path: Path) -> None:
-    harness = PluginHarness(tmp_path / "repo", PLUGIN_ROOT)
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
     source = harness.root / "service.py"
     source.write_text("def compute():\n    return 1\n", encoding="utf-8")
     harness.git("add", "service.py")
@@ -56,7 +56,7 @@ def test_full_context_capture_lifecycle_and_persistence_flow(tmp_path: Path) -> 
 
 
 def test_supporting_symbol_evidence_invalidates_a_captured_claim(tmp_path: Path) -> None:
-    harness = PluginHarness(tmp_path / "repo", PLUGIN_ROOT)
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
     login = harness.root / "auth.py"
     policy = harness.root / "policy.py"
     login.write_text("def login():\n    return False\n", encoding="utf-8")
@@ -90,7 +90,7 @@ def test_supporting_symbol_evidence_invalidates_a_captured_claim(tmp_path: Path)
 def test_typed_config_schema_and_test_evidence_ignore_formatting_then_stale(
     tmp_path: Path,
 ) -> None:
-    harness = PluginHarness(tmp_path / "repo", PLUGIN_ROOT)
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
     app = harness.root / "app.py"
     config = harness.root / "settings.yaml"
     schema = harness.root / "openapi.yaml"
@@ -156,7 +156,7 @@ def test_typed_config_schema_and_test_evidence_ignore_formatting_then_stale(
 
 
 def test_capture_rejects_an_invalid_evidence_item_atomically(tmp_path: Path) -> None:
-    harness = PluginHarness(tmp_path / "repo", PLUGIN_ROOT)
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
     source = harness.root / "app.py"
     source.write_text("def login():\n    return False\n", encoding="utf-8")
     harness.git("add", "app.py")
@@ -185,7 +185,7 @@ def test_capture_rejects_an_invalid_evidence_item_atomically(tmp_path: Path) -> 
 def test_transitive_evidence_dependency_marks_claim_stale_with_provenance_path(
     tmp_path: Path,
 ) -> None:
-    harness = PluginHarness(tmp_path / "repo", PLUGIN_ROOT)
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
     login = harness.root / "auth.py"
     policy = harness.root / "policy.py"
     mfa = harness.root / "mfa.py"
@@ -236,7 +236,7 @@ def test_transitive_evidence_dependency_marks_claim_stale_with_provenance_path(
 def test_recapturing_a_stale_claim_preserves_history_and_restores_active_context(
     tmp_path: Path,
 ) -> None:
-    harness = PluginHarness(tmp_path / "repo", PLUGIN_ROOT)
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
     source = harness.root / "service.py"
     source.write_text("def compute():\n    return 1\n", encoding="utf-8")
     harness.git("add", "service.py")

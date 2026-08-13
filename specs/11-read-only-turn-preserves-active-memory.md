@@ -46,7 +46,7 @@ The file remains byte-for-byte identical between the two hooks.
 
 - First test: a tracked file already dirty, an older stale memory with its previous signature, an active memory signed against current content, and a hook cycle with no new edits; observe failure before the fix and then require that only the current memory remain `active` and retrievable.
 - Run the focused test in red and green, the relevant suite, and every quality gate.
-- Repeat validation against the installed plugin after updating its cachebuster.
+- Repeat validation against the installed project-local runtime.
 
 ## Out of Scope
 

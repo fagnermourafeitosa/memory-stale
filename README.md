@@ -1,553 +1,164 @@
 # Memory Stale
 
-Automatic, code-anchored project memory for Codex.
+**Persistent project memory that stops being trusted when its code evidence changes.**
 
-Memory Stale gives Codex relevant knowledge before a task and requires
-revalidation when the recorded code evidence changes. It runs as a Codex plugin through
-lifecycle hooks, a bundled skill, and a local MCP server. There is no separate
-human-facing CLI, second LLM, remote service, vector database, or manual
-`remember` command.
+Memory Stale gives Codex durable, code-anchored context across tasks. It stores
+claims as reviewable Markdown, connects each claim to specific code evidence,
+and deterministically marks the claim `stale` when that evidence no longer
+matches.
 
-> [!NOTE]
-> Memory Stale is currently a pre-alpha local development build. The complete
-> plugin has been exercised end to end, but no public marketplace release has
-> been published yet.
+It is installed per repository as a local Codex skill with hooks and a local
+MCP server. It does not use Codex Plugins, global installation, another model,
+embeddings, a hosted service, or a vector database.
 
-## Why it exists
+## Why it matters
 
-Persistent memory is useful only while its recorded evidence remains unchanged.
-
-Suppose an agent remembers that `AuthService.login` accepts only a password. If
-that method later gains MFA validation, the old fact becomes dangerous: it is
-easy to retrieve, confidently stated, and no longer supported by the code.
-
-Memory Stale connects each durable claim to the exact code symbols that support
-it. Git identifies the working tree, tree-sitter provides structural signatures,
-and deterministic lifecycle rules decide whether its recorded evidence still
-matches the capture.
+Codex can remember that `AuthService.login` only checks a password. If MFA is
+added later, that fact is now unsafe. Memory Stale keeps the claim only while
+the recorded code still supports it.
 
 ```text
-active memory + unchanged evidence → available to future Codex tasks
-active memory + changed evidence   → stale and excluded pending revalidation
-new durable behavior               → captured as a new active memory
+unchanged evidence → active memory → available to Codex
+changed evidence   → stale memory  → excluded until revalidated
 ```
 
-`active` means every recorded item of evidence still matches its captured
-fingerprint. It does not prove that the claim is true or that its provenance is
-complete. `stale` means recorded evidence changed, disappeared, or could not be
-resolved, so the claim requires revalidation; it does not prove the claim false.
-The stale record remains available for audit and is never silently rewritten as
-if it had always contained the new behavior.
+`active` means the recorded evidence is unchanged; it is not proof that a claim
+is complete or universally true. `stale` means evidence changed, disappeared,
+or no longer resolves; it is not proof the claim is false.
 
-## How it relates to LLM-Wiki
+## Install in a project
 
-Memory Stale is persistent memory. It captures durable claims, stores them as
-Git-reviewable Markdown, retrieves relevant active claims in later Codex tasks,
-and preserves immutable evidence revisions. It is not merely an invalidation
-tool.
+From the target Git repository, ask Codex:
 
-LLM-Wiki, in the sense of the Karpathy pattern, is also persistent memory: an
-LLM incrementally compiles sources and conversations into an interlinked wiki
-and maintains it as new information arrives. Memory Stale does not claim that
-such a wiki cannot update its knowledge after code changes.
+> Install Memory Stale in this project from https://github.com/fagnermourafeitosa/memory-stale
 
-The distinction is the enforcement point. A wiki relies on an LLM maintenance
-pass to recognize a changed source and update its page. Memory Stale records the
-specific code evidence supporting a claim; if that evidence diverges, the
-revision is deterministically marked `stale` and is excluded from ordinary
-context until Codex revalidates and captures a new revision.
+Or run:
 
-Memory Stale is therefore a specialized, complementary form of LLM-Wiki-style
-memory for evolving software repositories: an integrity layer for
-code-anchored facts. A broad wiki can own research, documents, session history,
-and exploratory knowledge; Memory Stale supplies provenance and freshness
-enforcement for claims that must stay supported by the current code.
+```bash
+git clone https://github.com/fagnermourafeitosa/memory-stale.git /tmp/memory-stale
+sh /tmp/memory-stale/scripts/install-project.sh .
+```
 
-Neither state is a truth proof. `active` means the recorded evidence still
-matches, not that the claim is universally true or complete. `stale` means that
-the recorded support changed, not that the claim is false.
+The installer adds only target-project artifacts:
 
-## A 60-second example
+```text
+.agents/skills/memory-stale/  # skill, hooks, Python runtime, lockfile
+.codex/hooks.json             # lifecycle registrations
+.mcp.json                     # local memory-stale MCP server
+.git/memory-stale/runtime/    # local uv and grammar caches
+```
 
-Imagine Codex changes `src/auth.py:AuthService.login` and establishes this
-durable behavior:
+It preserves unrelated hook and MCP entries, rejects an incompatible existing
+`memory-stale` MCP server, and never changes `~/.codex`. Review the resulting
+hooks, then start a new Codex conversation to load the local configuration.
+
+Requirements: Git, `uv`, Python 3.10+, and Codex support for project-local
+skills, hooks, and MCP configuration.
+
+## How memory is discovered and classified
+
+On every task, the `UserPromptSubmit` hook considers only records whose evidence
+is still valid. It retrieves relevant active claims deterministically: exact
+paths/symbols receive priority and remaining matches use lexical BM25 ranking.
+
+```mermaid
+flowchart TD
+    A[Codex starts a task] --> B[UserPromptSubmit hook]
+    B --> C[Load project memories]
+    C --> D{"All recorded evidence<br/>still resolves and matches?"}
+    D -->|Yes| E[Classify as active]
+    D -->|No| F["Classify as stale<br/>and retain for audit"]
+    E --> G{"Relevant to this task?<br/>Exact code ref or lexical match"}
+    G -->|Yes| H["Inject active memory<br/>into Codex context"]
+    G -->|No| I[Keep stored; do not inject]
+    F --> J[Exclude from ordinary context]
+```
+
+This means a comment-only or formatting-only edit does not invalidate a memory,
+while a semantic change to its referenced symbol does.
+
+## How a memory is created
+
+Codex decides whether a completed change establishes a durable fact. The local
+runtime never asks another LLM: it validates the evidence and lifecycle state.
+
+```mermaid
+flowchart TD
+    A[Codex completes a code change] --> B{"Durable fact that could<br/>prevent a future mistake?"}
+    B -->|No| C[Do not create memory]
+    B -->|Yes| D[Codex calls memory.capture]
+    D --> E["Local MCP validates<br/>typed primary and supporting evidence"]
+    E --> F{"At least one primary item<br/>changed in this turn?"}
+    F -->|No| G["Reject candidate with<br/>actionable reason"]
+    F -->|Yes| H[Stage candidate in turn ledger]
+    H --> I["Stop hook reconciles<br/>final workspace evidence"]
+    I --> J{"Evidence resolves<br/>and matches captured state?"}
+    J -->|Yes| K[Write active Markdown memory]
+    J -->|No| L[Do not persist candidate]
+```
+
+For example, a useful memory is:
 
 ```text
 Login validates password and MFA before creating a session.
+Evidence: src/auth.py:AuthService.login
 ```
 
-During that turn, Codex stages the claim with `memory.capture`. The local tool
-verifies that the referenced symbol exists and changed during the task, then
-computes its structural signature. At `Stop`, Memory Stale reconciles existing
-evidence and writes the validated capture as an active Markdown memory.
+It is not a task summary such as “Added MFA to login.”
 
-On a later task mentioning `src/auth.py:AuthService.login`, Codex receives:
-
-```text
-Memory Stale active context:
-- Login validates password and MFA before creating a session.
-  Evidence: src/auth.py:AuthService.login
-```
-
-If the method's logic changes, the old memory becomes `stale`. Formatting and
-comment-only edits do not invalidate it. If the completed change establishes a
-replacement fact, Codex captures a new active memory while retaining the stale
-history.
-
-## Requirements
-
-- Codex with plugin, hook, skill, and local MCP support
-- Git
-- [`uv`](https://docs.astral.sh/uv/) available on `PATH`
-- Python 3.10 or newer, selected and managed through `uv`
-
-The plugin uses `uv` exclusively. On first use it creates its environment,
-dependency cache, and tree-sitter grammar cache under Codex's plugin data
-directory. It does not install project dependencies globally and does not use
-`pip`.
-
-## Local installation
-
-There is no public Memory Stale marketplace release yet. The currently tested
-installation uses Codex's personal marketplace and this repository as a local
-plugin source.
-
-Clone the source into the personal plugin layout:
-
-```bash
-mkdir -p ~/plugins
-git clone https://github.com/fagnermourafeitosa/memory-stale.git ~/plugins/memory-stale
-mkdir -p ~/.agents/plugins
-```
-
-Create `~/.agents/plugins/marketplace.json` if you do not already maintain a
-personal marketplace:
-
-```json
-{
-  "name": "personal",
-  "interface": {
-    "displayName": "Personal"
-  },
-  "plugins": [
-    {
-      "name": "memory-stale",
-      "source": {
-        "source": "local",
-        "path": "./plugins/memory-stale"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Developer Tools"
-    }
-  ]
-}
-```
-
-If that file already exists, merge the Memory Stale entry into its `plugins`
-array instead of replacing the file. Then install and verify the plugin:
-
-```bash
-codex plugin add memory-stale@personal
-codex plugin list
-```
-
-Start a new Codex conversation after installation so the skill, MCP tools, and
-hooks are loaded from the installed plugin snapshot. Review and trust the hooks
-before enabling them. The hooks invoke only the bundled local bootstrap and
-memory engine.
-
-## Normal use
+## Daily use
 
 Memory maintenance is automatic:
 
-1. `UserPromptSubmit` retrieves relevant active memories and adds them to the
-   Codex context.
-2. `PostToolUse` records task activity while Codex works.
-3. Codex calls `memory.capture` only for durable facts with at least one changed
-   primary evidence item.
-4. `Stop` compares the final workspace with the task-start snapshot, validates
-   typed evidence and fingerprints, persists captures whose recorded evidence resolves, and
-   marks affected memories stale for revalidation.
+1. `UserPromptSubmit` retrieves relevant active memory.
+2. `PostToolUse` records work performed during the task.
+3. Codex calls `memory.capture` when durable code-backed knowledge is created.
+4. `Stop` reconciles evidence, persists valid candidates, and marks affected
+   existing records stale.
 
-You do not call `memory.capture` yourself. Ask Codex to work normally. The
-bundled skill decides when a fact is durable enough to propose, while the local
-engine deterministically validates its code evidence.
-
-### What qualifies as durable memory
-
-A useful memory describes behavior, a contract, a constraint, an architectural
-decision, or a non-obvious operational fact that could prevent a future mistake.
-
-```text
-Do not store: "Added MFA to login."
-Do not store: "Changed auth.py and its tests."
-
-Store: "Login validates password and MFA before creating a session."
-Evidence: primary symbol src/auth.py:AuthService.login
-```
-
-Trivial fixes, formatting changes, mechanical refactors, user prompts, and
-generic diff summaries should not become memories.
-
-## Verify that it works
-
-Use a Git repository containing a supported language:
-
-1. Ask Codex to make a meaningful behavior change to a named function, method,
-   class, struct, or type.
-2. If the result establishes a durable fact, ask Codex to confirm that Memory
-   Stale captured it.
-3. Inspect `.agents/skills/.agent-memory/memories/` for an `active` Markdown
-   memory with the expected claim and typed evidence item.
-4. Start a new task mentioning that exact path or symbol. The active claim
-   should appear in Codex's injected context.
-5. Change the referenced symbol semantically. The previous memory should become
-   `stale` and disappear from normal context; a replacement fact may become a
-   new active memory.
-
-An unrelated prompt should not retrieve the memory. A comment-only or formatting
-change should not make it stale.
-
-## Storage and version control
-
-Memories are plain Markdown with structured front matter:
-
-```text
-<repo>/.agents/skills/.agent-memory/memories/*.md
-```
-
-Each file is an immutable evidence revision. It records a stable `claim_id`, a
-fingerprint-derived `revision_id`, `schema_version: 4`, and the observed Git
-commit and time when available. Re-capturing the same claim after its evidence
-changes preserves the earlier revision and restores one new `active` revision
-to normal context. Repeating an identical evidence revision is idempotent.
-
-Older records with implicit `signatures` are read as legacy primary `symbol`
-evidence and migrated deterministically on their next write; their prior ID
-remains in front matter as migration provenance. The HTML report groups revision
-history by claim, while context retrieval uses only the current active revision.
-
-## Staleness evaluation corpus
-
-`evaluation-corpus.yaml` is a versioned, human-labeled set of before-and-after
-fixtures used by the normal test suite. Its deterministic evaluator runs the
-same lifecycle against real source files, then reports two deliberately separate
-trade-offs: `unnecessary_revalidation_rate` for `preserved` claims marked stale,
-and `missed_semantic_change_rate` for `changed` claims left active. The current
-baseline is versioned in `evaluation-baseline.yaml`; its known instrumentation
-false-stale and indirect-policy false-negative cases document limitations rather
-than redefining evidence staleness as claim truth.
-
-## Repository-scale lifecycle evaluation
-
-`evaluator/corpus/repository-lifecycle-corpus.yaml` is a separate, versioned
-evaluation of the full plugin lifecycle in temporary Git repositories. Its 100
-explicitly labeled, reviewable trials are balanced between 50 `changed` and 50 `preserved`
-labels. Every trial records a semantic case group and a label rationale, creates
-an initial commit, captures a claim through the real `memory.capture` MCP
-process, applies a subsequent Git change, completes the real `Stop` hook, and
-observes both persisted Markdown status and later `UserPromptSubmit` context.
-It does not change capture, reconciliation, or retrieval behavior; it measures
-their resulting availability decision.
-
-The [checked-in result](evaluator/results/2026-08-12-repository-lifecycle-evaluation.yaml)
-records every trial, the complete confusion matrix, per-family matrices, and
-Wilson intervals. The [immutable corpus](evaluator/corpus/repository-lifecycle-corpus.yaml)
-contains the independently labeled input samples and must not be tuned to raise
-the result.
-
-| Metric | Current result |
-| --- | ---: |
-| True stale / false stale / missed change / true active | `38 / 8 / 12 / 42` |
-| Aggregate accuracy | 80.0% |
-| Stale recall | 76.0% |
-| Stale precision | 82.6% |
-| Specificity | 84.0% |
-| Unnecessary revalidation rate | 16.0% |
-| Missed semantic change rate | 24.0% |
-| Macro-family accuracy | 72.2% |
-
-These figures are produced by the real hook/MCP lifecycle in 100 temporary Git
-repositories. Per-family matrices keep repeated grammar variants from hiding
-the intentionally difficult conservative-revalidation and incomplete-provenance
-families.
-
-These values are regression measurements for this curated corpus, not an
-estimate of accuracy on all repositories. Wilson 95% intervals are retained as
-descriptions of the finite labeled set, but the trials are neither random nor
-independent population samples. The evaluator therefore reports counts first
-and does not present an interval as evidence of real-world generalization.
-
-Capture failures, hook failures, unresolved locators, and retrieval mismatches
-remain separate operational outcomes. They are never counted as favorable stale
-results or mixed into the semantic matrix, while `attempted_count` prevents them
-from disappearing from the report. The corpus covers all supported grammars and
-includes direct changes, preserving refactors, fully defined instrumentation,
-dependencies actually consumed by source, explicit evidence graphs, and
-repository-shape changes. Adding a trial or changing its expected outcome
-requires a reviewed rationale and baseline explanation.
-
-Project configuration lives at:
-
-```text
-<repo>/.agents/skills/.agent-memory/config.toml
-```
-
-Commit the memory files and configuration when the team wants to share durable
-project knowledge through Git. Review them like documentation. Active and stale
-records are both intentional history.
-
-Task snapshots and temporary ledgers live under the repository's Git metadata.
-The Python environment, dependency cache, and grammar cache live in Codex's
-plugin data directory. They are derived local state and should not be committed.
-The optional HTML report may be committed or ignored according to project
-policy.
-
-## Configuration
-
-All fields are optional. Defaults are shown below:
-
-```toml
-context_budget = 1500
-auto_report = false
-report_path = "memory-report.html"
-```
-
-- `context_budget` is a positive approximate token budget for injected memory.
-- `auto_report` regenerates the HTML report at the end of lifecycle processing.
-- `report_path` must be a non-empty relative path inside the repository.
-
-Invalid configuration is surfaced as a structured, non-blocking plugin error.
-
-## Memory health and Dream
-
-Ask Codex to generate the Memory Stale health report when you want an HTML view
-of active and stale memories, typed evidence, durability reasons, and staleness reasons.
-Codex calls the local `memory.report` MCP tool and returns the configured path.
-The report is not generated on ordinary turns unless `auto_report` is enabled.
-
-For an explicit repository-wide audit, invoke:
+Ask Codex to work normally. The bundled `memory-stale` skill guides its capture
+decisions. For explicit maintenance, use:
 
 ```text
 /memory-stale dream
 ```
 
-The deterministic `memory.dream` tool checks current symbol evidence, reports
-stale or broken items, and marks active memories whose evidence no longer
-matches as stale for revalidation. The same
-Codex instance can then review those results and use `memory.capture` for new
-durable facts. Dream does not launch another LLM and does not rewrite healthy
-active memories without evidence.
+Ask Codex for the Memory Stale health report to generate the local HTML view of
+active/stale memories, evidence, and invalidation reasons.
 
-## MCP tools
+## What is stored
 
-The local MCP server exposes three tools for the bundled skill and Codex. They
-are implementation surfaces, not a separate end-user CLI.
-
-- `memory.capture` stages a durable claim anchored to typed evidence.
-- `memory.dream` performs an explicit wide evidence-revalidation audit.
-- `memory.report` writes the optional static HTML health report.
-
-Capture kinds are `behavior`, `contract`, `constraint`, `architecture`, and
-`operation`. Every capture has an `evidence` set. Each item contains `type`,
-`role`, and `locator`; it is persisted with a deterministic fingerprint. Roles
-are `primary` and `supporting`, and at least one primary item must change in the
-active turn. Captures with the same normalized claim, kind, and evidence scope
-are idempotent. Deduplication is exact and deterministic, not semantic.
-
-`symbol` and `test` locators use `path:symbol` and receive tree-sitter structural
-fingerprints. `config` locators select an exact JSON Pointer in JSON, YAML, or
-TOML, such as `settings.yaml#/authentication/mfa`. `schema` locators select an
-exact JSON Pointer in a JSON Schema or OpenAPI JSON/YAML document. Formatting
-and comments do not affect document fingerprints. Whole-document locators,
-unknown formats, invalid documents, and missing nodes are rejected; there is no
-raw file-hash fallback. Supporting items may be intact when captured, but any
-recorded item that changes, disappears, or becomes unresolvable makes the
-revision stale with an item-specific reason.
-
-## Evidence dependency graph
-
-Evidence can also declare explicit nested `depends_on` relationships. This is a
-local provenance graph: the current Codex instance declares the relationships,
-while the engine validates locators, fingerprints nodes, and traverses them in
-canonical order. It does not infer a call graph, use embeddings, or act as
-GraphRAG.
-
-For example, a changed `auth.py:login` can be primary evidence that depends on
-an authentication policy, which itself depends on an MFA policy. A later change
-to the MFA policy makes the login revision stale even when `login` is untouched.
-The recorded stale reason includes a deterministic path from the claim's direct
-evidence to the affected node. Cycles are finite and deterministic; broken edges
-or unresolved nodes reject the entire capture.
-
-The Markdown record persists graph nodes, `supported_by` roots, and
-`depends_on` edges. The HTML report shows those edges and invalidation paths.
-The evaluation corpus compares the flat and graph outcomes separately so that
-the added coverage is visible alongside unnecessary revalidation.
-
-## Symbol-level staleness
-
-Memory Stale uses tree-sitter to resolve symbols and create canonical,
-versioned signatures. Signatures include syntax structure and real tokens while
-ignoring whitespace and comments, plus a small fail-closed set of locally
-provable semantic normalizations.
-
-- Logic, public identifiers, parameters, changed literals, or structural changes
-  make a memory stale and require its claim to be revalidated. Strictly local
-  temporary-variable renames and allowlisted literal rewrites do not.
-- Deleting or renaming a symbol makes its recorded evidence stale.
-- Deleting its file makes its recorded evidence stale.
-- Formatting and comment-only changes do not make it stale.
-
-V1 supports TypeScript, JavaScript, Python, Go, Java, Kotlin, and Rust. There is
-deliberately no file-level fallback. Unsupported languages and unresolved syntax
-are rejected instead of producing imprecise evidence.
-
-New symbol fingerprints carry a `v2:` prefix. Existing unversioned fingerprints
-continue to use the prior structural representation until their memory is
-recaptured, so an upgrade alone does not make legacy evidence stale.
-
-Every typed evidence item in a new capture must resolve in the final state. At
-least one `primary` item must have changed during the active task; supporting
-items need not have changed. A partially invalid evidence set is rejected
-atomically with an item-specific error.
-
-## Retrieval quality
-
-Only active memories are eligible for normal context. Retrieval is deterministic:
-
-1. BM25 scores shared terms in the claim and durability reason.
-2. An exact path or symbol occurrence in the prompt receives a strong boost.
-3. Ranked memories are selected within the configured context budget.
-
-Stale memories are always excluded. There are no embeddings in v1, so prompts
-with neither shared terms nor code refs intentionally return no memory context.
-
-## Architecture
+Durable records and configuration live in the target project:
 
 ```text
-Codex plugin
-├── bundled skill
-│   ├── durable-memory policy
-│   └── /memory-stale dream workflow
-├── local MCP server
-│   ├── memory.capture
-│   ├── memory.dream
-│   └── memory.report
-├── lifecycle adapters
-│   ├── UserPromptSubmit
-│   ├── PostToolUse
-│   └── Stop
-└── deterministic local core
-    ├── tree-sitter symbol indexers
-    ├── task snapshots and change ledger
-    ├── Markdown memory store
-    ├── staleness lifecycle
-    ├── BM25 retrieval
-    └── static HTML renderer
+.agents/skills/.agent-memory/memories/*.md
+.agents/skills/.agent-memory/config.toml
 ```
 
-Hooks and MCP handlers are thin adapters around the local engine, allowing the
-core behavior to be tested with real temporary Git repositories and without a
-live Codex session.
+Memory files are Git-reviewable Markdown. Commit them when the team wants to
+share project knowledge. Turn ledgers and runtime caches remain under `.git/`.
 
-## Failure behavior and privacy
+Supported primary evidence includes symbols, tests, configuration nodes, and
+schema nodes. Symbol evidence supports Python, JavaScript/TypeScript, Go, Java,
+Kotlin, and Rust. Unsupported languages intentionally have no file-level
+fallback.
 
-Memory maintenance must not block the coding task. Hook, parsing, indexing,
-configuration, and persistence failures are converted into actionable structured
-messages. Writes are atomic, so a failure should not leave a partially written
-memory. Best-effort behavior means a failed hook may miss an update instead of
-interrupting the user's work.
+## Design boundaries
 
-Git is required. Outside a Git worktree, the plugin explains that it is inactive
-and performs no memory operation.
-
-Memory files, task state, indexes, reports, and caches remain local. The plugin
-does not call another model or send memory to a dedicated service. Active memory
-selected for a task is added to the current Codex context, which is the intended
-product behavior.
-
-## Current status
-
-Memory Stale is a pre-alpha `0.1.0` development build. The following are
-implemented and covered by integration or end-to-end tests:
-
-- installable local Codex plugin with isolated `uv` bootstrap;
-- bundled skill, lifecycle hooks, and three local MCP tools;
-- Markdown memory store and `active → stale` evidence-revalidation lifecycle;
-- versioned claim/evidence revisions with deterministic legacy migration and
-  Git observation metadata;
-- typed primary and supporting evidence for symbols, tests, configuration, and
-  schema nodes, with canonical fingerprints and item-level stale reasons;
-- explicit local evidence dependency graphs with deterministic transitive
-  invalidation paths, finite cycle handling, and flat-versus-graph corpus metrics;
-- labeled evaluation corpus and deterministic revalidation trade-off baseline
-  across every supported grammar;
-- structural indexing for all seven v1 languages;
-- deterministic retrieval with exact-ref priority and context budgets;
-- Dream reconciliation, project configuration, and HTML reporting;
-- dirty-worktree handling, multi-file captures, failure behavior, and installed
-  plugin validation.
-
-Storage formats, configuration, and plugin interfaces may still change before a
-stable release.
+- **Codex supplies meaning.** It decides whether a fact is durable and states
+  the claim.
+- **The local core supplies proof of freshness.** It resolves declared evidence,
+  fingerprints it, retrieves active records, and manages lifecycle state.
+- **Hooks and MCP are adapters.** They keep the deterministic Python core
+  independent from Codex transport and configuration.
+- **Failures do not block coding.** Hook failures return actionable, non-blocking
+  messages; writes are atomic.
 
 ## Current limitations
 
-- There is no published marketplace release or one-command public installation.
-- Codex provides the semantic judgment about whether prose is durable; the local
-  engine checks recorded evidence but cannot prove claim truth, semantic value,
-  or provenance completeness.
-- Retrieval is lexical and structural. A query with no shared language or refs
-  may miss a conceptually related memory.
-- Exact deduplication does not merge semantically equivalent wording; it only
-  recognizes an identical claim scope and evidence fingerprint.
-- Stale memory is excluded rather than automatically repaired during ordinary
-  turns. Dream provides explicit reconciliation.
+- Retrieval is lexical and structural; a prompt with no shared terms or code
+  references may not retrieve a conceptually related memory.
+- Stale records are excluded, not automatically rewritten. Revalidate them with
+  Dream or a new capture.
 - Overloads, anonymous functions, generated code, macros, and partial classes
-  may not resolve with the desired granularity.
-- Hook trust, `uv` availability, dependency bootstrap, and local Git state are
-  operational prerequisites.
-- Best-effort non-blocking behavior can miss a memory update when a hook fails.
-
-## Roadmap
-
-### Before a public release
-
-- Publish a versioned Codex marketplace package and documented upgrade path.
-- Add release packaging and installed-plugin smoke tests to CI.
-- Improve first-run bootstrap diagnostics and MCP capture observability.
-- Add task-level diagnostics for missed or rejected captures.
-
-### Later
-
-- Add grammar packs for more languages without weakening the no-fallback rule.
-- Improve symbol resolution for overloads, anonymous functions, generated code,
-  macros, and partial classes.
-- Expand Dream with dry runs, review modes, and targeted scopes.
-- Add ranking evaluation datasets and retrieval quality metrics.
-- Add memory diffs beyond the existing claim-level revision history.
-- Evaluate an optional semantic retrieval layer only after deterministic ranking
-  has measurable quality baselines.
-
-## Development
-
-Use `uv` for every Python operation:
-
-```bash
-uv sync --frozen
-uv run ruff format --check .
-uv run ruff check .
-uv run mypy src tests evaluator
-uv run pytest
-```
-
-Repository behavior is specified in numbered files under `specs/`. See
-`AGENTS.md` for the spec-first, branch, TDD, and commit-authorization workflow.
-
-## License
-
-MIT
+  may not resolve at the desired granularity.

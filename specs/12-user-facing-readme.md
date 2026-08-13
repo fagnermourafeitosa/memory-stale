@@ -16,7 +16,7 @@ separate delivered features from the future roadmap.
 
 ## User Stories
 
-1. As a user, I want to understand the plugin's value quickly and install it without knowing its internal architecture.
+1. As a user, I want to understand the local integration's value quickly and install it without knowing its internal architecture.
 2. As a user, I want to know where memory lives, what I should version, and how to verify retrieval and staleness.
 3. As an advanced user, I want to configure the budget and report with copyable examples.
 4. As a potential contributor, I want to distinguish current state, limitations, and actual future work.

@@ -2,7 +2,7 @@
 
 ## Problem Statement
 
-The plugin depends on Git, hooks, MCP, files, and tree-sitter; isolated tests are insufficient to establish the lifecycle.
+The local integration depends on Git, hooks, MCP, files, and tree-sitter; isolated tests are insufficient to establish the lifecycle.
 
 ## Solution
 

@@ -44,7 +44,7 @@ repository instructions and specs.
 
 ## Out of Scope
 
-- Changing plugin behavior or public interfaces.
+- Changing local integration behavior or public interfaces.
 - Renumbering specs or renaming existing spec files solely to translate filenames.
 - Translating code identifiers, commands, paths, or product names.
 - Rewriting the README or changing its product positioning.

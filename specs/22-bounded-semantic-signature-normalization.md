@@ -46,7 +46,7 @@ stages or grow into general semantic analysis.
 
 Fingerprint evolution must be versioned. Existing unversioned fingerprints
 continue to use legacy structural comparison until a later capture records a new
-revision. Updating the plugin alone must not make legacy evidence stale.
+revision. Updating the local runtime alone must not make legacy evidence stale.
 
 ## User Stories
 

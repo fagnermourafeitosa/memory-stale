@@ -42,7 +42,7 @@ dependencies, the lockfile, and the virtual environment.
 
 ## Out of Scope
 
-- Implementing plugin features.
+- Implementing local integration features.
 - Creating a commit, publishing a branch, or opening a pull request.
 - Defining remote CI in this change.
 

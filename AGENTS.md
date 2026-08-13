@@ -2,8 +2,8 @@
 
 ## Product boundaries
 
-- Build Memory Stale as a Codex plugin with a bundled skill, local MCP server,
-  lifecycle hooks, and a deterministic local memory engine.
+- Build Memory Stale as a project-local Codex skill with associated local MCP
+  registration, lifecycle hooks, and a deterministic local memory engine.
 - Do not introduce a human-facing CLI as the primary product surface.
 - Do not call another LLM. Semantic claims come from the Codex instance already
   performing the task; hooks and the core remain deterministic.
@@ -100,7 +100,7 @@ failing test. Any production behavior change does.
 - Use `pathlib.Path`, explicit encodings, context managers, and specific
   exception types.
 - Never swallow exceptions silently. Convert boundary failures into structured,
-  actionable errors while preserving the plugin's non-blocking behavior.
+  actionable errors while preserving the integration's non-blocking behavior.
 - Keep writes atomic. Do not leave partially written memories or configuration.
 - Avoid hidden global state. Pass clocks, randomness, process runners, and
   filesystem boundaries explicitly when determinism matters.
