@@ -109,8 +109,8 @@ failing test. Any production behavior change does.
 
 ## Required validation
 
-Run the focused test throughout the red-green cycle. Before considering a
-change complete, run:
+When a change modifies production or test code, run the focused test throughout
+the red-green cycle. Before considering that code change complete, run:
 
 ```bash
 uv run ruff format --check .
@@ -121,6 +121,11 @@ uv run pytest
 
 Coverage is a guardrail, not a substitute for behavioral tests. New production
 modules must remain at or above the configured branch-coverage threshold.
+
+For a change with no production or test code modifications—including
+documentation, specs, repository instructions, and metadata—do not run the
+commands above solely for validation. Review and verify the changed artifact
+directly instead.
 
 ## Change discipline
 
