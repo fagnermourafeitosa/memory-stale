@@ -2,8 +2,10 @@
 
 ## Product boundaries
 
-- Build Memory Stale as a project-local Codex skill with associated local MCP
-  registration, lifecycle hooks, and a deterministic local memory engine.
+- Build Memory Stale as a project-local Codex skill with lifecycle hooks and a
+  deterministic local memory engine. Register its MCP server with the Codex
+  CLI globally, but make that registration point only to the project's copied
+  runtime.
 - Do not introduce a human-facing CLI as the primary product surface.
 - Do not call another LLM. Semantic claims come from the Codex instance already
   performing the task; hooks and the core remain deterministic.

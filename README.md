@@ -7,9 +7,10 @@ claims as reviewable Markdown, connects each claim to specific code evidence,
 and deterministically marks the claim `stale` when that evidence no longer
 matches.
 
-It is installed per repository as a local Codex skill with hooks and a local
-MCP server. It does not use Codex Plugins, global installation, another model,
-embeddings, a hosted service, or a vector database.
+It is installed per repository as a local Codex skill with hooks. Its MCP
+server is registered once in Codex's global configuration, but the entry points
+only to that project's installed runtime. It does not use Codex Plugins,
+another model, embeddings, a hosted service, or a vector database.
 
 ## Why it matters
 
@@ -44,16 +45,23 @@ The installer adds only target-project artifacts:
 ```text
 .agents/skills/memory-stale/  # skill, hooks, Python runtime, lockfile
 .codex/hooks.json             # lifecycle registrations
-.mcp.json                     # local memory-stale MCP server
 .git/memory-stale/runtime/    # local uv and grammar caches
 ```
 
-It preserves unrelated hook and MCP entries, rejects an incompatible existing
-`memory-stale` MCP server, and never changes `~/.codex`. Review the resulting
-hooks, then start a new Codex conversation to load the local configuration.
+It preserves unrelated hook entries and registers `memory-stale` with
+`codex mcp add` using the installed runtime's absolute path. The Codex
+registration is global, but it does not install Python packages globally or
+point to the source checkout. If Codex already has a `memory-stale` server,
+installation stops with the CLI's error instead of replacing it. Start a new
+Codex conversation after installation so it loads the registered server.
 
-Requirements: Git, `uv`, Python 3.10+, and Codex support for project-local
-skills, hooks, and MCP configuration.
+Requirements: Git, `uv`, Python 3.10+, and the `codex` CLI with MCP support.
+
+On the first hook or MCP invocation, the installed runtime uses its locked
+dependencies to run `uv sync --frozen --no-dev`. This creates or reuses an
+isolated environment at `.git/memory-stale/runtime/.venv`; its `uv` and
+grammar caches also remain below `.git/memory-stale/runtime/`. It does not
+modify the target project's `.venv` or install packages globally.
 
 ## How memory is discovered and classified
 

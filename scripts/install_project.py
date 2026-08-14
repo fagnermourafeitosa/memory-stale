@@ -62,10 +62,6 @@ HOOK_COMMANDS: dict[str, list[dict[str, object]]] = {
         }
     ],
 }
-MCP_SERVER = {
-    "command": "sh",
-    "args": [".agents/skills/memory-stale/scripts/run-python.sh", "-m", "memory_stale.mcp_server"],
-}
 
 
 class InstallationError(RuntimeError):
@@ -105,25 +101,16 @@ def _target_repository(target: Path) -> Path:
     return Path(result.stdout.strip()).resolve()
 
 
-def _configuration(source: Path, repository: Path) -> tuple[dict[str, object], dict[str, object]]:
+def _configuration(repository: Path) -> dict[str, object]:
     hooks_path = repository / ".codex" / "hooks.json"
-    mcp_path = repository / ".mcp.json"
     hooks = _read_json(hooks_path, "hooks")
-    mcp = _read_json(mcp_path, "mcpServers")
     hook_groups = cast(dict[str, object], hooks["hooks"])
     for event, additions in HOOK_COMMANDS.items():
         existing = hook_groups.get(event, [])
         if not isinstance(existing, list):
             raise InstallationError(f"{hooks_path} hooks.{event} must be an array")
         hook_groups[event] = [*existing, *additions]
-    servers = cast(dict[str, object], mcp["mcpServers"])
-    existing_server = servers.get("memory-stale")
-    if existing_server is not None and existing_server != MCP_SERVER:
-        raise InstallationError(
-            f"{mcp_path} already registers a different 'memory-stale' MCP server; resolve it first"
-        )
-    servers["memory-stale"] = MCP_SERVER
-    return hooks, mcp
+    return hooks
 
 
 def _copy_artifacts(source: Path, repository: Path) -> None:
@@ -143,6 +130,33 @@ def _copy_artifacts(source: Path, repository: Path) -> None:
     shutil.copy2(source / "uv.lock", destination / "uv.lock")
 
 
+def _register_mcp(repository: Path) -> None:
+    bootstrap = repository / ".agents" / "skills" / "memory-stale" / "scripts" / "run-python.sh"
+    try:
+        result = subprocess.run(
+            [
+                "codex",
+                "mcp",
+                "add",
+                "memory-stale",
+                "--",
+                "sh",
+                str(bootstrap),
+                "-m",
+                "memory_stale.mcp_server",
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as error:
+        raise InstallationError(
+            "Codex CLI is required to register the memory-stale MCP server"
+        ) from error
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "unknown Codex CLI failure"
+        raise InstallationError(f"could not register the memory-stale MCP server: {detail}")
+
+
 def install(source: Path, target: Path) -> Path:
     repository = _target_repository(target)
     destination = repository / ".agents" / "skills" / "memory-stale"
@@ -150,10 +164,10 @@ def install(source: Path, target: Path) -> Path:
         raise InstallationError(
             f"{destination} already exists; remove or upgrade the project-local installation explicitly"
         )
-    hooks, mcp = _configuration(source, repository)
+    hooks = _configuration(repository)
     _copy_artifacts(source, repository)
     _atomic_write_json(repository / ".codex" / "hooks.json", hooks)
-    _atomic_write_json(repository / ".mcp.json", mcp)
+    _register_mcp(repository)
     return repository
 
 

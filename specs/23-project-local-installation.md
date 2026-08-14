@@ -1,6 +1,12 @@
 # 23 — Project-local installation without Codex Plugins
 
-**Status: Done (2026-08-13)**
+**Status: Superseded in part by spec 26 (2026-08-13)**
+
+Spec 26 supersedes every requirement here that keeps MCP discovery in the
+target `.mcp.json` or forbids the Codex CLI's global MCP registration. The
+skill, hooks, Python runtime, durable memory, and task state remain
+project-local; the global entry is discovery metadata that points to the
+installed project runtime.
 
 ## Problem Statement
 

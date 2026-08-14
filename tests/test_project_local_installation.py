@@ -3,9 +3,73 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import cast
 
 SOURCE_ROOT = Path(__file__).parents[1]
+
+
+def _codex_environment(command_directory: Path, script: str) -> dict[str, str]:
+    command_directory.mkdir()
+    codex_command = command_directory / "codex"
+    codex_command.write_text(f"#!/bin/sh\n{script}\n", encoding="utf-8")
+    codex_command.chmod(0o755)
+    return {**os.environ, "PATH": f"{command_directory}{os.pathsep}{os.environ['PATH']}"}
+
+
+def test_installation_registers_the_installed_mcp_server_with_codex(tmp_path: Path) -> None:
+    repository = tmp_path / "target"
+    repository.mkdir()
+    subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+    command_directory = tmp_path / "commands"
+    captured_arguments = tmp_path / "codex-arguments"
+    environment = {
+        **_codex_environment(
+            command_directory, 'printf \'%s\\n\' "$@" > "$MEMORY_STALE_CODEX_ARGUMENTS"'
+        ),
+        "MEMORY_STALE_CODEX_ARGUMENTS": str(captured_arguments),
+    }
+
+    installation = subprocess.run(
+        ["sh", str(SOURCE_ROOT / "scripts" / "install-project.sh"), str(repository)],
+        cwd=SOURCE_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert installation.returncode == 0, installation.stderr
+    assert captured_arguments.read_text(encoding="utf-8").splitlines() == [
+        "mcp",
+        "add",
+        "memory-stale",
+        "--",
+        "sh",
+        str(repository / ".agents" / "skills" / "memory-stale" / "scripts" / "run-python.sh"),
+        "-m",
+        "memory_stale.mcp_server",
+    ]
+
+
+def test_installation_reports_a_failed_mcp_registration(tmp_path: Path) -> None:
+    repository = tmp_path / "target"
+    repository.mkdir()
+    subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+    environment = _codex_environment(
+        tmp_path / "commands", "printf '%s\\n' 'registration denied' >&2\nexit 12"
+    )
+
+    installation = subprocess.run(
+        ["sh", str(SOURCE_ROOT / "scripts" / "install-project.sh"), str(repository)],
+        cwd=SOURCE_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert installation.returncode == 1
+    assert (
+        "could not register the memory-stale MCP server: registration denied" in installation.stderr
+    )
+    assert "Memory Stale installed locally" not in installation.stdout
 
 
 def test_installation_creates_a_project_local_skill_and_hook_configuration(tmp_path: Path) -> None:
@@ -24,6 +88,7 @@ def test_installation_creates_a_project_local_skill_and_hook_configuration(tmp_p
     installation = subprocess.run(
         ["sh", str(source / "scripts" / "install-project.sh"), str(repository)],
         cwd=source,
+        env=_codex_environment(tmp_path / "commands", ":"),
         capture_output=True,
         text=True,
     )
@@ -36,8 +101,7 @@ def test_installation_creates_a_project_local_skill_and_hook_configuration(tmp_p
 
     hooks = json.loads((repository / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     assert set(hooks["hooks"]) == {"UserPromptSubmit", "PostToolUse", "Stop"}
-    mcp = json.loads((repository / ".mcp.json").read_text(encoding="utf-8"))
-    assert set(mcp["mcpServers"]) == {"memory-stale"}
+    assert not (repository / ".mcp.json").exists()
 
     command = hooks["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
     environment = os.environ.copy()
@@ -87,6 +151,7 @@ def test_installed_local_mcp_and_stop_hook_persist_a_memory_in_the_target_projec
     subprocess.run(
         ["sh", str(source / "scripts" / "install-project.sh"), str(repository)],
         cwd=source,
+        env=_codex_environment(tmp_path / "commands", ":"),
         check=True,
     )
     hooks = json.loads((repository / ".codex" / "hooks.json").read_text(encoding="utf-8"))
@@ -108,15 +173,13 @@ def test_installed_local_mcp_and_stop_hook_persist_a_memory_in_the_target_projec
     subject.write_text(
         "def login(password: str) -> bool:\n    return password == 'new'\n", encoding="utf-8"
     )
-    mcp = cast(
-        dict[str, object], json.loads((repository / ".mcp.json").read_text(encoding="utf-8"))
-    )
-    server_config = cast(
-        dict[str, object], cast(dict[str, object], mcp["mcpServers"])["memory-stale"]
-    )
-    arguments = cast(list[str], server_config["args"])
     server = subprocess.Popen(
-        [cast(str, server_config["command"]), *arguments],
+        [
+            "sh",
+            str(repository / ".agents" / "skills" / "memory-stale" / "scripts" / "run-python.sh"),
+            "-m",
+            "memory_stale.mcp_server",
+        ],
         cwd=repository,
         env=environment,
         stdin=subprocess.PIPE,
@@ -189,6 +252,7 @@ def test_installation_preserves_unrelated_project_codex_configuration(tmp_path: 
     installation = subprocess.run(
         ["sh", str(SOURCE_ROOT / "scripts" / "install-project.sh"), str(repository)],
         cwd=SOURCE_ROOT,
+        env=_codex_environment(tmp_path / "commands", ":"),
         capture_output=True,
         text=True,
     )
@@ -200,10 +264,10 @@ def test_installation_preserves_unrelated_project_codex_configuration(tmp_path: 
     assert len(stop_hooks) == 2
     mcp = json.loads((repository / ".mcp.json").read_text(encoding="utf-8"))
     assert mcp["mcpServers"]["existing"] == {"command": "existing-command"}
-    assert "memory-stale" in mcp["mcpServers"]
+    assert "memory-stale" not in mcp["mcpServers"]
 
 
-def test_installation_rejects_a_conflicting_memory_stale_mcp_server(tmp_path: Path) -> None:
+def test_installation_leaves_a_project_mcp_registration_unchanged(tmp_path: Path) -> None:
     repository = tmp_path / "target"
     repository.mkdir()
     subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
@@ -214,11 +278,11 @@ def test_installation_rejects_a_conflicting_memory_stale_mcp_server(tmp_path: Pa
     installation = subprocess.run(
         ["sh", str(SOURCE_ROOT / "scripts" / "install-project.sh"), str(repository)],
         cwd=SOURCE_ROOT,
+        env=_codex_environment(tmp_path / "commands", ":"),
         capture_output=True,
         text=True,
     )
 
-    assert installation.returncode == 1
-    assert "different 'memory-stale' MCP server" in installation.stderr
+    assert installation.returncode == 0, installation.stderr
     assert json.loads(mcp_path.read_text(encoding="utf-8")) == original
-    assert not (repository / ".agents" / "skills" / "memory-stale").exists()
+    assert (repository / ".agents" / "skills" / "memory-stale").exists()

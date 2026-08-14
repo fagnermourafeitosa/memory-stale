@@ -16,7 +16,10 @@ Provide a local `memory.capture` MCP tool through which Codex records a memory c
 
 ## Implementation Decisions
 
-- The local MCP server uses stdio JSON-RPC transport and is declared in the target project's `.mcp.json`; the process uses the current Git repository and the single active turn to locate its ephemeral ledger.
+- The local MCP server uses stdio JSON-RPC transport. Its Codex CLI registration
+  points to the target project's installed runtime; the process uses the
+  current Git repository and the single active turn to locate its ephemeral
+  ledger. This discovery detail is superseded by spec 26.
 - Required input: `kind`, `claim`, `refs`, and `durability_reason`.
 - `kind`: `behavior`, `contract`, `constraint`, `architecture`, or `operation`.
 - The skill requires a checklist: durable behavior, real risk of future error, evidence in the final code, and more than task history.
