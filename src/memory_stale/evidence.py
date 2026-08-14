@@ -13,7 +13,7 @@ import yaml
 
 from memory_stale.symbol_index import SIGNATURE_VERSION, SymbolIndexer, SymbolIndexError
 
-EVIDENCE_TYPES = frozenset({"symbol", "config", "schema", "test"})
+EVIDENCE_TYPES = frozenset({"source", "symbol", "config", "schema", "test"})
 EVIDENCE_ROLES = frozenset({"primary", "supporting"})
 
 
@@ -155,6 +155,11 @@ def resolve_item(repository: Path, item_type: str, role: str, locator: str) -> E
             fingerprint = SymbolIndexer(repository).signature(locator)
         except SymbolIndexError as error:
             raise EvidenceError(str(error)) from error
+    elif item_type == "source":
+        try:
+            fingerprint = SymbolIndexer(repository).source_signature(locator)
+        except SymbolIndexError as error:
+            raise EvidenceError(str(error)) from error
     else:
         fingerprint = _document_fingerprint(repository, item_type, locator)
     return EvidenceItem(item_type, role, locator, fingerprint)
@@ -168,6 +173,11 @@ def resolve_stored_item(repository: Path, item: EvidenceItem) -> str:
             if item.fingerprint.startswith(f"{SIGNATURE_VERSION}:"):
                 return indexer.signature(item.locator)
             return indexer.legacy_signature(item.locator)
+        except SymbolIndexError as error:
+            raise EvidenceError(str(error)) from error
+    if item.type == "source":
+        try:
+            return SymbolIndexer(repository).source_signature(item.locator)
         except SymbolIndexError as error:
             raise EvidenceError(str(error)) from error
     return resolve_item(repository, item.type, item.role, item.locator).fingerprint

@@ -163,8 +163,13 @@ def test_installed_local_mcp_and_stop_hook_persist_a_memory_in_the_target_projec
     )
     assert stopped.returncode == 0, stopped.stderr
     memories = list((repository / ".agents" / "skills" / ".agent-memory" / "memories").glob("*.md"))
-    assert len(memories) == 1
-    assert "status: active" in memories[0].read_text(encoding="utf-8")
+    assert len(memories) == 2
+    explicit_memory = next(
+        memory
+        for memory in memories
+        if "Login accepts the new password." in memory.read_text(encoding="utf-8")
+    )
+    assert "status: active" in explicit_memory.read_text(encoding="utf-8")
 
 
 def test_installation_preserves_unrelated_project_codex_configuration(tmp_path: Path) -> None:

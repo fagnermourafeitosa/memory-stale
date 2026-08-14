@@ -75,36 +75,36 @@ flowchart TD
 ```
 
 This means a comment-only or formatting-only edit does not invalidate a memory,
-while a semantic change to its referenced symbol does.
+while a semantic change to its referenced source does.
 
 ## How a memory is created
 
-Codex decides whether a completed change establishes a durable fact. The local
-runtime never asks another LLM: it validates the evidence and lifecycle state.
+The local runtime captures supported code changes automatically. It never asks
+another LLM: it fingerprints the parsed source at the start and end of a turn,
+then records a code-anchored change record only when its semantic structure
+differs.
 
 ```mermaid
 flowchart TD
-    A[Codex completes a code change] --> B{"Durable fact that could<br/>prevent a future mistake?"}
-    B -->|No| C[Do not create memory]
-    B -->|Yes| D[Codex calls memory.capture]
-    D --> E["Local MCP validates<br/>typed primary and supporting evidence"]
-    E --> F{"At least one primary item<br/>changed in this turn?"}
-    F -->|No| G["Reject candidate with<br/>actionable reason"]
-    F -->|Yes| H[Stage candidate in turn ledger]
-    H --> I["Stop hook reconciles<br/>final workspace evidence"]
-    I --> J{"Evidence resolves<br/>and matches captured state?"}
-    J -->|Yes| K[Write active Markdown memory]
-    J -->|No| L[Do not persist candidate]
+    A[UserPromptSubmit snapshots supported source] --> B[Codex changes code]
+    B --> C["Stop hook fingerprints<br/>the final source"]
+    C --> D{"Semantic source<br/>signature changed?"}
+    D -->|No| E[No automatic memory]
+    D -->|Yes| F[Stage automatic source-change record]
+    F --> G[Reconcile final evidence]
+    G --> H[Write active Markdown memory]
+    I["Optional: Codex calls memory.capture<br/>for a richer claim"] --> G
 ```
 
-For example, a useful memory is:
+An automatic record is intentionally factual:
 
 ```text
-Login validates password and MFA before creating a session.
-Evidence: src/auth.py:AuthService.login
+Automatic change record: src/auth.py changed in this task.
+Evidence: src/auth.py
 ```
 
-It is not a task summary such as “Added MFA to login.”
+Codex can still call `memory.capture` to add a richer, code-backed claim such
+as “Login validates password and MFA before creating a session.”
 
 ## Daily use
 
@@ -112,12 +112,12 @@ Memory maintenance is automatic:
 
 1. `UserPromptSubmit` retrieves relevant active memory.
 2. `PostToolUse` records work performed during the task.
-3. Codex calls `memory.capture` when durable code-backed knowledge is created.
-4. `Stop` reconciles evidence, persists valid candidates, and marks affected
-   existing records stale.
+3. `Stop` automatically captures semantic changes to supported code files,
+   persists them, and marks affected existing records stale.
+4. Codex may call `memory.capture` to attach a richer, explicit claim.
 
-Ask Codex to work normally. The bundled `memory-stale` skill guides its capture
-decisions. For explicit maintenance, use:
+Ask Codex to work normally; no memory command or tool call is required for code
+changes. For explicit maintenance, use:
 
 ```text
 /memory-stale dream
@@ -138,10 +138,10 @@ Durable records and configuration live in the target project:
 Memory files are Git-reviewable Markdown. Commit them when the team wants to
 share project knowledge. Turn ledgers and runtime caches remain under `.git/`.
 
-Supported primary evidence includes symbols, tests, configuration nodes, and
-schema nodes. Symbol evidence supports Python, JavaScript/TypeScript, Go, Java,
-Kotlin, and Rust. Unsupported languages intentionally have no file-level
-fallback.
+Automatic primary evidence is a parsed source file and supports Python,
+JavaScript/TypeScript, Go, Java, Kotlin, and Rust. Explicit MCP captures may
+also use symbols, tests, configuration nodes, and schema nodes. Unsupported
+languages intentionally have no fallback.
 
 ## Design boundaries
 

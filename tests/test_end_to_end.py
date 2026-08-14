@@ -8,6 +8,97 @@ from memory_stale.memory_store import MemoryStore
 RUNTIME_ROOT = Path(__file__).parents[1]
 
 
+def test_stop_automatically_persists_a_semantically_changed_source_file(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "service.py"
+    source.write_text("def compute() -> int:\n    return 1\n", encoding="utf-8")
+    harness.git("add", "service.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Change service.py:compute")
+    source.write_text("def compute() -> int:\n    return 2\n", encoding="utf-8")
+    harness.hook("Stop", "turn-1")
+
+    memories = MemoryStore(harness.root).load_all()
+    assert len(memories) == 1
+    assert memories[0].kind == "operation"
+    assert memories[0].status == "active"
+    assert memories[0].claim == "Automatic change record: service.py changed in this task."
+    assert memories[0].evidence[0].type == "source"
+    assert memories[0].evidence[0].locator == "service.py"
+
+
+def test_stop_automatically_captures_code_outside_a_function(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "settings.py"
+    source.write_text("DEFAULT_TIMEOUT = 5\n", encoding="utf-8")
+    harness.git("add", "settings.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Change the default timeout")
+    source.write_text("DEFAULT_TIMEOUT = 10\n", encoding="utf-8")
+    harness.hook("Stop", "turn-1")
+
+    memories = MemoryStore(harness.root).load_all()
+    assert len(memories) == 1
+    assert memories[0].evidence[0].locator == "settings.py"
+
+
+def test_stop_ignores_configuration_and_markdown_changes(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    config = harness.root / "settings.yaml"
+    readme = harness.root / "README.md"
+    config.write_text("limit: 5\n", encoding="utf-8")
+    readme.write_text("# Project\n", encoding="utf-8")
+    harness.git("add", "settings.yaml", "README.md")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Update documentation and configuration")
+    config.write_text("limit: 10\n", encoding="utf-8")
+    readme.write_text("# Project\n\nUpdated.\n", encoding="utf-8")
+    harness.hook("Stop", "turn-1")
+
+    assert MemoryStore(harness.root).load_all() == []
+
+
+def test_stop_ignores_comment_and_format_only_source_edits(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "service.py"
+    source.write_text("def compute() -> int:\n    return 1\n", encoding="utf-8")
+    harness.git("add", "service.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Format service.py")
+    source.write_text(
+        "# implementation note\n\ndef compute() -> int:\n\n    return 1\n", encoding="utf-8"
+    )
+    harness.hook("Stop", "turn-1")
+
+    assert MemoryStore(harness.root).load_all() == []
+
+
+def test_later_source_change_stales_the_prior_automatic_revision(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "service.py"
+    source.write_text("def compute() -> int:\n    return 1\n", encoding="utf-8")
+    harness.git("add", "service.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Change compute")
+    source.write_text("def compute() -> int:\n    return 2\n", encoding="utf-8")
+    harness.hook("Stop", "turn-1")
+
+    harness.hook("UserPromptSubmit", "turn-2", prompt="Change compute again")
+    source.write_text("def compute() -> int:\n    return 3\n", encoding="utf-8")
+    harness.hook("Stop", "turn-2")
+
+    memories = MemoryStore(harness.root).load_all()
+    assert sorted(memory.status for memory in memories) == ["active", "stale"]
+    assert {memory.claim for memory in memories} == {
+        "Automatic change record: service.py changed in this task."
+    }
+
+
 def test_full_context_capture_lifecycle_and_persistence_flow(tmp_path: Path) -> None:
     harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
     source = harness.root / "service.py"
@@ -32,7 +123,12 @@ def test_full_context_capture_lifecycle_and_persistence_flow(tmp_path: Path) -> 
     )
     assert cast(dict[str, object], captured["result"])["isError"] is False
     harness.hook("Stop", "turn-1")
-    assert MemoryStore(harness.root).load_all()[0].status == "active"
+    manual_revision = next(
+        memory
+        for memory in MemoryStore(harness.root).load_all()
+        if memory.claim == "Compute returns two."
+    )
+    assert manual_revision.status == "active"
 
     context = harness.hook("UserPromptSubmit", "turn-2", prompt="Modify service.py:compute")
     assert context is not None
@@ -47,12 +143,19 @@ def test_full_context_capture_lifecycle_and_persistence_flow(tmp_path: Path) -> 
         tool_input={"command": "edit service.py"},
     )
     harness.hook("Stop", "turn-2")
-    assert MemoryStore(harness.root).load_all()[0].status == "stale"
+    manual_revision = next(
+        memory
+        for memory in MemoryStore(harness.root).load_all()
+        if memory.claim == "Compute returns two."
+    )
+    assert manual_revision.status == "stale"
 
     final_context = harness.hook("UserPromptSubmit", "turn-3", prompt="Modify service.py:compute")
     assert final_context is not None
     final_specific = cast(dict[str, object], final_context["hookSpecificOutput"])
-    assert final_specific["additionalContext"] == ""
+    assert "Automatic change record: service.py changed in this task." in str(
+        final_specific["additionalContext"]
+    )
 
 
 def test_supporting_symbol_evidence_invalidates_a_captured_claim(tmp_path: Path) -> None:
@@ -82,7 +185,11 @@ def test_supporting_symbol_evidence_invalidates_a_captured_claim(tmp_path: Path)
     policy.write_text("def mfa_required():\n    return False\n", encoding="utf-8")
     harness.hook("Stop", "turn-2")
 
-    revision = MemoryStore(harness.root).load_all()[0]
+    revision = next(
+        memory
+        for memory in MemoryStore(harness.root).load_all()
+        if memory.claim == "Login follows the MFA policy."
+    )
     assert revision.status == "stale"
     assert revision.stale_reasons == {"symbol:policy.py:mfa_required": "changed"}
 
@@ -135,7 +242,12 @@ def test_typed_config_schema_and_test_evidence_ignore_formatting_then_stale(
         "# protective scenario\ndef test_mfa_policy():\n    assert True\n", encoding="utf-8"
     )
     harness.hook("Stop", "turn-2")
-    assert MemoryStore(harness.root).load_all()[0].status == "active"
+    revision = next(
+        memory
+        for memory in MemoryStore(harness.root).load_all()
+        if memory.claim == "Login follows the configured MFA schema and protective test."
+    )
+    assert revision.status == "active"
 
     harness.hook("UserPromptSubmit", "turn-3", prompt="Change evidence")
     config.write_text("mfa:\n  required: false\n", encoding="utf-8")
@@ -146,7 +258,11 @@ def test_typed_config_schema_and_test_evidence_ignore_formatting_then_stale(
     protective_test.write_text("def test_mfa_policy():\n    assert False\n", encoding="utf-8")
     harness.hook("Stop", "turn-3")
 
-    revision = MemoryStore(harness.root).load_all()[0]
+    revision = next(
+        memory
+        for memory in MemoryStore(harness.root).load_all()
+        if memory.claim == "Login follows the configured MFA schema and protective test."
+    )
     assert revision.status == "stale"
     assert revision.stale_reasons == {
         "config:settings.yaml#/mfa/required": "changed",
@@ -179,7 +295,9 @@ def test_capture_rejects_an_invalid_evidence_item_atomically(tmp_path: Path) -> 
     message = cast(list[dict[str, str]], result["content"])[0]["text"]
     assert "evidence[1]" in message
     harness.hook("Stop", "turn-1")
-    assert MemoryStore(harness.root).load_all() == []
+    memories = MemoryStore(harness.root).load_all()
+    assert len(memories) == 1
+    assert memories[0].claim == "Automatic change record: app.py changed in this task."
 
 
 def test_transitive_evidence_dependency_marks_claim_stale_with_provenance_path(
@@ -223,7 +341,11 @@ def test_transitive_evidence_dependency_marks_claim_stale_with_provenance_path(
     mfa.write_text("def mfa_policy():\n    return False\n", encoding="utf-8")
     harness.hook("Stop", "turn-2")
 
-    revision = MemoryStore(harness.root).load_all()[0]
+    revision = next(
+        memory
+        for memory in MemoryStore(harness.root).load_all()
+        if memory.claim == "Login follows the transitive MFA policy."
+    )
     assert revision.status == "stale"
     assert revision.stale_reasons == {
         "symbol:mfa.py:mfa_policy": (
@@ -267,7 +389,11 @@ def test_recapturing_a_stale_claim_preserves_history_and_restores_active_context
     assert cast(dict[str, object], recaptured["result"])["isError"] is False
     harness.hook("Stop", "turn-3")
 
-    revisions = MemoryStore(harness.root).load_all()
+    revisions = [
+        memory
+        for memory in MemoryStore(harness.root).load_all()
+        if memory.claim == "Compute has an established result."
+    ]
     assert len(revisions) == 2
     assert {revision.status for revision in revisions} == {"active", "stale"}
     assert len({revision.id for revision in revisions}) == 2

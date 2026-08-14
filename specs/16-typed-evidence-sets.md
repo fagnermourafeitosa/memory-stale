@@ -34,7 +34,9 @@ revalidation whenever any recorded item diverges.
 - Each revision contains a canonical set of `EvidenceItem` values with `type`, `role`, `locator`, and `fingerprint`.
 - Roles are `primary` and `supporting`. At least one `primary` item must have changed during the active turn; `supporting` items need not have changed.
 - Every item must resolve in the final state before capture. Capture is rejected atomically if any item is invalid.
-- Supported types are `symbol`, `config`, `schema`, and `test`.
+- Explicit MCP capture supports `symbol`, `config`, `schema`, and `test`.
+  Spec 27 adds internal automatic `source` evidence for parsed supported code
+  files only.
 - `symbol` continues to use tree-sitter resolution and the symbol's structural signature without a file fallback.
 - `test` resolves a test function or method as a structural symbol but retains its own type to explain its provenance role.
 - `config` points to an exact node in a JSON, YAML, or TOML document through a structured locator. Its fingerprint covers the node's canonical representation while ignoring formatting and comments.

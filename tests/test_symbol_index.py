@@ -72,6 +72,22 @@ def test_symbol_signatures_ignore_trivia_but_detect_semantic_changes(
     assert indexer.signature(f"{filename}:compute") != first
 
 
+@pytest.mark.parametrize(("filename", "initial", "trivia", "semantic"), CASES)
+def test_source_signatures_ignore_trivia_but_detect_semantic_changes(
+    tmp_path: Path, filename: str, initial: str, trivia: str, semantic: str
+) -> None:
+    path = tmp_path / filename
+    path.write_text(initial, encoding="utf-8")
+    indexer = SymbolIndexer(tmp_path)
+    first = indexer.source_signature(filename)
+
+    path.write_text(trivia, encoding="utf-8")
+    assert indexer.source_signature(filename) == first
+
+    path.write_text(semantic, encoding="utf-8")
+    assert indexer.source_signature(filename) != first
+
+
 @pytest.mark.parametrize(
     ("filename", "literal_source", "expression_source"),
     [

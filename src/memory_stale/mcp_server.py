@@ -53,6 +53,8 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
     claim = _string(arguments, "claim")
     durability_reason = _string(arguments, "durability_reason")
     graph = parse_graph(arguments.get("evidence"))
+    if any(item_type == "source" for item_type, _role, _locator in graph.items):
+        raise ValueError("source evidence is reserved for automatic capture")
     repository = _repository_root(cwd)
     observed_commit = subprocess.run(
         ["git", "-C", str(repository), "rev-parse", "HEAD"],

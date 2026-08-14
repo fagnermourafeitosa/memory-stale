@@ -7,7 +7,8 @@
 - Do not introduce a human-facing CLI as the primary product surface.
 - Do not call another LLM. Semantic claims come from the Codex instance already
   performing the task; hooks and the core remain deterministic.
-- Git is required. Never add file-level or unsupported-language fallbacks.
+- Git is required. Never add unsupported-language fallbacks. Automatic capture
+  may use source-file evidence only for code resolved by a supported grammar.
 - Treat `README.md` as the public product description and `specs/` as the
   implementation contract. Resolve contradictions before coding.
 

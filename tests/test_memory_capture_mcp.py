@@ -135,9 +135,10 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
     )
     assert stopped.returncode == 0, stopped.stderr
     memories = list((repository / ".agents" / "skills" / ".agent-memory" / "memories").glob("*.md"))
-    assert len(memories) == 1
-    assert "Login validates MFA before creating a session." in memories[0].read_text(
-        encoding="utf-8"
+    assert len(memories) == 2
+    assert any(
+        "Login validates MFA before creating a session." in memory.read_text(encoding="utf-8")
+        for memory in memories
     )
 
 
@@ -249,3 +250,49 @@ def test_capture_rejects_invalid_or_unchanged_refs_and_is_idempotent(tmp_path: P
     task_files = list((repository / ".git" / "memory-stale" / "tasks").glob("*.json"))
     task = json.loads(task_files[0].read_text(encoding="utf-8"))
     assert len(task["captures"]) == 1
+
+
+def test_capture_rejects_source_evidence_reserved_for_automatic_capture(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    _start_turn(repository)
+    (repository / "auth.py").write_text("def login():\n    return True\n", encoding="utf-8")
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(RUNTIME_ROOT / "src")
+    server = subprocess.Popen(
+        [sys.executable, "-m", "memory_stale.mcp_server"],
+        cwd=repository,
+        env=environment,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        response = _rpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "memory.capture",
+                    "arguments": {
+                        "kind": "operation",
+                        "claim": "Auth source changed.",
+                        "evidence": [{"type": "source", "role": "primary", "locator": "auth.py"}],
+                        "durability_reason": "The automatic lifecycle owns source evidence.",
+                    },
+                },
+            },
+        )
+    finally:
+        assert server.stdin is not None
+        server.stdin.close()
+        server.wait(timeout=5)
+
+    result = response["result"]
+    assert isinstance(result, dict)
+    assert result["isError"] is True
+    content = result["content"]
+    assert isinstance(content, list)
+    assert content[0]["text"] == "source evidence is reserved for automatic capture"

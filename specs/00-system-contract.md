@@ -18,7 +18,8 @@ Establish contracts, states, and the order of the following specs.
 - Product: project-local Codex `memory-stale` skill with a local MCP server and hooks.
 - Git is required; without Git, the local integration reports its state and does not operate.
 - States: `active` and `stale`. A ref change marks memory stale; there is no implicit supersession.
-- No file-level or unsupported-language fallback.
+- No unsupported-language fallback. Automatic capture may use deterministic
+  source-file evidence for code resolved by a supported grammar.
 - Memory failures never block the Codex task.
 - Order: 01 runtime, 02 capture, 03 indexing, 04 lifecycle, 05 retrieval, 06 dream, 07 report/config, 08 tests.
 

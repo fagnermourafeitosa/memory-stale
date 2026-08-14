@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TextIO, TypedDict, cast
 
 from memory_stale.evidence import EvidenceError
+from memory_stale.symbol_index import SymbolIndexer, SymbolIndexError
 
 
 class FileSnapshot(TypedDict):
@@ -29,6 +30,7 @@ class TaskState(TypedDict):
     turn_id: str
     repository: str
     baseline: dict[str, FileSnapshot]
+    sources: dict[str, str]
     ledger: list[LedgerEntry]
     captures: list[object]
 
@@ -134,6 +136,51 @@ def _changes_since(
     return changes
 
 
+def _source_snapshot(repository: Path) -> dict[str, str]:
+    index = SymbolIndexer(repository)
+    sources: dict[str, str] = {}
+    for path in _snapshot(repository):
+        signature = _source_signature(index, path)
+        if signature is not None:
+            sources[path] = signature
+    return sources
+
+
+def _source_signature(index: SymbolIndexer, path: str) -> str | None:
+    try:
+        return index.source_signature(path)
+    except SymbolIndexError:
+        return None
+
+
+def _automatic_captures(
+    baseline: dict[str, str], current: dict[str, str]
+) -> list[dict[str, object]]:
+    captures: list[dict[str, object]] = []
+    for path, fingerprint in sorted(current.items()):
+        if baseline.get(path) == fingerprint:
+            continue
+        captures.append(
+            {
+                "kind": "operation",
+                "claim": f"Automatic change record: {path} changed in this task.",
+                "evidence": [
+                    {
+                        "type": "source",
+                        "role": "primary",
+                        "locator": path,
+                        "fingerprint": fingerprint,
+                    }
+                ],
+                "durability_reason": (
+                    f"Keeps the current implementation of {path} available for exact-path retrieval."
+                ),
+                "schema_version": 4,
+            }
+        )
+    return captures
+
+
 def _run_lifecycle(
     repository: Path,
     changes: list[ChangedPath],
@@ -167,9 +214,11 @@ def _run_lifecycle(
 
 
 def _evidence_file(item_type: str, locator: str) -> str:
-    return (
-        locator.rpartition(":")[0] if item_type in {"symbol", "test"} else locator.partition("#")[0]
-    )
+    if item_type in {"symbol", "test"}:
+        return locator.rpartition(":")[0]
+    if item_type in {"config", "schema"}:
+        return locator.partition("#")[0]
+    return locator
 
 
 def _evidence_error_reason(error: EvidenceError) -> str:
@@ -224,6 +273,7 @@ def run_user_prompt_submit(
             "turn_id": turn_id,
             "repository": str(repository),
             "baseline": _snapshot(repository),
+            "sources": _source_snapshot(repository),
             "ledger": [],
             "captures": [],
         }
@@ -301,7 +351,11 @@ def run_stop(
             return 0
         state = _read_task(task_path)
         changes = _changes_since(state["baseline"], _snapshot(repository))
-        _run_lifecycle(repository, changes, state["ledger"], state["captures"])
+        captures = [
+            *state["captures"],
+            *_automatic_captures(state["sources"], _source_snapshot(repository)),
+        ]
+        _run_lifecycle(repository, changes, state["ledger"], captures)
         from memory_stale.memory_store import MemoryStore
         from memory_stale.reporting import write_report
 

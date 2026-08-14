@@ -98,6 +98,24 @@ class SymbolIndexer:
 
     def signature(self, ref: str) -> str:
         node, source = self._resolve(ref)
+        return self._signature_for(node, source)
+
+    def source_signature(self, path_text: str) -> str:
+        """Return a comment- and format-insensitive signature for one source file."""
+        path = self._root / path_text
+        language = LANGUAGES.get(path.suffix.lower())
+        if language is None:
+            raise UnsupportedLanguageError(f"unsupported language: {path.suffix or '<none>'}")
+        if not path.is_file():
+            raise SymbolNotFoundError(f"file not found: {path_text}")
+        source = path.read_bytes()
+        tree = get_parser(language).parse(source)
+        if tree.root_node.has_error:
+            raise InvalidSyntaxError(f"invalid syntax: {path_text}")
+        canonical = " ".join(self._structural_tokens(tree.root_node, source))
+        return f"source-v1:{self._digest(canonical)}"
+
+    def _signature_for(self, node: Node, source: bytes) -> str:
         local_bindings = self._local_bindings(node, source)
         canonical = " ".join(self._canonical_tokens(node, source, local_bindings))
         return f"{SIGNATURE_VERSION}:{self._digest(canonical)}"

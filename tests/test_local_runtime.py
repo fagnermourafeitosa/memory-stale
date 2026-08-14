@@ -330,8 +330,9 @@ def test_stop_marks_memory_stale_when_task_changes_its_symbol(tmp_path: Path) ->
     result = _run_hook("Stop", repository, {"turn_id": "turn-2", "cwd": str(repository)})
 
     assert result.returncode == 0
-    assert store.load_all()[0].status == "stale"
-    assert store.load_all()[0].stale_reasons == {"symbol:service.py:compute": "changed"}
+    revision = next(memory for memory in store.load_all() if memory.claim == "Compute returns one.")
+    assert revision.status == "stale"
+    assert revision.stale_reasons == {"symbol:service.py:compute": "changed"}
 
 
 def test_stop_preserves_legacy_structural_fingerprints_until_real_change(tmp_path: Path) -> None:
@@ -360,13 +361,15 @@ def test_stop_preserves_legacy_structural_fingerprints_until_real_change(tmp_pat
     source.write_text("# note\ndef compute():\n    return 1\n", encoding="utf-8")
     _run_hook("Stop", repository, {"turn_id": "turn-1", "cwd": str(repository)})
 
-    assert store.load_all()[0].status == "active"
+    revision = next(memory for memory in store.load_all() if memory.claim == "Compute returns one.")
+    assert revision.status == "active"
 
     _run_hook("UserPromptSubmit", repository, {"turn_id": "turn-2", "cwd": str(repository)})
     source.write_text("def compute():\n    return 2\n", encoding="utf-8")
     _run_hook("Stop", repository, {"turn_id": "turn-2", "cwd": str(repository)})
 
-    assert store.load_all()[0].status == "stale"
+    revision = next(memory for memory in store.load_all() if memory.claim == "Compute returns one.")
+    assert revision.status == "stale"
 
 
 def test_read_only_turn_preserves_active_memory_for_preexisting_dirty_symbol(
