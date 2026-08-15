@@ -46,6 +46,22 @@ def _string(arguments: dict[str, object], name: str) -> str:
     return value.strip()
 
 
+def _validate_semantic_claim(claim: str, graph: EvidenceGraph) -> None:
+    normalized = claim.casefold().strip("` .")
+    locations = {
+        value.casefold()
+        for item_type, _role, locator in graph.items
+        for value in (locator, _evidence_path(item_type, locator))
+    }
+    mechanical = set(locations)
+    for location in locations:
+        for action in ("added", "changed", "created", "deleted", "removed", "updated"):
+            mechanical.add(f"{location} {action} in this task")
+            mechanical.add(f"{action} {location} in this task")
+    if normalized.startswith("automatic change record:") or normalized in mechanical:
+        raise ValueError("claim must describe what the resulting code does or guarantees")
+
+
 def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
     kind = _string(arguments, "kind")
     if kind not in KINDS:
@@ -55,6 +71,7 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
     graph = parse_graph(arguments.get("evidence"))
     if any(item_type == "source" for item_type, _role, _locator in graph.items):
         raise ValueError("source evidence is reserved for automatic capture")
+    _validate_semantic_claim(claim, graph)
     repository = _repository_root(cwd)
     observed_commit = subprocess.run(
         ["git", "-C", str(repository), "rev-parse", "HEAD"],
@@ -151,8 +168,10 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
                 {
                     "name": "memory.capture",
                     "description": (
-                        "Stage durable code-anchored project memory. Active means "
-                        "recorded evidence is unchanged; stale requires revalidation."
+                        "Required once per coherent supported-code change. Stage a claim "
+                        "describing what the resulting code does or guarantees, anchored to "
+                        "typed evidence. Active means recorded evidence is unchanged; stale "
+                        "requires revalidation."
                     ),
                     "inputSchema": {
                         "type": "object",

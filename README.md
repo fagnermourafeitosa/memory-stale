@@ -87,34 +87,42 @@ while a semantic change to its referenced source does.
 
 ## How a memory is created
 
-The local runtime captures supported code changes automatically. It never asks
-another LLM: it fingerprints the parsed source and its resolvable named symbols
-at the start and end of a turn, then records a code-anchored change record only
-when its semantic structure differs.
+Every supported code change produces two complementary records. The local
+runtime creates deterministic provenance for the added or changed code
+locations. The Codex instance performing the task submits a concise semantic
+claim describing what the coherent change now does or guarantees. Memory Stale
+does not ask another LLM or generate that claim inside the local engine.
 
 ```mermaid
 flowchart TD
-    A[UserPromptSubmit snapshots supported source and symbols] --> B[Codex changes code]
-    B --> C["Stop hook fingerprints<br/>the final source and symbols"]
-    C --> D{"Semantic source or<br/>symbol signature changed?"}
-    D -->|No| E[No automatic memory]
-    D -->|Yes| F[Stage automatic symbol-change record]
-    F --> G[Reconcile final evidence]
-    G --> H[Write active Markdown memory]
-    I["Optional: Codex calls memory.capture<br/>for a richer claim"] --> G
+    A[UserPromptSubmit snapshots source and injects capture requirement] --> B[Codex changes code]
+    B --> C["Codex calls memory.capture<br/>once per coherent change"]
+    B --> D["Stop fingerprints<br/>final source and symbols"]
+    C --> E[Stage semantic claim with evidence]
+    D --> F[Stage automatic provenance records]
+    E --> G[Reconcile final evidence]
+    F --> G
+    G --> H[Write both record types as Markdown]
 ```
 
-An automatic record is intentionally factual and names the added or changed
-symbol when one can be resolved:
+For example, one coherent change may create these automatic provenance records:
 
 ```text
-Automatic change record: added symbol src/auth.py:login.
-Evidence: src/auth.py:login
+Automatic change record: changed symbol src/jobs.py:retry.
+Automatic change record: changed symbol tests/test_jobs.py:test_retry_limit.
 ```
 
-For a semantic change outside every named symbol, it retains the file-level
-record. Codex can still call `memory.capture` to add a richer, code-backed
-claim about behavior, constraints, architecture, or operational rules.
+Alongside them, Codex submits the memory content used for conceptual retrieval:
+
+```text
+Failed jobs retry at most three times before surfacing the final failure.
+Evidence: src/jobs.py:retry, tests/test_jobs.py:test_retry_limit
+```
+
+The claim supplies what later tasks should remember and participates in lexical
+retrieval. Provenance supplies exact code matching and determines whether the
+claim remains `active`. If semantic capture does not cover a changed location,
+`Stop` preserves its automatic provenance and reports the missing coverage.
 
 ## Daily use
 
@@ -122,13 +130,14 @@ Memory maintenance is automatic:
 
 1. `UserPromptSubmit` retrieves relevant active memory.
 2. `PostToolUse` records work performed during the task.
-3. `Stop` automatically captures added or changed symbols in supported code,
-   uses a file record only when no symbol can represent the change, persists
-   them, and marks affected existing records stale.
-4. Codex may call `memory.capture` to attach a richer, explicit claim.
+3. Codex calls `memory.capture` before its final response once per coherent
+   supported-code change.
+4. `Stop` captures automatic provenance, persists both record types, reports
+   semantic coverage gaps, and marks affected existing records stale.
 
-Ask Codex to work normally; no memory command or tool call is required for code
-changes. For explicit maintenance, use:
+Ask Codex to work normally; the installed skill and hooks handle this protocol
+without requiring the user to issue a memory command. For explicit maintenance,
+use:
 
 ```text
 /memory-stale dream
@@ -149,11 +158,12 @@ Durable records and configuration live in the target project:
 Memory files are Git-reviewable Markdown. Commit them when the team wants to
 share project knowledge. Turn ledgers and runtime caches remain under `.git/`.
 
+Each completed supported-code change stores automatic symbol/source provenance
+and at least one Codex-authored semantic claim covering its coherent meaning.
 Automatic primary evidence is a parsed symbol when available, otherwise a
-parsed source file; it supports Python, JavaScript/TypeScript, Go, Java,
-Kotlin, and Rust. Explicit MCP captures may also use symbols, tests,
-configuration nodes, and schema nodes. Unsupported languages intentionally
-have no fallback.
+parsed source file; it supports Python, JavaScript/TypeScript, Go, Java, Kotlin,
+and Rust. Semantic captures may also use symbols, tests, configuration nodes,
+and schema nodes. Unsupported languages intentionally have no fallback.
 
 ## Design boundaries
 

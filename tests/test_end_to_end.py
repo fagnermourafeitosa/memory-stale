@@ -33,6 +33,29 @@ def test_stop_automatically_persists_an_added_symbol(tmp_path: Path) -> None:
     assert memories[0].evidence[0].locator == "app/main.py:version"
 
 
+def test_stop_reports_changed_locations_without_semantic_descriptions(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "service.py"
+    source.write_text("def compute() -> int:\n    return 1\n", encoding="utf-8")
+    harness.git("add", "service.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Change compute")
+    source.write_text("def compute() -> int:\n    return 2\n", encoding="utf-8")
+    stopped = harness.hook("Stop", "turn-1")
+
+    assert stopped == {
+        "systemMessage": (
+            "Memory Stale semantic capture missing for changed locations: "
+            "service.py:compute. Automatic provenance was stored."
+        )
+    }
+    memories = MemoryStore(harness.root).load_all()
+    assert [memory.claim for memory in memories] == [
+        "Automatic change record: changed symbol service.py:compute."
+    ]
+
+
 def test_stop_automatically_captures_code_outside_a_function(tmp_path: Path) -> None:
     harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
     source = harness.root / "settings.py"
@@ -185,6 +208,105 @@ def test_full_context_capture_lifecycle_and_persistence_flow(tmp_path: Path) -> 
     assert "Automatic change record: changed symbol service.py:compute." in str(
         final_specific["additionalContext"]
     )
+
+
+def test_semantic_description_and_automatic_provenance_are_both_persisted_and_retrieved(
+    tmp_path: Path,
+) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    service = harness.root / "checkout.py"
+    protective_test = harness.root / "test_checkout.py"
+    service.write_text(
+        "def subtotal() -> int:\n    return 10\n\n\ndef discount() -> int:\n    return 0\n",
+        encoding="utf-8",
+    )
+    protective_test.write_text(
+        "def test_checkout_discount() -> None:\n    assert True\n", encoding="utf-8"
+    )
+    harness.git("add", "checkout.py", "test_checkout.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Implement the checkout discount policy")
+    service.write_text(
+        "def subtotal() -> int:\n    return 20\n\n\ndef discount() -> int:\n    return 5\n",
+        encoding="utf-8",
+    )
+    protective_test.write_text(
+        "def test_checkout_discount() -> None:\n    assert 20 - 5 == 15\n", encoding="utf-8"
+    )
+    captured = harness.capture(
+        kind="behavior",
+        claim="Checkout applies a five-unit discount to the current subtotal.",
+        evidence=[
+            {"type": "symbol", "role": "primary", "locator": "checkout.py:subtotal"},
+            {"type": "symbol", "role": "primary", "locator": "checkout.py:discount"},
+            {
+                "type": "test",
+                "role": "supporting",
+                "locator": "test_checkout.py:test_checkout_discount",
+            },
+        ],
+        durability_reason="Future checkout changes must preserve the discount policy.",
+    )
+    assert cast(dict[str, object], captured["result"])["isError"] is False
+    stopped = harness.hook("Stop", "turn-1")
+
+    assert stopped == {}
+
+    memories = MemoryStore(harness.root).load_all()
+    assert {memory.claim for memory in memories} == {
+        "Checkout applies a five-unit discount to the current subtotal.",
+        "Automatic change record: changed symbol checkout.py:discount.",
+        "Automatic change record: changed symbol checkout.py:subtotal.",
+        "Automatic change record: changed symbol test_checkout.py:test_checkout_discount.",
+    }
+
+    context = harness.hook(
+        "UserPromptSubmit",
+        "turn-2",
+        prompt="How does the current checkout policy calculate totals?",
+    )
+    assert context is not None
+    additional = cast(dict[str, object], context["hookSpecificOutput"])["additionalContext"]
+    assert "Checkout applies a five-unit discount to the current subtotal." in str(additional)
+
+
+def test_partial_semantic_capture_reports_only_the_uncovered_location(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "service.py"
+    source.write_text(
+        "def first() -> int:\n    return 1\n\n\ndef second() -> int:\n    return 2\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "service.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Change both calculations")
+    source.write_text(
+        "def first() -> int:\n    return 10\n\n\ndef second() -> int:\n    return 20\n",
+        encoding="utf-8",
+    )
+    captured = harness.capture(
+        kind="behavior",
+        claim="The first calculation now returns ten.",
+        evidence=[{"type": "symbol", "role": "primary", "locator": "service.py:first"}],
+        durability_reason="Callers rely on the first calculation result.",
+    )
+    assert cast(dict[str, object], captured["result"])["isError"] is False
+
+    stopped = harness.hook("Stop", "turn-1")
+
+    assert stopped == {
+        "systemMessage": (
+            "Memory Stale semantic capture missing for changed locations: "
+            "service.py:second. Automatic provenance was stored."
+        )
+    }
+    assert {memory.claim for memory in MemoryStore(harness.root).load_all()} == {
+        "The first calculation now returns ten.",
+        "Automatic change record: changed symbol service.py:first.",
+        "Automatic change record: changed symbol service.py:second.",
+    }
 
 
 def test_supporting_symbol_evidence_invalidates_a_captured_claim(tmp_path: Path) -> None:

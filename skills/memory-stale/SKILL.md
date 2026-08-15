@@ -20,16 +20,23 @@ the actionable message without treating memory maintenance as a blocker.
 At `Stop`, Memory Stale automatically captures every added or semantically
 changed resolvable symbol in a supported source file. When a semantic change
 cannot be attributed to a named symbol, it uses a source-file record instead.
-Do not ask the user to call `memory.capture`, and do not need to call it merely
-to record ordinary code changes. Configuration, Markdown, unsupported
-languages, comments, and formatting-only edits do not produce automatic
-records.
+Configuration, Markdown, unsupported languages, comments, and formatting-only
+edits do not produce automatic records.
 
 Automatic records are deterministic provenance, not semantic summaries. A
 record such as `added symbol app/main.py:version` does not establish the
 symbol's purpose, behavior, design rationale, or user-facing contract. When a
-completed change establishes any durable code-backed fact, call
-`memory.capture` with a precise claim and appropriate evidence.
+task changes supported code, call `memory.capture` before the final response
+once per coherent change. State what the resulting code now does or guarantees
+and include evidence covering every relevant changed location. This semantic
+capture is required even though automatic provenance is also stored; both
+records are intentional and neither replaces the other.
+
+The `UserPromptSubmit` hook injects the same completion requirement on every
+turn. If `Stop` reports locations missing semantic coverage, surface that
+diagnostic and treat the memory result as incomplete. Never satisfy the
+requirement with a file path, symbol locator, task-history statement, or an
+`Automatic change record` claim.
 
 When the user invokes `/memory-stale dream`, call the local `memory.dream` MCP
 tool. Review only the stale or broken items it reports. Use `memory.capture` for
@@ -42,13 +49,13 @@ it again. The engine preserves the prior evidence revision for audit and exposes
 only the new active revision in ordinary context. Repeating an identical
 revision is safe and idempotent.
 
-When adding a richer explicit claim, provide an `evidence` array rather than legacy `refs`. Every
-item has `type`, `role`, and `locator`. Use at least one changed `primary` item;
-unchanged `supporting` items are permitted but must resolve. Supported types are
-`symbol`, `test`, `config`, and `schema`. Symbol and test locators use
-`path:symbol`; config and schema locators use an exact JSON Pointer such as
-`settings.yaml#/authentication/mfa`. Do not use whole-file evidence in an
-explicit MCP capture or invent a fallback when an item cannot resolve.
+When adding a semantic claim, provide an `evidence` array rather than legacy
+`refs`. Every item has `type`, `role`, and `locator`. Use at least one changed
+`primary` item; unchanged `supporting` items are permitted but must resolve.
+Supported types are `symbol`, `test`, `config`, and `schema`. Symbol and test
+locators use `path:symbol`; config and schema locators use an exact JSON Pointer
+such as `settings.yaml#/authentication/mfa`. Do not use whole-file evidence in
+an explicit MCP capture or invent a fallback when an item cannot resolve.
 
 When one evidence item depends on another, declare it in that item's nested
 `depends_on` array. A dependency uses the same typed locator and is stored as

@@ -117,7 +117,13 @@ def test_installation_creates_a_project_local_skill_and_hook_configuration(tmp_p
     )
 
     assert prompt.returncode == 0, prompt.stderr
-    assert json.loads(prompt.stdout)["hookSpecificOutput"]["additionalContext"] == ""
+    assert json.loads(prompt.stdout)["hookSpecificOutput"]["additionalContext"] == (
+        "Memory Stale completion requirement:\n"
+        "If this task changes supported code, call memory.capture before the final response "
+        "once per coherent change. The claim must describe what the resulting code does or "
+        "guarantees, and its evidence must cover the relevant changed locations. Automatic "
+        "provenance does not replace semantic capture."
+    )
     runtime = repository / ".git" / "memory-stale" / "runtime"
     assert (runtime / ".venv" / "bin" / "python").is_file()
     assert (runtime / "uv-cache").is_dir()

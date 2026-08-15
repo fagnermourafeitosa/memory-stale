@@ -95,7 +95,13 @@ def test_prompt_hook_snapshots_dirty_workspace_before_returning_context(tmp_path
     assert json.loads(result.stdout) == {
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
-            "additionalContext": "",
+            "additionalContext": (
+                "Memory Stale completion requirement:\n"
+                "If this task changes supported code, call memory.capture before the final "
+                "response once per coherent change. The claim must describe what the resulting "
+                "code does or guarantees, and its evidence must cover the relevant changed "
+                "locations. Automatic provenance does not replace semantic capture."
+            ),
         }
     }
     task = _only_task(repository)
@@ -106,6 +112,32 @@ def test_prompt_hook_snapshots_dirty_workspace_before_returning_context(tmp_path
     assert isinstance(tracked, dict)
     assert tracked["status"] == " M"
     assert task["ledger"] == []
+
+
+def test_prompt_hook_requires_semantic_capture_for_supported_code_changes(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path)
+
+    result = _run_hook(
+        "UserPromptSubmit",
+        repository,
+        {
+            "session_id": "session-1",
+            "turn_id": "turn-semantic-capture",
+            "cwd": str(repository),
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "Implement the requested behavior",
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+    assert context == (
+        "Memory Stale completion requirement:\n"
+        "If this task changes supported code, call memory.capture before the final response "
+        "once per coherent change. The claim must describe what the resulting code does or "
+        "guarantees, and its evidence must cover the relevant changed locations. Automatic "
+        "provenance does not replace semantic capture."
+    )
 
 
 def test_post_tool_hook_appends_write_to_the_turn_ledger(tmp_path: Path) -> None:

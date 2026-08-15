@@ -14,6 +14,14 @@ from typing import TextIO, TypedDict, cast
 from memory_stale.evidence import EvidenceError
 from memory_stale.symbol_index import SymbolIndexer, SymbolIndexError
 
+SEMANTIC_CAPTURE_PROTOCOL = (
+    "Memory Stale completion requirement:\n"
+    "If this task changes supported code, call memory.capture before the final response "
+    "once per coherent change. The claim must describe what the resulting code does or "
+    "guarantees, and its evidence must cover the relevant changed locations. Automatic "
+    "provenance does not replace semantic capture."
+)
+
 
 class FileSnapshot(TypedDict):
     status: str
@@ -231,6 +239,47 @@ def _automatic_captures(
     return captures
 
 
+def _uncovered_automatic_locations(
+    automatic_captures: list[dict[str, object]], explicit_captures: list[object]
+) -> list[str]:
+    covered_symbols: set[str] = set()
+    covered_paths: set[str] = set()
+    for capture in explicit_captures:
+        if not isinstance(capture, dict):
+            continue
+        evidence = capture.get("evidence")
+        if not isinstance(evidence, list):
+            continue
+        for item in evidence:
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type")
+            locator = item.get("locator")
+            if not isinstance(item_type, str) or not isinstance(locator, str):
+                continue
+            covered_paths.add(_evidence_file(item_type, locator))
+            if item_type in {"symbol", "test"}:
+                covered_symbols.add(locator)
+
+    uncovered: set[str] = set()
+    for capture in automatic_captures:
+        evidence = capture.get("evidence")
+        if not isinstance(evidence, list) or len(evidence) != 1:
+            continue
+        item = evidence[0]
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type")
+        locator = item.get("locator")
+        if not isinstance(item_type, str) or not isinstance(locator, str):
+            continue
+        if (item_type == "symbol" and locator not in covered_symbols) or (
+            item_type == "source" and locator not in covered_paths
+        ):
+            uncovered.add(locator)
+    return sorted(uncovered)
+
+
 def _run_lifecycle(
     repository: Path,
     changes: list[ChangedPath],
@@ -339,11 +388,14 @@ def run_user_prompt_submit(
             prompt if isinstance(prompt, str) else "",
             load_config(repository).context_budget,
         )
+        additional_context = (
+            f"{SEMANTIC_CAPTURE_PROTOCOL}\n\n{context}" if context else SEMANTIC_CAPTURE_PROTOCOL
+        )
         json.dump(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "UserPromptSubmit",
-                    "additionalContext": context,
+                    "additionalContext": additional_context,
                 }
             },
             output_stream,
@@ -409,18 +461,27 @@ def run_stop(
             and all(isinstance(value, dict) for value in previous_symbols.values())
             else None
         )
-        captures = [
-            *state["captures"],
-            *_automatic_captures(
-                state["sources"],
-                _source_snapshot(repository),
-                symbol_baseline,
-                _symbol_snapshot(repository),
-            ),
-        ]
+        automatic_captures = _automatic_captures(
+            state["sources"],
+            _source_snapshot(repository),
+            symbol_baseline,
+            _symbol_snapshot(repository),
+        )
+        uncovered = _uncovered_automatic_locations(automatic_captures, state["captures"])
+        captures = [*state["captures"], *automatic_captures]
         _run_lifecycle(repository, changes, state["ledger"], captures)
         task_path.unlink()
-        json.dump({}, output_stream)
+        response = (
+            {
+                "systemMessage": (
+                    "Memory Stale semantic capture missing for changed locations: "
+                    f"{', '.join(uncovered)}. Automatic provenance was stored."
+                )
+            }
+            if uncovered
+            else {}
+        )
+        json.dump(response, output_stream)
         output_stream.write("\n")
     except Exception as error:
         _write_failure("Stop", error, output_stream)

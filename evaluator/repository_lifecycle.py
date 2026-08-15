@@ -560,7 +560,9 @@ def _hook(
     except json.JSONDecodeError:
         return "hook did not return JSON"
     message = output.get("systemMessage")
-    return message if isinstance(message, str) else output
+    if isinstance(message, str) and (" failed:" in message or " is inactive:" in message):
+        return message
+    return output
 
 
 def _capture(runtime_root: Path, repository: Path, arguments: dict[str, object]) -> str | None:

@@ -239,6 +239,11 @@ def test_capture_rejects_invalid_or_unchanged_refs_and_is_idempotent(tmp_path: P
     assert "serverInfo" in cast(dict[str, object], initialized["result"])
     tools = cast(dict[str, object], listed["result"])["tools"]
     assert isinstance(tools, list) and tools[0]["name"] == "memory.capture"
+    assert tools[0]["description"] == (
+        "Required once per coherent supported-code change. Stage a claim describing what the "
+        "resulting code does or guarantees, anchored to typed evidence. Active means recorded "
+        "evidence is unchanged; stale requires revalidation."
+    )
     for response in (missing, unknown, unchanged, invalid):
         result = response["result"]
         assert isinstance(result, dict)
@@ -296,6 +301,96 @@ def test_capture_rejects_source_evidence_reserved_for_automatic_capture(tmp_path
     content = result["content"]
     assert isinstance(content, list)
     assert content[0]["text"] == "source evidence is reserved for automatic capture"
+
+
+def test_capture_rejects_reserved_and_locator_only_claims(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    _start_turn(repository)
+    (repository / "auth.py").write_text("def login():\n    return False\n", encoding="utf-8")
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(RUNTIME_ROOT / "src")
+    server = subprocess.Popen(
+        [sys.executable, "-m", "memory_stale.mcp_server"],
+        cwd=repository,
+        env=environment,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        response = _rpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "memory.capture",
+                    "arguments": {
+                        "kind": "operation",
+                        "claim": "Automatic change record: changed symbol auth.py:login.",
+                        "evidence": [
+                            {"type": "symbol", "role": "primary", "locator": "auth.py:login"}
+                        ],
+                        "durability_reason": "Authentication behavior changed.",
+                    },
+                },
+            },
+        )
+        locator_response = _rpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "memory.capture",
+                    "arguments": {
+                        "kind": "operation",
+                        "claim": "auth.py:login",
+                        "evidence": [
+                            {"type": "symbol", "role": "primary", "locator": "auth.py:login"}
+                        ],
+                        "durability_reason": "Authentication behavior changed.",
+                    },
+                },
+            },
+        )
+        history_response = _rpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "memory.capture",
+                    "arguments": {
+                        "kind": "operation",
+                        "claim": "auth.py changed in this task.",
+                        "evidence": [
+                            {"type": "symbol", "role": "primary", "locator": "auth.py:login"}
+                        ],
+                        "durability_reason": "Authentication behavior changed.",
+                    },
+                },
+            },
+        )
+    finally:
+        assert server.stdin is not None
+        server.stdin.close()
+        server.wait(timeout=5)
+
+    for rejected in (response, locator_response, history_response):
+        result = cast(dict[str, object], rejected["result"])
+        assert result["isError"] is True
+        content = cast(list[dict[str, str]], result["content"])
+        assert (
+            content[0]["text"] == "claim must describe what the resulting code does or guarantees"
+        )
+    task_files = list((repository / ".git" / "memory-stale" / "tasks").glob("*.json"))
+    task = json.loads(task_files[0].read_text(encoding="utf-8"))
+    assert task["captures"] == []
 
 
 def test_report_writes_html_only_after_an_explicit_mcp_request(tmp_path: Path) -> None:
