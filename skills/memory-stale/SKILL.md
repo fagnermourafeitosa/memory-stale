@@ -58,5 +58,4 @@ relationships from imports or call sites. Explain the deterministic invalidation
 path returned by Dream or the report when a transitive node becomes stale.
 
 When the user asks for the memory health report, call `memory.report` and return
-the generated local path. Do not generate the report on ordinary turns unless
-project configuration enables automatic reporting.
+the generated local path. Do not generate the report on ordinary turns.

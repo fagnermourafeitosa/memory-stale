@@ -419,10 +419,6 @@ def run_stop(
             ),
         ]
         _run_lifecycle(repository, changes, state["ledger"], captures)
-        from memory_stale.memory_store import MemoryStore
-        from memory_stale.reporting import write_report
-
-        write_report(repository, MemoryStore(repository).load_all())
         task_path.unlink()
         json.dump({}, output_stream)
         output_stream.write("\n")

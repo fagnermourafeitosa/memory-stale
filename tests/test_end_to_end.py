@@ -51,6 +51,28 @@ def test_stop_automatically_captures_code_outside_a_function(tmp_path: Path) -> 
     assert memories[0].evidence[0].locator == "settings.py"
 
 
+def test_stop_does_not_write_an_html_report_even_when_auto_report_is_enabled(
+    tmp_path: Path,
+) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "service.py"
+    source.write_text("def health() -> str:\n    return 'ok'\n", encoding="utf-8")
+    harness.git("add", "service.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+    config_directory = harness.root / ".agents" / "skills" / ".agent-memory"
+    config_directory.mkdir(parents=True)
+    (config_directory / "config.toml").write_text(
+        'auto_report = true\nreport_path = "health/memory.html"\n', encoding="utf-8"
+    )
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Change health")
+    source.write_text("def health() -> str:\n    return 'ready'\n", encoding="utf-8")
+    harness.hook("Stop", "turn-1")
+
+    assert not (harness.root / "health" / "memory.html").exists()
+    assert MemoryStore(harness.root).load_all()
+
+
 def test_stop_ignores_configuration_and_markdown_changes(tmp_path: Path) -> None:
     harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
     config = harness.root / "settings.yaml"

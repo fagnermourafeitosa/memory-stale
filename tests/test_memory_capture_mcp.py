@@ -296,3 +296,41 @@ def test_capture_rejects_source_evidence_reserved_for_automatic_capture(tmp_path
     content = result["content"]
     assert isinstance(content, list)
     assert content[0]["text"] == "source evidence is reserved for automatic capture"
+
+
+def test_report_writes_html_only_after_an_explicit_mcp_request(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    config_directory = repository / ".agents" / "skills" / ".agent-memory"
+    config_directory.mkdir(parents=True)
+    (config_directory / "config.toml").write_text(
+        'report_path = "health/memory.html"\n', encoding="utf-8"
+    )
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(RUNTIME_ROOT / "src")
+    server = subprocess.Popen(
+        [sys.executable, "-m", "memory_stale.mcp_server"],
+        cwd=repository,
+        env=environment,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        response = _rpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "memory.report", "arguments": {}},
+            },
+        )
+    finally:
+        assert server.stdin is not None
+        server.stdin.close()
+        server.wait(timeout=5)
+
+    result = cast(dict[str, object], response["result"])
+    assert result["isError"] is False
+    assert (repository / "health" / "memory.html").is_file()
