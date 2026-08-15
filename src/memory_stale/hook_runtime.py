@@ -31,6 +31,7 @@ class TaskState(TypedDict):
     repository: str
     baseline: dict[str, FileSnapshot]
     sources: dict[str, str]
+    symbols: dict[str, dict[str, str]]
     ledger: list[LedgerEntry]
     captures: list[object]
 
@@ -153,13 +154,62 @@ def _source_signature(index: SymbolIndexer, path: str) -> str | None:
         return None
 
 
+def _symbol_snapshot(repository: Path) -> dict[str, dict[str, str]]:
+    index = SymbolIndexer(repository)
+    symbols: dict[str, dict[str, str]] = {}
+    for path in _snapshot(repository):
+        resolved = _source_symbols(index, path)
+        if resolved is not None:
+            symbols[path] = resolved
+    return symbols
+
+
+def _source_symbols(index: SymbolIndexer, path: str) -> dict[str, str] | None:
+    try:
+        return index.source_symbols(path)
+    except SymbolIndexError:
+        return None
+
+
 def _automatic_captures(
-    baseline: dict[str, str], current: dict[str, str]
+    baseline: dict[str, str],
+    current: dict[str, str],
+    baseline_symbols: dict[str, dict[str, str]] | None,
+    current_symbols: dict[str, dict[str, str]],
 ) -> list[dict[str, object]]:
     captures: list[dict[str, object]] = []
     for path, fingerprint in sorted(current.items()):
         if baseline.get(path) == fingerprint:
             continue
+        previous_symbols = baseline_symbols.get(path, {}) if baseline_symbols is not None else None
+        symbols = current_symbols.get(path, {})
+        if previous_symbols is not None:
+            changed_symbols = [
+                (locator, signature, "added" if locator not in previous_symbols else "changed")
+                for locator, signature in sorted(symbols.items())
+                if previous_symbols.get(locator) != signature
+            ]
+            for locator, signature, action in changed_symbols:
+                captures.append(
+                    {
+                        "kind": "operation",
+                        "claim": f"Automatic change record: {action} symbol {locator}.",
+                        "evidence": [
+                            {
+                                "type": "symbol",
+                                "role": "primary",
+                                "locator": locator,
+                                "fingerprint": signature,
+                            }
+                        ],
+                        "durability_reason": (
+                            f"Keeps the current implementation of {locator} available for exact-symbol retrieval."
+                        ),
+                        "schema_version": 4,
+                    }
+                )
+            if changed_symbols or previous_symbols != symbols:
+                continue
         captures.append(
             {
                 "kind": "operation",
@@ -274,6 +324,7 @@ def run_user_prompt_submit(
             "repository": str(repository),
             "baseline": _snapshot(repository),
             "sources": _source_snapshot(repository),
+            "symbols": _symbol_snapshot(repository),
             "ledger": [],
             "captures": [],
         }
@@ -351,9 +402,21 @@ def run_stop(
             return 0
         state = _read_task(task_path)
         changes = _changes_since(state["baseline"], _snapshot(repository))
+        previous_symbols = state.get("symbols")
+        symbol_baseline = (
+            previous_symbols
+            if isinstance(previous_symbols, dict)
+            and all(isinstance(value, dict) for value in previous_symbols.values())
+            else None
+        )
         captures = [
             *state["captures"],
-            *_automatic_captures(state["sources"], _source_snapshot(repository)),
+            *_automatic_captures(
+                state["sources"],
+                _source_snapshot(repository),
+                symbol_baseline,
+                _symbol_snapshot(repository),
+            ),
         ]
         _run_lifecycle(repository, changes, state["ledger"], captures)
         from memory_stale.memory_store import MemoryStore

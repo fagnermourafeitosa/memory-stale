@@ -7,7 +7,7 @@ import os
 from collections.abc import Iterator
 from pathlib import Path
 
-from tree_sitter import Node
+from tree_sitter import Node, Tree
 from tree_sitter_language_pack import PackConfig, get_parser, init
 
 LANGUAGES = {
@@ -102,18 +102,30 @@ class SymbolIndexer:
 
     def source_signature(self, path_text: str) -> str:
         """Return a comment- and format-insensitive signature for one source file."""
-        path = self._root / path_text
-        language = LANGUAGES.get(path.suffix.lower())
-        if language is None:
-            raise UnsupportedLanguageError(f"unsupported language: {path.suffix or '<none>'}")
-        if not path.is_file():
-            raise SymbolNotFoundError(f"file not found: {path_text}")
-        source = path.read_bytes()
-        tree = get_parser(language).parse(source)
-        if tree.root_node.has_error:
-            raise InvalidSyntaxError(f"invalid syntax: {path_text}")
+        tree, source = self._source_tree(path_text)
         canonical = " ".join(self._structural_tokens(tree.root_node, source))
         return f"source-v1:{self._digest(canonical)}"
+
+    def source_symbols(self, path_text: str) -> dict[str, str]:
+        """Return unambiguous named symbols in one supported source file."""
+        tree, source = self._source_tree(path_text)
+        candidates: dict[str, list[Node]] = {}
+
+        def visit(node: Node, scope: tuple[str, ...]) -> None:
+            name = self._symbol_name(node, source)
+            locator = f"{path_text}:{'.'.join((*scope, name))}" if name else None
+            if locator is not None:
+                candidates.setdefault(locator, []).append(node)
+            next_scope = (*scope, name) if name and node.type in SCOPE_TYPES else scope
+            for child in node.children:
+                visit(child, next_scope)
+
+        visit(tree.root_node, ())
+        return {
+            locator: self._signature_for(nodes[0], source)
+            for locator, nodes in sorted(candidates.items())
+            if len(nodes) == 1
+        }
 
     def _signature_for(self, node: Node, source: bytes) -> str:
         local_bindings = self._local_bindings(node, source)
@@ -145,20 +157,26 @@ class SymbolIndexer:
             raise SymbolNotFoundError(f"symbol not found: {ref}")
         return node, source
 
+    def _source_tree(self, path_text: str) -> tuple[Tree, bytes]:
+        path = self._root / path_text
+        language = LANGUAGES.get(path.suffix.lower())
+        if language is None:
+            raise UnsupportedLanguageError(f"unsupported language: {path.suffix or '<none>'}")
+        if not path.is_file():
+            raise SymbolNotFoundError(f"file not found: {path_text}")
+        source = path.read_bytes()
+        tree = get_parser(language).parse(source)
+        if tree.root_node.has_error:
+            raise InvalidSyntaxError(f"invalid syntax: {path_text}")
+        return tree, source
+
     def _digest(self, canonical: str) -> str:
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
     def _find_symbol(
         self, node: Node, source: bytes, wanted: str, scope: tuple[str, ...]
     ) -> Node | None:
-        name_node = node.child_by_field_name("name") if node.type in SYMBOL_TYPES else None
-        if name_node is None and node.type in SYMBOL_TYPES:
-            name_node = next(
-                (child for child in node.named_children if "identifier" in child.type), None
-            )
-        name = (
-            source[name_node.start_byte : name_node.end_byte].decode("utf-8") if name_node else None
-        )
+        name = self._symbol_name(node, source)
         if name and (name == wanted or ".".join((*scope, name)) == wanted):
             return node
         next_scope = (*scope, name) if name and node.type in SCOPE_TYPES else scope
@@ -167,6 +185,18 @@ class SymbolIndexer:
             if found is not None:
                 return found
         return None
+
+    def _symbol_name(self, node: Node, source: bytes) -> str | None:
+        if node.type not in SYMBOL_TYPES:
+            return None
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            name_node = next(
+                (child for child in node.named_children if "identifier" in child.type), None
+            )
+        if name_node is None:
+            return None
+        return source[name_node.start_byte : name_node.end_byte].decode("utf-8")
 
     def _canonical_tokens(
         self,

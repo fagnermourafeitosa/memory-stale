@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import cast
 
@@ -8,24 +9,28 @@ from memory_stale.memory_store import MemoryStore
 RUNTIME_ROOT = Path(__file__).parents[1]
 
 
-def test_stop_automatically_persists_a_semantically_changed_source_file(tmp_path: Path) -> None:
+def test_stop_automatically_persists_an_added_symbol(tmp_path: Path) -> None:
     harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
-    source = harness.root / "service.py"
-    source.write_text("def compute() -> int:\n    return 1\n", encoding="utf-8")
-    harness.git("add", "service.py")
+    source = harness.root / "app" / "main.py"
+    source.parent.mkdir()
+    source.write_text("def health() -> str:\n    return 'ok'\n", encoding="utf-8")
+    harness.git("add", "app/main.py")
     harness.git("commit", "--quiet", "-m", "baseline")
 
-    harness.hook("UserPromptSubmit", "turn-1", prompt="Change service.py:compute")
-    source.write_text("def compute() -> int:\n    return 2\n", encoding="utf-8")
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Add the version endpoint")
+    source.write_text(
+        "def health() -> str:\n    return 'ok'\n\n\ndef version() -> str:\n    return '1.0'\n",
+        encoding="utf-8",
+    )
     harness.hook("Stop", "turn-1")
 
     memories = MemoryStore(harness.root).load_all()
     assert len(memories) == 1
     assert memories[0].kind == "operation"
     assert memories[0].status == "active"
-    assert memories[0].claim == "Automatic change record: service.py changed in this task."
-    assert memories[0].evidence[0].type == "source"
-    assert memories[0].evidence[0].locator == "service.py"
+    assert memories[0].claim == "Automatic change record: added symbol app/main.py:version."
+    assert memories[0].evidence[0].type == "symbol"
+    assert memories[0].evidence[0].locator == "app/main.py:version"
 
 
 def test_stop_automatically_captures_code_outside_a_function(tmp_path: Path) -> None:
@@ -41,6 +46,8 @@ def test_stop_automatically_captures_code_outside_a_function(tmp_path: Path) -> 
 
     memories = MemoryStore(harness.root).load_all()
     assert len(memories) == 1
+    assert memories[0].claim == "Automatic change record: settings.py changed in this task."
+    assert memories[0].evidence[0].type == "source"
     assert memories[0].evidence[0].locator == "settings.py"
 
 
@@ -95,7 +102,7 @@ def test_later_source_change_stales_the_prior_automatic_revision(tmp_path: Path)
     memories = MemoryStore(harness.root).load_all()
     assert sorted(memory.status for memory in memories) == ["active", "stale"]
     assert {memory.claim for memory in memories} == {
-        "Automatic change record: service.py changed in this task."
+        "Automatic change record: changed symbol service.py:compute."
     }
 
 
@@ -153,7 +160,7 @@ def test_full_context_capture_lifecycle_and_persistence_flow(tmp_path: Path) -> 
     final_context = harness.hook("UserPromptSubmit", "turn-3", prompt="Modify service.py:compute")
     assert final_context is not None
     final_specific = cast(dict[str, object], final_context["hookSpecificOutput"])
-    assert "Automatic change record: service.py changed in this task." in str(
+    assert "Automatic change record: changed symbol service.py:compute." in str(
         final_specific["additionalContext"]
     )
 
@@ -297,7 +304,80 @@ def test_capture_rejects_an_invalid_evidence_item_atomically(tmp_path: Path) -> 
     harness.hook("Stop", "turn-1")
     memories = MemoryStore(harness.root).load_all()
     assert len(memories) == 1
-    assert memories[0].claim == "Automatic change record: app.py changed in this task."
+    assert memories[0].claim == "Automatic change record: changed symbol app.py:login."
+
+
+def test_stop_records_each_changed_symbol_in_one_source_file(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "service.py"
+    source.write_text(
+        "def health() -> str:\n    return 'ok'\n\n\ndef version() -> str:\n    return '1.0'\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "service.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Change health and version")
+    source.write_text(
+        "def health() -> str:\n    return 'ready'\n\n\ndef version() -> str:\n    return '2.0'\n",
+        encoding="utf-8",
+    )
+    harness.hook("Stop", "turn-1")
+
+    memories = MemoryStore(harness.root).load_all()
+    assert {memory.claim for memory in memories} == {
+        "Automatic change record: changed symbol service.py:health.",
+        "Automatic change record: changed symbol service.py:version.",
+    }
+    assert {memory.evidence[0].locator for memory in memories} == {
+        "service.py:health",
+        "service.py:version",
+    }
+
+
+def test_stop_does_not_replace_a_deleted_symbol_with_a_source_record(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "service.py"
+    source.write_text("def health() -> str:\n    return 'ok'\n", encoding="utf-8")
+    harness.git("add", "service.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Add version")
+    source.write_text(
+        "def health() -> str:\n    return 'ok'\n\n\ndef version() -> str:\n    return '1.0'\n",
+        encoding="utf-8",
+    )
+    harness.hook("Stop", "turn-1")
+
+    harness.hook("UserPromptSubmit", "turn-2", prompt="Remove version")
+    source.write_text("def health() -> str:\n    return 'ok'\n", encoding="utf-8")
+    harness.hook("Stop", "turn-2")
+
+    memories = MemoryStore(harness.root).load_all()
+    assert len(memories) == 1
+    assert memories[0].status == "stale"
+    assert memories[0].claim == "Automatic change record: added symbol service.py:version."
+
+
+def test_stop_uses_source_record_for_a_legacy_task_without_symbol_snapshot(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "service.py"
+    source.write_text("def health() -> str:\n    return 'ok'\n", encoding="utf-8")
+    harness.git("add", "service.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Change health")
+    task_path = next((harness.root / ".git" / "memory-stale" / "tasks").glob("*.json"))
+    task = json.loads(task_path.read_text(encoding="utf-8"))
+    del task["symbols"]
+    task_path.write_text(json.dumps(task), encoding="utf-8")
+    source.write_text("def health() -> str:\n    return 'ready'\n", encoding="utf-8")
+    harness.hook("Stop", "turn-1")
+
+    memories = MemoryStore(harness.root).load_all()
+    assert len(memories) == 1
+    assert memories[0].claim == "Automatic change record: service.py changed in this task."
+    assert memories[0].evidence[0].type == "source"
 
 
 def test_transitive_evidence_dependency_marks_claim_stale_with_provenance_path(
