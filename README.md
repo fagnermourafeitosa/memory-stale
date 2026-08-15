@@ -176,6 +176,70 @@ and schema nodes. Unsupported languages intentionally have no fallback.
 - **Failures do not block coding.** Hook failures return actionable, non-blocking
   messages; writes are atomic.
 
+## Measured evaluation
+
+The current repository-lifecycle corpus contains 100 unique, human-labeled
+cases: 50 semantic changes and 50 behavior-preserving edits across Python,
+JavaScript, TypeScript, Go, Java, Kotlin, and Rust. A semantic change that should
+make a memory stale is the positive class.
+
+| Human label | Observed stale | Observed active |
+| --- | ---: | ---: |
+| Changed | 38 true stale | 12 missed changes |
+| Preserved | 8 false stale | 42 true active |
+
+| Corpus metric | Result | Descriptive Wilson 95% interval |
+| --- | ---: | ---: |
+| Overall accuracy | 80/100 (80.0%) | 71.1–86.7% |
+| Stale precision | 38/46 (82.6%) | 69.3–90.9% |
+| Stale recall | 38/50 (76.0%) | 62.6–85.7% |
+| Stale F1 | 79.2% | — |
+| Specificity | 42/50 (84.0%) | 71.5–91.7% |
+| Unnecessary revalidation | 8/50 (16.0%) | 8.3–28.5% |
+| Missed semantic changes | 12/50 (24.0%) | 14.3–37.4% |
+| Unweighted macro-family accuracy | 72.2% | — |
+
+All 12 missed changes are incomplete-provenance cases, where changed config,
+policy, schema, constants, or dependencies were not declared as evidence. All
+8 false-stale results are conservative classifications of behavior-preserving
+transformations. Direct local changes, declared evidence graphs, preserving
+edits, and repository-shape cases matched their labels in this corpus.
+
+### Methodology and reproducibility
+
+Each case starts from an independently written semantic label and rationale. The
+evaluator then creates a temporary Git repository and crosses the real
+`UserPromptSubmit` hook, `memory.capture` MCP process, persisted Markdown, `Stop`
+reconciliation, and later retrieval boundary. The final active/stale availability
+is compared with the human label. Operational failures are reported separately
+and cannot disappear into the semantic confusion matrix.
+
+The inputs and exact per-case outcomes are reviewable in the
+[versioned corpus](evaluator/corpus/repository-lifecycle-corpus.yaml) and
+[dated result](evaluator/results/2026-08-12-repository-lifecycle-evaluation.yaml).
+The [evaluation contract](specs/21-quality-evaluation-100-samples.md) documents
+sample design and interpretation, while the
+[end-to-end test](evaluator/tests/test_repository_lifecycle.py) reruns the corpus
+and requires an exact baseline match.
+
+On 2026-08-15, commit `f6fe73d` was checked by repeating all 100 cases ten times:
+1,000/1,000 lifecycle executions matched the baseline, with no operational
+failure or divergent outcome. These repetitions measure deterministic stability;
+they remain 100 unique semantic samples and do not narrow the intervals above.
+
+To update the statistics intentionally, keep labels and fixtures independent of
+product tuning, version any corpus or behavior change through a numbered spec,
+run the end-to-end evaluation, review every changed outcome, record a new dated
+baseline, and update this section in the same change. The reproducibility check
+is:
+
+```bash
+uv run pytest evaluator/tests/test_repository_lifecycle.py::test_checked_in_repository_corpus_has_a_reproducible_baseline
+```
+
+These are descriptive scores for a curated regression corpus, not estimates of
+accuracy across arbitrary repositories.
+
 ## Current limitations
 
 - Retrieval is lexical and structural; a prompt with no shared terms or code
