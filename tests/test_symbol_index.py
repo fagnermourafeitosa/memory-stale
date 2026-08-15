@@ -55,6 +55,16 @@ CASES = [
     ),
 ]
 
+SYMBOL_CASES = [
+    ("sample.py", "sample.py:compute"),
+    ("sample.js", "sample.js:compute"),
+    ("sample.ts", "sample.ts:compute"),
+    ("sample.go", "sample.go:compute"),
+    ("Sample.java", "Sample.java:Sample.compute"),
+    ("sample.kt", "sample.kt:compute"),
+    ("sample.rs", "sample.rs:compute"),
+]
+
 
 @pytest.mark.parametrize(("filename", "initial", "trivia", "semantic"), CASES)
 def test_symbol_signatures_ignore_trivia_but_detect_semantic_changes(
@@ -86,6 +96,27 @@ def test_source_signatures_ignore_trivia_but_detect_semantic_changes(
 
     path.write_text(semantic, encoding="utf-8")
     assert indexer.source_signature(filename) != first
+
+
+@pytest.mark.parametrize(
+    ("filename", "initial", "trivia", "semantic", "locator"),
+    [(*case, locator) for case, (_symbol_file, locator) in zip(CASES, SYMBOL_CASES, strict=True)],
+)
+def test_source_symbol_snapshots_ignore_trivia_but_detect_semantic_changes(
+    tmp_path: Path, filename: str, initial: str, trivia: str, semantic: str, locator: str
+) -> None:
+    path = tmp_path / filename
+    path.write_text(initial, encoding="utf-8")
+    indexer = SymbolIndexer(tmp_path)
+    first = indexer.source_symbols(filename)
+
+    assert first[locator] == indexer.signature(locator)
+
+    path.write_text(trivia, encoding="utf-8")
+    assert indexer.source_symbols(filename) == first
+
+    path.write_text(semantic, encoding="utf-8")
+    assert indexer.source_symbols(filename)[locator] != first[locator]
 
 
 @pytest.mark.parametrize(

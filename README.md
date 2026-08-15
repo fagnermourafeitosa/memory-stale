@@ -88,31 +88,33 @@ while a semantic change to its referenced source does.
 ## How a memory is created
 
 The local runtime captures supported code changes automatically. It never asks
-another LLM: it fingerprints the parsed source at the start and end of a turn,
-then records a code-anchored change record only when its semantic structure
-differs.
+another LLM: it fingerprints the parsed source and its resolvable named symbols
+at the start and end of a turn, then records a code-anchored change record only
+when its semantic structure differs.
 
 ```mermaid
 flowchart TD
-    A[UserPromptSubmit snapshots supported source] --> B[Codex changes code]
-    B --> C["Stop hook fingerprints<br/>the final source"]
-    C --> D{"Semantic source<br/>signature changed?"}
+    A[UserPromptSubmit snapshots supported source and symbols] --> B[Codex changes code]
+    B --> C["Stop hook fingerprints<br/>the final source and symbols"]
+    C --> D{"Semantic source or<br/>symbol signature changed?"}
     D -->|No| E[No automatic memory]
-    D -->|Yes| F[Stage automatic source-change record]
+    D -->|Yes| F[Stage automatic symbol-change record]
     F --> G[Reconcile final evidence]
     G --> H[Write active Markdown memory]
     I["Optional: Codex calls memory.capture<br/>for a richer claim"] --> G
 ```
 
-An automatic record is intentionally factual:
+An automatic record is intentionally factual and names the added or changed
+symbol when one can be resolved:
 
 ```text
-Automatic change record: src/auth.py changed in this task.
-Evidence: src/auth.py
+Automatic change record: added symbol src/auth.py:login.
+Evidence: src/auth.py:login
 ```
 
-Codex can still call `memory.capture` to add a richer, code-backed claim such
-as “Login validates password and MFA before creating a session.”
+For a semantic change outside every named symbol, it retains the file-level
+record. Codex can still call `memory.capture` to add a richer, code-backed
+claim about behavior, constraints, architecture, or operational rules.
 
 ## Daily use
 
@@ -120,8 +122,9 @@ Memory maintenance is automatic:
 
 1. `UserPromptSubmit` retrieves relevant active memory.
 2. `PostToolUse` records work performed during the task.
-3. `Stop` automatically captures semantic changes to supported code files,
-   persists them, and marks affected existing records stale.
+3. `Stop` automatically captures added or changed symbols in supported code,
+   uses a file record only when no symbol can represent the change, persists
+   them, and marks affected existing records stale.
 4. Codex may call `memory.capture` to attach a richer, explicit claim.
 
 Ask Codex to work normally; no memory command or tool call is required for code
@@ -146,10 +149,11 @@ Durable records and configuration live in the target project:
 Memory files are Git-reviewable Markdown. Commit them when the team wants to
 share project knowledge. Turn ledgers and runtime caches remain under `.git/`.
 
-Automatic primary evidence is a parsed source file and supports Python,
-JavaScript/TypeScript, Go, Java, Kotlin, and Rust. Explicit MCP captures may
-also use symbols, tests, configuration nodes, and schema nodes. Unsupported
-languages intentionally have no fallback.
+Automatic primary evidence is a parsed symbol when available, otherwise a
+parsed source file; it supports Python, JavaScript/TypeScript, Go, Java,
+Kotlin, and Rust. Explicit MCP captures may also use symbols, tests,
+configuration nodes, and schema nodes. Unsupported languages intentionally
+have no fallback.
 
 ## Design boundaries
 

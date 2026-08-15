@@ -17,11 +17,19 @@ The project-local installation requires a Git working tree. If a hook reports th
 inactive or encountered an error, continue the user's task normally and surface
 the actionable message without treating memory maintenance as a blocker.
 
-At `Stop`, Memory Stale automatically captures every semantic change to a
-supported source file. Do not ask the user to call `memory.capture`, and do not
-need to call it merely to record ordinary code changes. Configuration,
-Markdown, unsupported languages, comments, and formatting-only edits do not
-produce automatic records.
+At `Stop`, Memory Stale automatically captures every added or semantically
+changed resolvable symbol in a supported source file. When a semantic change
+cannot be attributed to a named symbol, it uses a source-file record instead.
+Do not ask the user to call `memory.capture`, and do not need to call it merely
+to record ordinary code changes. Configuration, Markdown, unsupported
+languages, comments, and formatting-only edits do not produce automatic
+records.
+
+Automatic records are deterministic provenance, not semantic summaries. A
+record such as `added symbol app/main.py:version` does not establish the
+symbol's purpose, behavior, design rationale, or user-facing contract. When a
+completed change establishes any durable code-backed fact, call
+`memory.capture` with a precise claim and appropriate evidence.
 
 When the user invokes `/memory-stale dream`, call the local `memory.dream` MCP
 tool. Review only the stale or broken items it reports. Use `memory.capture` for
