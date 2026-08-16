@@ -1,0 +1,893 @@
+{
+  "version": 2,
+  "corpus_version": 2,
+  "attempted_count": 100,
+  "sample_count": 100,
+  "matrix": {
+    "true_stale": 38,
+    "false_stale": 8,
+    "missed_change": 12,
+    "true_active": 42
+  },
+  "metrics": {
+    "stale_recall": {
+      "count": 38,
+      "denominator": 50,
+      "rate": 0.76,
+      "wilson_95": [
+        0.6258731624205708,
+        0.8570260860300828
+      ]
+    },
+    "stale_precision": {
+      "count": 38,
+      "denominator": 46,
+      "rate": 0.8260869565217391,
+      "wilson_95": [
+        0.692766462836215,
+        0.9091420829775368
+      ]
+    },
+    "specificity": {
+      "count": 42,
+      "denominator": 50,
+      "rate": 0.84,
+      "wilson_95": [
+        0.7148578393696501,
+        0.916625793219666
+      ]
+    },
+    "unnecessary_revalidation_rate": {
+      "count": 8,
+      "denominator": 50,
+      "rate": 0.16,
+      "wilson_95": [
+        0.08337420678033404,
+        0.2851421606303499
+      ]
+    },
+    "missed_semantic_change_rate": {
+      "count": 12,
+      "denominator": 50,
+      "rate": 0.24,
+      "wilson_95": [
+        0.1429739139699173,
+        0.3741268375794292
+      ]
+    },
+    "overall_accuracy": {
+      "count": 80,
+      "denominator": 100,
+      "rate": 0.8,
+      "wilson_95": [
+        0.7111708344068411,
+        0.8666330666689676
+      ]
+    }
+  },
+  "families": [
+    {
+      "family": "conservative-false-stale",
+      "sample_count": 12,
+      "matrix": {
+        "true_stale": 0,
+        "false_stale": 8,
+        "missed_change": 0,
+        "true_active": 4
+      },
+      "accuracy": {
+        "count": 4,
+        "denominator": 12,
+        "rate": 0.3333333333333333,
+        "wilson_95": [
+          0.13812009109121315,
+          0.6093779111272004
+        ]
+      }
+    },
+    {
+      "family": "direct-local",
+      "sample_count": 28,
+      "matrix": {
+        "true_stale": 28,
+        "false_stale": 0,
+        "missed_change": 0,
+        "true_active": 0
+      },
+      "accuracy": {
+        "count": 28,
+        "denominator": 28,
+        "rate": 1,
+        "wilson_95": [
+          0.8793566952341543,
+          0.9999999999999998
+        ]
+      }
+    },
+    {
+      "family": "evidence-graph",
+      "sample_count": 10,
+      "matrix": {
+        "true_stale": 6,
+        "false_stale": 0,
+        "missed_change": 0,
+        "true_active": 4
+      },
+      "accuracy": {
+        "count": 10,
+        "denominator": 10,
+        "rate": 1,
+        "wilson_95": [
+          0.7224672001371107,
+          0.9999999999999999
+        ]
+      }
+    },
+    {
+      "family": "incomplete-provenance",
+      "sample_count": 12,
+      "matrix": {
+        "true_stale": 0,
+        "false_stale": 0,
+        "missed_change": 12,
+        "true_active": 0
+      },
+      "accuracy": {
+        "count": 0,
+        "denominator": 12,
+        "rate": 0,
+        "wilson_95": [
+          2.7755575615628914e-17,
+          0.24249400665524085
+        ]
+      }
+    },
+    {
+      "family": "preserving",
+      "sample_count": 28,
+      "matrix": {
+        "true_stale": 0,
+        "false_stale": 0,
+        "missed_change": 0,
+        "true_active": 28
+      },
+      "accuracy": {
+        "count": 28,
+        "denominator": 28,
+        "rate": 1,
+        "wilson_95": [
+          0.8793566952341543,
+          0.9999999999999998
+        ]
+      }
+    },
+    {
+      "family": "repository-shape",
+      "sample_count": 10,
+      "matrix": {
+        "true_stale": 4,
+        "false_stale": 0,
+        "missed_change": 0,
+        "true_active": 6
+      },
+      "accuracy": {
+        "count": 10,
+        "denominator": 10,
+        "rate": 1,
+        "wilson_95": [
+          0.7224672001371107,
+          0.9999999999999999
+        ]
+      }
+    }
+  ],
+  "macro_family_accuracy": 0.7222222222222222,
+  "operational_outcomes": [],
+  "trials": [
+    {
+      "id": "go-boolean-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "go-comparison-boundary-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "go-control-flow-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "go-equivalent-expression",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "go-formatting-only",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "go-leading-comment",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "go-local-variable-rename",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "go-return-value-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "graph-config-change",
+      "family": "evidence-graph",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "graph-cycle-comment",
+      "family": "evidence-graph",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "graph-one-hop-change",
+      "family": "evidence-graph",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "graph-one-hop-comment",
+      "family": "evidence-graph",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "graph-schema-change",
+      "family": "evidence-graph",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "graph-shared-support-change",
+      "family": "evidence-graph",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "graph-three-hop-change",
+      "family": "evidence-graph",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "graph-three-hop-formatting",
+      "family": "evidence-graph",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "graph-two-hop-change",
+      "family": "evidence-graph",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "graph-two-hop-comment",
+      "family": "evidence-graph",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-json-config",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-locale-module",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-permission-module",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-policy-function",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-pricing-module",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-schema-required",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-threshold-constant",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-timeout-module",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-toml-config",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-transform-module",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-validator-module",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "incomplete-yaml-config",
+      "family": "incomplete-provenance",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "java-boolean-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "java-comparison-boundary-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "java-control-flow-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "java-equivalent-expression",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "java-formatting-only",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "java-leading-comment",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "java-local-variable-rename",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "java-return-value-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "javascript-boolean-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "javascript-comparison-boundary-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "javascript-control-flow-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "javascript-equivalent-expression",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "javascript-formatting-only",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "javascript-leading-comment",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "javascript-local-variable-rename",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "javascript-return-value-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "kotlin-boolean-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "kotlin-comparison-boundary-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "kotlin-control-flow-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "kotlin-equivalent-expression",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "kotlin-formatting-only",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "kotlin-leading-comment",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "kotlin-local-variable-rename",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "kotlin-return-value-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-boolean-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-comparison-boundary-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-conservative-constant-conditional",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "python-conservative-defined-logging",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-conservative-defined-metric",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-conservative-defined-tracing",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-conservative-double-negation",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "python-conservative-harmless-guard",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-conservative-identity-helper",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-conservative-neutral-arithmetic",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "python-conservative-single-item-index",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "python-conservative-temporary-variable",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-conservative-try-finally-pass",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-conservative-unreachable-branch",
+      "family": "conservative-false-stale",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-control-flow-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "python-equivalent-expression",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "python-formatting-only",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "python-leading-comment",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "python-local-variable-rename",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "python-return-value-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "rust-boolean-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "rust-comparison-boundary-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "rust-control-flow-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "rust-equivalent-expression",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "rust-formatting-only",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "rust-leading-comment",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "rust-local-variable-rename",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "rust-return-value-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "shape-added-file",
+      "family": "repository-shape",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "shape-documentation-edit",
+      "family": "repository-shape",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "shape-multi-module-primary-change",
+      "family": "repository-shape",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "shape-multiple-unrelated-edits",
+      "family": "repository-shape",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "shape-primary-and-unrelated-change",
+      "family": "repository-shape",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "shape-primary-deletion",
+      "family": "repository-shape",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "shape-primary-rename",
+      "family": "repository-shape",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "shape-test-only-edit",
+      "family": "repository-shape",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "shape-unrelated-config-edit",
+      "family": "repository-shape",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "shape-unrelated-source-edit",
+      "family": "repository-shape",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "typescript-boolean-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "typescript-comparison-boundary-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "typescript-control-flow-result-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    },
+    {
+      "id": "typescript-equivalent-expression",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "typescript-formatting-only",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "typescript-leading-comment",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "typescript-local-variable-rename",
+      "family": "preserving",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_status": "active"
+    },
+    {
+      "id": "typescript-return-value-change",
+      "family": "direct-local",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_status": "stale"
+    }
+  ],
+  "notes": [
+    "Scores describe this curated corpus and are not population estimates for real repositories.",
+    "Family accuracy is reported separately so translated grammar cases do not imply independent semantic breadth.",
+    "The corpus contains 50 changed and 50 preserved labels with an explicit rationale for every trial."
+  ]
+}

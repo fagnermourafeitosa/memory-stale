@@ -94,7 +94,11 @@ modify the target project's `.venv` or install packages globally.
 
 On every task, the `UserPromptSubmit` hook considers only records whose evidence
 is still valid. It retrieves relevant active claims deterministically: exact
-paths/symbols receive priority and remaining matches use lexical BM25 ranking.
+paths or symbols receive a `100.0` boost, and remaining matches use
+field-weighted lexical BM25 ranking. Claims have weight `1.0`, durability reasons
+have weight `0.5`, and evidence locators have weight `2.0`. Locator paths and
+symbols are split into searchable structural components, including path
+segments, file extensions, snake case, kebab case, and camel case.
 
 ```mermaid
 flowchart TD
@@ -243,11 +247,15 @@ and cannot disappear into the semantic confusion matrix.
 
 The inputs and exact per-case outcomes are reviewable in the
 [versioned corpus](evaluator/corpus/repository-lifecycle-corpus.yaml) and
-[dated result](evaluator/results/2026-08-12-repository-lifecycle-evaluation.yaml).
+[dated result](evaluator/results/2026-08-16-repository-lifecycle-evaluation.yaml).
 The [evaluation contract](specs/21-quality-evaluation-100-samples.md) documents
 sample design and interpretation, while the
 [end-to-end test](evaluator/tests/test_repository_lifecycle.py) reruns the corpus
 and requires an exact baseline match.
+
+On 2026-08-16, the field-weighted locator retrieval implementation was run
+through all 100 cases. It reproduced the matrix and every per-case lifecycle
+and retrieval outcome above exactly, with no operational failures.
 
 On 2026-08-15, commit `f6fe73d` was checked by repeating all 100 cases ten times:
 1,000/1,000 lifecycle executions matched the baseline, with no operational
@@ -270,9 +278,9 @@ accuracy across arbitrary repositories.
 
 ## Current limitations
 
-- Retrieval is lexical and structural; a prompt with no shared terms or code
-  references may not retrieve a conceptually related memory.
-- Stale records are excluded, not automatically rewritten. Revalidate them with
-  Dream or a new capture.
+- Retrieval is lexical and structural; conceptually related memories may not be
+  retrieved when the prompt shares neither relevant terms nor code references.
+- Stale records are excluded from retrieval, not automatically rewritten.
+  Revalidate them with Dream or create a new capture.
 - Overloads, anonymous functions, generated code, macros, and partial classes
-  may not resolve at the desired granularity.
+  may not resolve at the intended symbol granularity.

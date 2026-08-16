@@ -269,5 +269,5 @@ def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path
     assert result.macro_family_accuracy == pytest.approx(13 / 18)
     assert_repository_baseline(
         result,
-        evaluator_root / "results" / "2026-08-12-repository-lifecycle-evaluation.yaml",
+        evaluator_root / "results" / "2026-08-16-repository-lifecycle-evaluation.yaml",
     )

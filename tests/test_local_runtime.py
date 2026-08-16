@@ -480,3 +480,43 @@ def test_prompt_hook_injects_only_relevant_active_memory(tmp_path: Path) -> None
     assert result.returncode == 0
     output = json.loads(result.stdout)
     assert "Auth changes require review." in output["hookSpecificOutput"]["additionalContext"]
+
+
+def test_prompt_hook_injects_memory_found_through_locator_vocabulary(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path)
+    MemoryStore(repository).write_all(
+        [
+            Memory(
+                "memory-1",
+                "behavior",
+                "active",
+                "Credentials renew after successful authorization.",
+                "Existing clients depend on uninterrupted renewal.",
+                (
+                    EvidenceItem(
+                        "symbol",
+                        "primary",
+                        "src/security/session.py:rotate_token",
+                        "sig",
+                    ),
+                ),
+            )
+        ]
+    )
+
+    result = _run_hook(
+        "UserPromptSubmit",
+        repository,
+        {
+            "turn_id": "turn-context",
+            "cwd": str(repository),
+            "prompt": "Adjust session token handling",
+        },
+    )
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert (
+        "Credentials renew after successful authorization."
+        in output["hookSpecificOutput"]["additionalContext"]
+    )
