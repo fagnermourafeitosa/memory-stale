@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TextIO, TypedDict, cast
 
 from memory_stale.evidence import EvidenceError
+from memory_stale.project_paths import evidence_path, is_ignored_project_path
 from memory_stale.symbol_index import SymbolIndexer, SymbolIndexError
 
 SEMANTIC_CAPTURE_PROTOCOL = (
@@ -100,7 +101,7 @@ def _snapshot(repository: Path) -> dict[str, FileSnapshot]:
     ).split("\0")
     snapshot: dict[str, FileSnapshot] = {}
     for relative_path in paths:
-        if not relative_path:
+        if not relative_path or is_ignored_project_path(relative_path):
             continue
         path = repository / relative_path
         digest = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
@@ -138,6 +139,8 @@ def _changes_since(
 ) -> list[ChangedPath]:
     changes: list[ChangedPath] = []
     for path in sorted(baseline.keys() | current.keys()):
+        if is_ignored_project_path(path):
+            continue
         before = baseline.get(path)
         after = current.get(path)
         if before != after:
@@ -257,7 +260,7 @@ def _uncovered_automatic_locations(
             locator = item.get("locator")
             if not isinstance(item_type, str) or not isinstance(locator, str):
                 continue
-            covered_paths.add(_evidence_file(item_type, locator))
+            covered_paths.add(evidence_path(item_type, locator))
             if item_type in {"symbol", "test"}:
                 covered_symbols.add(locator)
 
@@ -298,7 +301,7 @@ def _run_lifecycle(
         if memory.status != "active":
             continue
         for item in memory.evidence:
-            path_text = _evidence_file(item.type, item.locator)
+            path_text = evidence_path(item.type, item.locator)
             if path_text not in changed_paths:
                 evidence[item.key] = RefEvidence(item.fingerprint)
                 continue
@@ -310,14 +313,6 @@ def _run_lifecycle(
         cast(Mapping[str, object], item) for item in captures if isinstance(item, dict)
     ]
     store.write_all(reconcile(memories, capture_mappings, evidence))
-
-
-def _evidence_file(item_type: str, locator: str) -> str:
-    if item_type in {"symbol", "test"}:
-        return locator.rpartition(":")[0]
-    if item_type in {"config", "schema"}:
-        return locator.partition("#")[0]
-    return locator
 
 
 def _evidence_error_reason(error: EvidenceError) -> str:

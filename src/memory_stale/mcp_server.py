@@ -13,6 +13,7 @@ from memory_stale.dream import dream
 from memory_stale.evidence import EvidenceError, EvidenceGraph, parse_graph, resolve_item
 from memory_stale.hook_runtime import _atomic_json_write, _repository_root, _snapshot
 from memory_stale.memory_store import MemoryStore
+from memory_stale.project_paths import evidence_path, is_ignored_project_path
 from memory_stale.reporting import write_report
 
 KINDS = {"behavior", "contract", "constraint", "architecture", "operation"}
@@ -69,6 +70,11 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
     claim = _string(arguments, "claim")
     durability_reason = _string(arguments, "durability_reason")
     graph = parse_graph(arguments.get("evidence"))
+    if any(
+        is_ignored_project_path(evidence_path(item_type, locator))
+        for item_type, _role, locator in graph.items
+    ):
+        raise ValueError("evidence inside .agents is ignored")
     if any(item_type == "source" for item_type, _role, _locator in graph.items):
         raise ValueError("source evidence is reserved for automatic capture")
     _validate_semantic_claim(claim, graph)

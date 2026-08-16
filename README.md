@@ -186,6 +186,13 @@ Durable records and configuration live in the target project:
 .agents/skills/.agent-memory/config.toml
 ```
 
+The repository-root `.agents/` tree is operational infrastructure, not project
+evidence. Memory Stale excludes it from change discovery, automatic capture,
+explicit evidence, retrieval, and Dream audits even when its files are tracked.
+Users do not need to add `.agents/` to `.gitignore` for this boundary to apply.
+The exclusion does not prevent the installed hooks and MCP server from running
+there or the memory store and reports from reading records there.
+
 Memory files are Git-reviewable Markdown. Commit them when the team wants to
 share project knowledge. Turn ledgers and runtime caches remain under `.git/`.
 

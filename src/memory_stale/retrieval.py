@@ -8,6 +8,7 @@ from collections import Counter
 from collections.abc import Sequence
 
 from memory_stale.lifecycle import Memory
+from memory_stale.project_paths import evidence_path, is_ignored_project_path
 
 TOKEN = re.compile(r"[\w./:-]+", re.UNICODE)
 CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
@@ -70,7 +71,15 @@ def _is_exact_locator_match(locator: str, prompt_folded: str) -> bool:
 
 
 def retrieve(memories: Sequence[Memory], prompt: str, budget: int = 1500) -> str:
-    active = [memory for memory in memories if memory.status == "active"]
+    active = [
+        memory
+        for memory in memories
+        if memory.status == "active"
+        and not any(
+            is_ignored_project_path(evidence_path(item.type, item.locator))
+            for item in memory.evidence
+        )
+    ]
     query = _tokens(prompt)
     if not active or not query or budget <= 0:
         return ""

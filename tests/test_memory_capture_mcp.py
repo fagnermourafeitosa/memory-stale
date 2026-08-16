@@ -303,6 +303,62 @@ def test_capture_rejects_source_evidence_reserved_for_automatic_capture(tmp_path
     assert content[0]["text"] == "source evidence is reserved for automatic capture"
 
 
+def test_capture_rejects_evidence_inside_the_agents_directory(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    installed_runtime = repository / ".agents" / "skills" / "memory-stale" / "runtime.py"
+    installed_runtime.parent.mkdir(parents=True)
+    installed_runtime.write_text("def run() -> int:\n    return 1\n", encoding="utf-8")
+    _start_turn(repository)
+    installed_runtime.write_text("def run() -> int:\n    return 2\n", encoding="utf-8")
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(RUNTIME_ROOT / "src")
+    server = subprocess.Popen(
+        [sys.executable, "-m", "memory_stale.mcp_server"],
+        cwd=repository,
+        env=environment,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        response = _rpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "memory.capture",
+                    "arguments": {
+                        "kind": "behavior",
+                        "claim": "The installed runtime returns the current protocol result.",
+                        "evidence": [
+                            {
+                                "type": "symbol",
+                                "role": "primary",
+                                "locator": ".agents/skills/memory-stale/runtime.py:run",
+                            }
+                        ],
+                        "durability_reason": "The installed hook depends on this behavior.",
+                    },
+                },
+            },
+        )
+    finally:
+        assert server.stdin is not None
+        server.stdin.close()
+        server.wait(timeout=5)
+
+    result = cast(dict[str, object], response["result"])
+    assert result["isError"] is True
+    content = cast(list[dict[str, str]], result["content"])
+    assert content[0]["text"] == "evidence inside .agents is ignored"
+    task_files = list((repository / ".git" / "memory-stale" / "tasks").glob("*.json"))
+    task = json.loads(task_files[0].read_text(encoding="utf-8"))
+    assert task["captures"] == []
+
+
 def test_capture_rejects_reserved_and_locator_only_claims(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     _start_turn(repository)

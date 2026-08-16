@@ -2,11 +2,118 @@ import json
 from pathlib import Path
 from typing import cast
 
+import pytest
 from local_harness import LocalHarness
 
+from memory_stale.evidence import EvidenceItem
+from memory_stale.lifecycle import Memory
 from memory_stale.memory_store import MemoryStore
+from memory_stale.symbol_index import SymbolIndexer
 
 RUNTIME_ROOT = Path(__file__).parents[1]
+
+
+def test_stop_ignores_a_semantic_change_inside_the_installed_agents_runtime(
+    tmp_path: Path,
+) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    installed_runtime = harness.root / ".agents" / "skills" / "memory-stale" / "runtime.py"
+    installed_runtime.parent.mkdir(parents=True)
+    installed_runtime.write_text("def run() -> int:\n    return 1\n", encoding="utf-8")
+    harness.git("add", ".agents/skills/memory-stale/runtime.py")
+    harness.git("commit", "--quiet", "-m", "install runtime")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Update the installed runtime")
+    installed_runtime.write_text("def run() -> int:\n    return 2\n", encoding="utf-8")
+    stopped = harness.hook("Stop", "turn-1")
+
+    assert stopped == {}
+    assert MemoryStore(harness.root).load_all() == []
+
+
+def test_stop_ignores_agents_paths_left_in_a_legacy_task_baseline(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    relative_path = ".agents/skills/memory-stale/runtime.py"
+    installed_runtime = harness.root / relative_path
+    installed_runtime.parent.mkdir(parents=True)
+    installed_runtime.write_text("def run() -> int:\n    return 1\n", encoding="utf-8")
+    harness.git("add", relative_path)
+    harness.git("commit", "--quiet", "-m", "install runtime")
+    signature = SymbolIndexer(harness.root).signature(f"{relative_path}:run")
+    store = MemoryStore(harness.root)
+    store.write_all(
+        [
+            Memory(
+                "installed-runtime",
+                "behavior",
+                "active",
+                "Installed runtime returns one.",
+                "The hook depends on this behavior.",
+                (EvidenceItem("symbol", "primary", f"{relative_path}:run", signature),),
+            )
+        ]
+    )
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Update the installed runtime")
+    task_path = next((harness.root / ".git" / "memory-stale" / "tasks").glob("*.json"))
+    state = cast(dict[str, object], json.loads(task_path.read_text(encoding="utf-8")))
+    baseline = cast(dict[str, object], state["baseline"])
+    baseline[relative_path] = {"status": "  ", "sha256": "legacy-snapshot"}
+    task_path.write_text(json.dumps(state), encoding="utf-8")
+    installed_runtime.write_text("def run() -> int:\n    return 2\n", encoding="utf-8")
+
+    stopped = harness.hook("Stop", "turn-1")
+
+    assert stopped == {}
+    assert store.load_all()[0].status == "active"
+
+
+def test_stop_captures_project_code_but_ignores_agents_code_in_the_same_turn(
+    tmp_path: Path,
+) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    service = harness.root / "service.py"
+    service.write_text("def compute() -> int:\n    return 1\n", encoding="utf-8")
+    installed_runtime = harness.root / ".agents" / "skills" / "memory-stale" / "runtime.py"
+    installed_runtime.parent.mkdir(parents=True)
+    installed_runtime.write_text("def run() -> int:\n    return 1\n", encoding="utf-8")
+    harness.git("add", "service.py", ".agents/skills/memory-stale/runtime.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Update project and runtime")
+    service.write_text("def compute() -> int:\n    return 2\n", encoding="utf-8")
+    installed_runtime.write_text("def run() -> int:\n    return 2\n", encoding="utf-8")
+    stopped = harness.hook("Stop", "turn-1")
+
+    assert stopped == {
+        "systemMessage": (
+            "Memory Stale semantic capture missing for changed locations: "
+            "service.py:compute. Automatic provenance was stored."
+        )
+    }
+    memories = MemoryStore(harness.root).load_all()
+    assert [memory.claim for memory in memories] == [
+        "Automatic change record: changed symbol service.py:compute."
+    ]
+
+
+@pytest.mark.parametrize("relative_path", [".agents-cache/tool.py", "src/.agents/tool.py"])
+def test_stop_does_not_ignore_paths_that_only_resemble_the_agents_root(
+    tmp_path: Path, relative_path: str
+) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / relative_path
+    source.parent.mkdir(parents=True)
+    source.write_text("def run() -> int:\n    return 1\n", encoding="utf-8")
+    harness.git("add", relative_path)
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Update tool")
+    source.write_text("def run() -> int:\n    return 2\n", encoding="utf-8")
+    harness.hook("Stop", "turn-1")
+
+    memories = MemoryStore(harness.root).load_all()
+    assert [memory.evidence[0].locator for memory in memories] == [f"{relative_path}:run"]
 
 
 def test_stop_automatically_persists_an_added_symbol(tmp_path: Path) -> None:

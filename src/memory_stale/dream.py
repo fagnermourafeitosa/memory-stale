@@ -8,6 +8,7 @@ from pathlib import Path
 from memory_stale.evidence import EvidenceError, resolve_stored_item
 from memory_stale.lifecycle import RefEvidence, reconcile
 from memory_stale.memory_store import MemoryStore
+from memory_stale.project_paths import evidence_path, is_ignored_project_path
 
 
 @dataclass(frozen=True)
@@ -21,10 +22,23 @@ def dream(repository: Path) -> DreamSummary:
     store = MemoryStore(repository)
     memories = store.load_all()
     evidence: dict[str, RefEvidence] = {}
-    affected: set[str] = {memory.id for memory in memories if memory.status == "stale"}
+    ignored = {
+        memory.id
+        for memory in memories
+        if any(
+            is_ignored_project_path(evidence_path(item.type, item.locator))
+            for item in memory.evidence
+        )
+    }
+    affected: set[str] = {
+        memory.id for memory in memories if memory.status == "stale" and memory.id not in ignored
+    }
     errors: list[str] = []
     for memory in memories:
         if memory.status != "active":
+            continue
+        if memory.id in ignored:
+            evidence.update({item.key: RefEvidence(item.fingerprint) for item in memory.evidence})
             continue
         for item in memory.evidence:
             try:

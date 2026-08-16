@@ -45,6 +45,26 @@ def test_retrieval_returns_empty_context_for_empty_or_unrelated_corpus() -> None
     )
 
 
+def test_retrieval_excludes_memory_anchored_inside_the_agents_directory() -> None:
+    memories = [
+        _memory(
+            "installed-runtime",
+            "Installed runtime handles retries.",
+            ".agents/skills/memory-stale/runtime.py:run",
+        ),
+        _memory(
+            "project-auth",
+            "Authentication requires review.",
+            "auth.py:login",
+        ),
+    ]
+
+    context = retrieve(memories, "Review runtime and auth.py:login", budget=1500)
+
+    assert "Authentication requires review." in context
+    assert "Installed runtime handles retries." not in context
+
+
 def test_retrieval_finds_active_memory_through_locator_vocabulary() -> None:
     memory = _memory(
         "session-renewal",
