@@ -14,13 +14,15 @@
 - Treat `README.md` as the public product description and `specs/` as the
   implementation contract. Resolve contradictions before coding.
 
-## Spec-first is mandatory
+## Spec-first is mandatory for code changes
 
 - Write repository instructions and every numbered spec in English.
-- Every feature, bug fix, refactor, behavior adjustment, tooling change, or
-  repository workflow change must have a numbered spec created with the
-  `to-spec` skill before implementation starts.
-- Never implement from a loose request. First synthesize the request and
+- Every change to executable code, including features, bug fixes, refactors,
+  behavior adjustments, hooks, scripts, tests, and tooling, must have a numbered
+  spec created with the `to-spec` skill before implementation starts.
+- Documentation-only changes, including `README.md`, repository instructions,
+  and prose-only workflow clarification, do not require a numbered spec.
+- Never implement code from a loose request. First synthesize the request and
   settled decisions into `specs/NN-kebab-case.md`.
 - The spec must identify the highest observable test seam, expected behavior,
   implementation constraints, testing decisions, and out-of-scope work.

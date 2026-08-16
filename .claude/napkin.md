@@ -9,8 +9,8 @@
 
 ## Execution & Validation (Highest Priority)
 
-1. **[2026-08-11] Require a spec before every change**
-   Do instead: use `to-spec`, store a numbered spec under `specs/`, confirm the public seam, then implement on a dedicated branch.
+1. **[2026-08-11] Require a spec before every code change**
+   Do instead: use `to-spec`, store a numbered spec under `specs/`, confirm the public seam, then implement code on a dedicated branch; edit documentation directly on its own branch.
 
 2. **[2026-08-11] Use uv with an isolated project environment**
    Do instead: manage dependencies and commands only through `uv` and keep them in the project `.venv`.

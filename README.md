@@ -1,11 +1,12 @@
 # Memory Stale
 
-**Persistent project memory that stops being trusted when its code evidence changes.**
+**Project memory for Codex that invalidates itself when its recorded code
+evidence changes.**
 
-Memory Stale gives Codex durable, code-anchored context across tasks. It stores
-claims as reviewable Markdown, connects each claim to specific code evidence,
-and deterministically marks the claim `stale` when that evidence no longer
-matches.
+Memory Stale prevents Codex from silently reusing a stored project claim after
+the code recorded as its evidence has changed. Future tasks keep useful context
+across conversations, while every claim retains a deterministic freshness
+boundary and a reviewable source.
 
 It is installed per repository as a local Codex skill with hooks. Its MCP
 server is registered once in Codex's global configuration, but the entry points
@@ -14,14 +15,40 @@ another model, embeddings, a hosted service, or a vector database.
 
 ## Why it matters
 
-Codex can remember that `AuthService.login` only checks a password. If MFA is
-added later, that fact is now unsafe. Memory Stale keeps the claim only while
-the recorded code still supports it.
+Persistent memory is valuable until the implementation moves and an old fact
+still looks authoritative. Consider three tasks in the same repository:
+
+```text
+Task 1  Codex records: "AuthService.login validates a password."
+        Evidence: src/auth.py:AuthService.login
+
+Task 2  Another change adds MFA to AuthService.login.
+
+Task 3  Codex works on authentication again.
+```
+
+Without a freshness check, Task 3 can receive the password-only claim as if it
+still described the current implementation. Memory Stale fingerprints the
+recorded evidence, detects that `AuthService.login` changed, marks the claim
+`stale`, and excludes it from ordinary context.
+
+| After recorded code changes | Plain stored context | Memory Stale |
+| --- | --- | --- |
+| Old claim availability | Can remain available | Excluded when its recorded evidence changes |
+| Freshness decision | Not evidence-aware | Deterministic fingerprint comparison |
+| Audit trail | System-dependent | Claim, evidence, revisions, and invalidation reason in Markdown |
+| Hosted dependency | System-dependent | None; storage and evaluation stay local |
 
 ```text
 unchanged evidence → active memory → available to Codex
 changed evidence   → stale memory  → excluded until revalidated
 ```
+
+In the checked-in 100-case end-to-end corpus, Memory Stale reached **80.0%
+overall accuracy**, **82.6% stale precision**, and **76.0% stale recall**. It
+classified every direct local change and every declared evidence-graph case
+correctly; the remaining weaknesses are documented in
+[Measured evaluation](#measured-evaluation), not hidden behind the aggregate.
 
 `active` means the recorded evidence is unchanged; it is not proof that a claim
 is complete or universally true. `stale` means evidence changed, disappeared,
