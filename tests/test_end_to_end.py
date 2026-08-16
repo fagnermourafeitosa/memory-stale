@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+import yaml
 from local_harness import LocalHarness
 
 from memory_stale.evidence import EvidenceItem
@@ -11,6 +12,60 @@ from memory_stale.memory_store import MemoryStore
 from memory_stale.symbol_index import SymbolIndexer
 
 RUNTIME_ROOT = Path(__file__).parents[1]
+
+
+def test_stop_persists_an_okf_memory_claim(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "jobs.py"
+    source.write_text("def retry() -> int:\n    return 1\n", encoding="utf-8")
+    harness.git("add", "jobs.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Update retry")
+    source.write_text("def retry() -> int:\n    return 2\n", encoding="utf-8")
+    harness.hook("Stop", "turn-1")
+
+    memory_file = next(MemoryStore(harness.root).directory.glob("*.md"))
+    _opening, front_matter, body = memory_file.read_text(encoding="utf-8").split("---", 2)
+    document = cast(dict[str, object], yaml.safe_load(front_matter))
+    generated = cast(dict[str, object], document["generated"])
+    verified = cast(list[dict[str, object]], document["verified"])
+    extension = cast(dict[str, object], document["memory_stale"])
+    evidence = cast(list[dict[str, object]], extension["evidence"])
+
+    assert document["type"] == "Memory Stale Claim"
+    assert document["title"] == "Automatic change record: changed symbol jobs.py:retry."
+    assert document["description"] == (
+        "Keeps the current implementation of jobs.py:retry available for exact-symbol retrieval."
+    )
+    assert document["sources"] == [{"id": "symbol:jobs.py:retry", "resource": "jobs.py:retry"}]
+    assert generated == verified[0]
+    assert document["status"] == "stable"
+    assert document["memory_stale"] == {
+        "schema_version": 5,
+        "claim_id": extension["claim_id"],
+        "revision_id": extension["revision_id"],
+        "kind": "operation",
+        "status": "active",
+        "durability_reason": (
+            "Keeps the current implementation of jobs.py:retry available for exact-symbol retrieval."
+        ),
+        "evidence": [
+            {
+                "source_id": "symbol:jobs.py:retry",
+                "type": "symbol",
+                "role": "primary",
+                "fingerprint": evidence[0]["fingerprint"],
+            }
+        ],
+        "supported_by": ["symbol:jobs.py:retry"],
+        "dependencies": [],
+        "stale_reasons": None,
+        "observed_commit": None,
+        "observed_at": generated["at"],
+        "legacy_id": None,
+    }
+    assert body == "\n\nAutomatic change record: changed symbol jobs.py:retry.\n"
 
 
 def test_stop_ignores_a_semantic_change_inside_the_installed_agents_runtime(
@@ -729,7 +784,7 @@ def test_recapturing_a_stale_claim_preserves_history_and_restores_active_context
     assert {revision.status for revision in revisions} == {"active", "stale"}
     assert len({revision.id for revision in revisions}) == 2
     assert len({revision.claim_id for revision in revisions}) == 1
-    assert {revision.schema_version for revision in revisions} == {4}
+    assert {revision.schema_version for revision in revisions} == {5}
     assert all(revision.observed_commit for revision in revisions)
 
     context = harness.hook("UserPromptSubmit", "turn-4", prompt="service.py:compute")

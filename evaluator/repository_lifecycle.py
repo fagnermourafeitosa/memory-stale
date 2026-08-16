@@ -619,9 +619,11 @@ def _memory_observation(repository: Path, claim: str) -> tuple[str | None, dict[
             continue
         data = yaml.safe_load(parts[1])
         if isinstance(data, dict):
-            status = data.get("status")
+            extension = data.get("memory_stale")
+            observation = extension if isinstance(extension, dict) else data
+            status = observation.get("status")
             if isinstance(status, str):
-                raw_reasons = data.get("stale_reasons")
+                raw_reasons = observation.get("stale_reasons")
                 if raw_reasons is None:
                     return status, None
                 if isinstance(raw_reasons, dict) and all(

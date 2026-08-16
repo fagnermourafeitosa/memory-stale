@@ -238,7 +238,10 @@ def test_installed_local_mcp_and_stop_hook_persist_a_memory_in_the_target_projec
         for memory in memories
         if "Login accepts the new password." in memory.read_text(encoding="utf-8")
     )
-    assert "status: active" in explicit_memory.read_text(encoding="utf-8")
+    persisted = explicit_memory.read_text(encoding="utf-8")
+    assert "status: stable" in persisted
+    assert "memory_stale:" in persisted
+    assert "  status: active" in persisted
 
 
 def test_installation_preserves_unrelated_project_codex_configuration(tmp_path: Path) -> None:

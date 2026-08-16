@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TextIO, TypedDict, cast
 
@@ -189,6 +190,7 @@ def _automatic_captures(
     current_symbols: dict[str, dict[str, str]],
 ) -> list[dict[str, object]]:
     captures: list[dict[str, object]] = []
+    observed_at = datetime.now(timezone.utc).isoformat()
     for path, fingerprint in sorted(current.items()):
         if baseline.get(path) == fingerprint:
             continue
@@ -216,7 +218,8 @@ def _automatic_captures(
                         "durability_reason": (
                             f"Keeps the current implementation of {locator} available for exact-symbol retrieval."
                         ),
-                        "schema_version": 4,
+                        "schema_version": 5,
+                        "observed_at": observed_at,
                     }
                 )
             if changed_symbols or previous_symbols != symbols:
@@ -236,7 +239,8 @@ def _automatic_captures(
                 "durability_reason": (
                     f"Keeps the current implementation of {path} available for exact-path retrieval."
                 ),
-                "schema_version": 4,
+                "schema_version": 5,
+                "observed_at": observed_at,
             }
         )
     return captures

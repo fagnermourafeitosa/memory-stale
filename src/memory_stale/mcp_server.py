@@ -116,7 +116,7 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         "supported_by": list(graph.supported_by),
         "dependencies": [{"from": edge.source, "to": edge.target} for edge in graph.dependencies],
         "durability_reason": durability_reason,
-        "schema_version": 4,
+        "schema_version": 5,
         "observed_commit": observed_commit,
         "observed_at": datetime.now(timezone.utc).isoformat(),
     }

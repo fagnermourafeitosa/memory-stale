@@ -196,6 +196,16 @@ there or the memory store and reports from reading records there.
 Memory files are Git-reviewable Markdown. Commit them when the team wants to
 share project knowledge. Turn ledgers and runtime caches remain under `.git/`.
 
+Each memory file is an [Open Knowledge Format (OKF) v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+concept with `type: Memory Stale Claim`. Its standard frontmatter makes the
+claim's sources, producer, deterministic verification event, and broad document
+lifecycle readable by other OKF consumers. Memory Stale places its own
+fingerprints, evidence graph, exact `active`/`stale`/`superseded` state, and
+invalidation reasons under the `memory_stale` extension. OKF is the portable
+envelope; Memory Stale remains responsible for resolving evidence and deciding
+freshness. An `active` memory is `stable` in the OKF lifecycle, while a `stale`
+or `superseded` revision is `deprecated`.
+
 Each completed supported-code change stores automatic symbol/source provenance
 and at least one Codex-authored semantic claim covering its coherent meaning.
 Automatic primary evidence is a parsed symbol when available, otherwise a

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import cast
 
 from memory_stale.evidence import EvidenceEdge, EvidenceItem
@@ -25,13 +25,15 @@ class Memory:
     durability_reason: str
     evidence: tuple[EvidenceItem, ...]
     stale_reasons: dict[str, str] | None = None
-    schema_version: int = 4
+    schema_version: int = 5
     claim_id: str | None = None
     observed_commit: str | None = None
     observed_at: str | None = None
+    generated_at: str | None = field(default=None, compare=False)
     legacy_id: str | None = None
     supported_by: tuple[str, ...] = ()
     dependencies: tuple[EvidenceEdge, ...] = ()
+    okf_extras: dict[str, object] = field(default_factory=dict, compare=False)
 
     def __post_init__(self) -> None:
         if not self.supported_by:
@@ -90,6 +92,8 @@ def _capture_memory(capture: Mapping[str, object]) -> Memory:
         claim_id=claim_id,
         observed_commit=_optional_string(capture, "observed_commit"),
         observed_at=_optional_string(capture, "observed_at"),
+        generated_at=_optional_string(capture, "generated_at")
+        or _optional_string(capture, "observed_at"),
         supported_by=supported_by,
         dependencies=dependencies,
     )
@@ -199,6 +203,7 @@ def migrate_legacy_memory(
         claim_id=claim_id,
         observed_commit=observed_commit,
         observed_at=observed_at,
+        generated_at=observed_at,
         legacy_id=legacy_id if legacy_id != revision_id else None,
         supported_by=supported_by,
     )

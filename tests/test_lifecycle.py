@@ -1,4 +1,10 @@
+from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import cast
+
+import pytest
+import yaml
 
 from memory_stale.evidence import EvidenceEdge, EvidenceItem
 from memory_stale.lifecycle import Memory, RefEvidence, reconcile
@@ -27,11 +33,25 @@ def test_lifecycle_creates_memory_and_marks_changed_evidence_stale(tmp_path: Pat
     assert stale[0].status == "stale"
     assert stale[0].stale_reasons == {"symbol:auth.py:login": "changed"}
 
-    store = MemoryStore(tmp_path)
+    captured_at = datetime(2026, 8, 16, 12, tzinfo=timezone.utc)
+    store = MemoryStore(tmp_path, clock=lambda: captured_at)
     store.write_all(stale)
     loaded = store.load_all()
-    assert loaded == stale
+    assert loaded == [
+        replace(
+            stale[0],
+            observed_at="2026-08-16T12:00:00+00:00",
+            generated_at="2026-08-16T12:00:00+00:00",
+        )
+    ]
     assert list(store.directory.glob("*.md"))
+    _opening, front_matter, _body = (
+        next(store.directory.glob("*.md")).read_text(encoding="utf-8").split("---", 2)
+    )
+    document = yaml.safe_load(front_matter)
+    assert document["status"] == "deprecated"
+    assert document["memory_stale"]["status"] == "stale"
+    assert document["memory_stale"]["stale_reasons"] == {"symbol:auth.py:login": "changed"}
 
 
 def test_lifecycle_records_missing_and_unresolvable_reasons() -> None:
@@ -94,7 +114,10 @@ def test_lifecycle_is_idempotent_and_preserves_stale_history(tmp_path: Path) -> 
 def test_legacy_markdown_migrates_to_one_versioned_revision_without_losing_history(
     tmp_path: Path,
 ) -> None:
-    store = MemoryStore(tmp_path)
+    store = MemoryStore(
+        tmp_path,
+        clock=lambda: datetime(2026, 8, 16, 12, tzinfo=timezone.utc),
+    )
     store.directory.mkdir(parents=True)
     legacy = store.directory / "legacy-id.md"
     legacy.write_text(
@@ -116,7 +139,7 @@ def test_legacy_markdown_migrates_to_one_versioned_revision_without_losing_histo
 
     assert len(migrated) == 1
     revision = migrated[0]
-    assert revision.schema_version == 4
+    assert revision.schema_version == 5
     assert revision.legacy_id == "legacy-id"
     assert revision.id != "legacy-id"
     assert revision.claim_id is not None
@@ -127,8 +150,102 @@ def test_legacy_markdown_migrates_to_one_versioned_revision_without_losing_histo
 
     paths = list(store.directory.glob("*.md"))
     assert [path.name for path in paths] == [f"{revision.id}.md"]
-    assert "schema_version: 4" in paths[0].read_text(encoding="utf-8")
-    assert store.load_all() == migrated
+    migrated_text = paths[0].read_text(encoding="utf-8")
+    assert "type: Memory Stale Claim" in migrated_text
+    assert "schema_version: 5" in migrated_text
+    reloaded = store.load_all()
+    assert reloaded[0].id == revision.id
+    assert reloaded[0].claim_id == revision.claim_id
+    assert reloaded[0].evidence == revision.evidence
+    assert reloaded[0].stale_reasons == revision.stale_reasons
+
+    store.write_all(reloaded)
+
+    assert paths[0].read_text(encoding="utf-8") == migrated_text
+
+
+def test_store_preserves_unknown_okf_fields_without_affecting_memory_state(tmp_path: Path) -> None:
+    store = MemoryStore(
+        tmp_path,
+        clock=lambda: datetime(2026, 8, 16, 12, tzinfo=timezone.utc),
+    )
+    memory = Memory(
+        id="retry-policy",
+        kind="behavior",
+        status="active",
+        claim="Jobs retry transient failures.",
+        durability_reason="Retries are a reliability contract.",
+        evidence=(EvidenceItem("symbol", "primary", "jobs.py:retry", "retry-v1"),),
+    )
+    store.write_all([memory])
+    path = next(store.directory.glob("*.md"))
+    _opening, front_matter, body = path.read_text(encoding="utf-8").split("---", 2)
+    document = yaml.safe_load(front_matter)
+    document["tags"] = ["jobs", "retry"]
+    path.write_text(
+        f"---\n{yaml.safe_dump(document, sort_keys=False)}---{body}",
+        encoding="utf-8",
+    )
+
+    loaded = store.load_all()
+    store.write_all(loaded)
+
+    _opening, front_matter, _body = path.read_text(encoding="utf-8").split("---", 2)
+    persisted = yaml.safe_load(front_matter)
+    assert persisted["tags"] == ["jobs", "retry"]
+    assert loaded[0].status == "active"
+    assert loaded[0].evidence == memory.evidence
+
+
+@pytest.mark.parametrize(
+    ("case", "message"),
+    [
+        ("missing_source", "mismatched evidence source"),
+        ("duplicate_source", "duplicate source"),
+        ("mismatched_resource", "mismatched evidence source"),
+        ("unknown_graph_source", "supported_by references unknown evidence"),
+        ("missing_primary", "missing primary evidence"),
+    ],
+)
+def test_store_rejects_invalid_okf_evidence_mappings(
+    tmp_path: Path, case: str, message: str
+) -> None:
+    store = MemoryStore(tmp_path / case)
+    store.write_all(
+        [
+            Memory(
+                id="retry-policy",
+                kind="behavior",
+                status="active",
+                claim="Jobs retry transient failures.",
+                durability_reason="Retries are a reliability contract.",
+                evidence=(EvidenceItem("symbol", "primary", "jobs.py:retry", "retry-v1"),),
+            )
+        ]
+    )
+    path = next(store.directory.glob("*.md"))
+    _opening, front_matter, body = path.read_text(encoding="utf-8").split("---", 2)
+    document = cast(dict[str, object], yaml.safe_load(front_matter))
+    sources = cast(list[dict[str, object]], document["sources"])
+    extension = cast(dict[str, object], document["memory_stale"])
+    evidence = cast(list[dict[str, object]], extension["evidence"])
+    if case == "missing_source":
+        document["sources"] = []
+    elif case == "duplicate_source":
+        sources.append(dict(sources[0]))
+    elif case == "mismatched_resource":
+        sources[0]["resource"] = "jobs.py:other"
+    elif case == "unknown_graph_source":
+        extension["supported_by"] = ["symbol:missing"]
+    else:
+        evidence[0]["role"] = "supporting"
+    path.write_text(
+        f"---\n{yaml.safe_dump(document, sort_keys=False)}---{body}",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        store.load_all()
 
 
 def test_dependency_cycle_has_a_finite_deterministic_invalidation_path() -> None:
