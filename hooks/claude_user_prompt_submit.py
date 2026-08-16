@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Codex UserPromptSubmit adapter."""
+"""Claude Code UserPromptSubmit adapter."""
 
 from __future__ import annotations
 
-from memory_stale.codex_adapter import run_user_prompt_submit
+from memory_stale.claude_adapter import run_user_prompt_submit
 
 if __name__ == "__main__":
     raise SystemExit(run_user_prompt_submit())

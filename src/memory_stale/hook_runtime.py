@@ -6,11 +6,10 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TextIO, TypedDict, cast
+from typing import TypedDict, cast
 
 from memory_stale.evidence import EvidenceError
 from memory_stale.project_paths import evidence_path, is_ignored_project_path
@@ -328,160 +327,74 @@ def _evidence_error_reason(error: EvidenceError) -> str:
     return "unresolvable"
 
 
-def _read_payload(stream: TextIO) -> dict[str, object]:
-    return cast(dict[str, object], json.load(stream))
+def start_task(cwd: Path, turn_id: str, prompt: str) -> str:
+    """Persist a task baseline and return active memory context for any host."""
+    repository = _repository_root(cwd)
+    state: TaskState = {
+        "turn_id": turn_id,
+        "repository": str(repository),
+        "baseline": _snapshot(repository),
+        "sources": _source_snapshot(repository),
+        "symbols": _symbol_snapshot(repository),
+        "ledger": [],
+        "captures": [],
+    }
+    _atomic_json_write(_task_path(repository, turn_id), state)
+    from memory_stale.memory_store import MemoryStore
+    from memory_stale.reporting import load_config
+    from memory_stale.retrieval import retrieve
 
-
-def _required_string(payload: dict[str, object], field: str) -> str:
-    value = payload.get(field)
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"{field} must be a non-empty string")
-    return value
-
-
-def _write_failure(event: str, error: Exception, output_stream: TextIO) -> None:
-    json.dump(
-        {"systemMessage": (f"Memory Stale {event} failed: {type(error).__name__}: {error}")},
-        output_stream,
+    context = retrieve(
+        MemoryStore(repository).load_all(), prompt, load_config(repository).context_budget
     )
-    output_stream.write("\n")
+    return f"{SEMANTIC_CAPTURE_PROTOCOL}\n\n{context}" if context else SEMANTIC_CAPTURE_PROTOCOL
 
 
-def run_user_prompt_submit(
-    input_stream: TextIO = sys.stdin,
-    output_stream: TextIO = sys.stdout,
-) -> int:
-    try:
-        payload = _read_payload(input_stream)
-        turn_id = _required_string(payload, "turn_id")
-        try:
-            repository = _repository_root(Path(_required_string(payload, "cwd")))
-        except NotGitRepositoryError:
-            json.dump(
-                {
-                    "systemMessage": (
-                        "Memory Stale is inactive: cwd is not inside a Git repository."
-                    )
-                },
-                output_stream,
-            )
-            output_stream.write("\n")
-            return 0
-        state: TaskState = {
-            "turn_id": turn_id,
-            "repository": str(repository),
-            "baseline": _snapshot(repository),
-            "sources": _source_snapshot(repository),
-            "symbols": _symbol_snapshot(repository),
-            "ledger": [],
-            "captures": [],
-        }
-        _atomic_json_write(_task_path(repository, turn_id), state)
-        from memory_stale.memory_store import MemoryStore
-        from memory_stale.reporting import load_config
-        from memory_stale.retrieval import retrieve
-
-        prompt = payload.get("prompt")
-        context = retrieve(
-            MemoryStore(repository).load_all(),
-            prompt if isinstance(prompt, str) else "",
-            load_config(repository).context_budget,
-        )
-        additional_context = (
-            f"{SEMANTIC_CAPTURE_PROTOCOL}\n\n{context}" if context else SEMANTIC_CAPTURE_PROTOCOL
-        )
-        json.dump(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "UserPromptSubmit",
-                    "additionalContext": additional_context,
-                }
-            },
-            output_stream,
-        )
-        output_stream.write("\n")
-    except Exception as error:
-        _write_failure("UserPromptSubmit", error, output_stream)
-    return 0
+def record_tool_activity(
+    cwd: Path, turn_id: str, tool_name: str, tool_use_id: str, tool_input: object
+) -> None:
+    """Append an observed tool invocation to a task without host-specific parsing."""
+    repository = _repository_root(cwd)
+    task_path = _task_path(repository, turn_id)
+    if not task_path.is_file():
+        return
+    state = _read_task(task_path)
+    state["ledger"].append(
+        {"tool_name": tool_name, "tool_use_id": tool_use_id, "tool_input": tool_input}
+    )
+    _atomic_json_write(task_path, state)
 
 
-def run_post_tool_use(
-    input_stream: TextIO = sys.stdin,
-    output_stream: TextIO = sys.stdout,
-) -> int:
-    try:
-        payload = _read_payload(input_stream)
-        turn_id = _required_string(payload, "turn_id")
-        try:
-            repository = _repository_root(Path(_required_string(payload, "cwd")))
-        except NotGitRepositoryError:
-            return 0
-        task_path = _task_path(repository, turn_id)
-        if not task_path.is_file():
-            return 0
-        state = _read_task(task_path)
-        state["ledger"].append(
-            {
-                "tool_name": _required_string(payload, "tool_name"),
-                "tool_use_id": _required_string(payload, "tool_use_id"),
-                "tool_input": payload.get("tool_input"),
-            }
-        )
-        _atomic_json_write(task_path, state)
-    except Exception as error:
-        _write_failure("PostToolUse", error, output_stream)
-    return 0
+def finish_task(cwd: Path, turn_id: str) -> list[str] | None:
+    """Reconcile a task and return uncovered automatic locations, if it exists."""
+    repository = _repository_root(cwd)
+    task_path = _task_path(repository, turn_id)
+    if not task_path.is_file():
+        return None
+    state = _read_task(task_path)
+    changes = _changes_since(state["baseline"], _snapshot(repository))
+    previous_symbols = state.get("symbols")
+    symbol_baseline = (
+        previous_symbols
+        if isinstance(previous_symbols, dict)
+        and all(isinstance(value, dict) for value in previous_symbols.values())
+        else None
+    )
+    automatic_captures = _automatic_captures(
+        state["sources"],
+        _source_snapshot(repository),
+        symbol_baseline,
+        _symbol_snapshot(repository),
+    )
+    uncovered = _uncovered_automatic_locations(automatic_captures, state["captures"])
+    _run_lifecycle(repository, changes, state["ledger"], [*state["captures"], *automatic_captures])
+    task_path.unlink()
+    return uncovered
 
 
-def run_stop(
-    input_stream: TextIO = sys.stdin,
-    output_stream: TextIO = sys.stdout,
-) -> int:
-    try:
-        payload = _read_payload(input_stream)
-        turn_id = _required_string(payload, "turn_id")
-        try:
-            repository = _repository_root(Path(_required_string(payload, "cwd")))
-        except NotGitRepositoryError:
-            json.dump({}, output_stream)
-            output_stream.write("\n")
-            return 0
-        task_path = _task_path(repository, turn_id)
-        if not task_path.is_file():
-            json.dump({}, output_stream)
-            output_stream.write("\n")
-            return 0
-        state = _read_task(task_path)
-        changes = _changes_since(state["baseline"], _snapshot(repository))
-        previous_symbols = state.get("symbols")
-        symbol_baseline = (
-            previous_symbols
-            if isinstance(previous_symbols, dict)
-            and all(isinstance(value, dict) for value in previous_symbols.values())
-            else None
-        )
-        automatic_captures = _automatic_captures(
-            state["sources"],
-            _source_snapshot(repository),
-            symbol_baseline,
-            _symbol_snapshot(repository),
-        )
-        uncovered = _uncovered_automatic_locations(automatic_captures, state["captures"])
-        captures = [*state["captures"], *automatic_captures]
-        _run_lifecycle(repository, changes, state["ledger"], captures)
-        task_path.unlink()
-        response = (
-            {
-                "systemMessage": (
-                    "Memory Stale semantic capture missing for changed locations: "
-                    f"{', '.join(uncovered)}. Automatic provenance was stored."
-                )
-            }
-            if uncovered
-            else {}
-        )
-        json.dump(response, output_stream)
-        output_stream.write("\n")
-    except Exception as error:
-        _write_failure("Stop", error, output_stream)
-    return 0
+def semantic_capture_missing_message(uncovered: list[str]) -> str:
+    """Render the shared semantic-coverage diagnostic for a host adapter."""
+    return (
+        "Memory Stale semantic capture missing for changed locations: "
+        f"{', '.join(uncovered)}. Automatic provenance was stored."
+    )

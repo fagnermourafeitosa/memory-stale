@@ -101,7 +101,17 @@ def test_installation_creates_a_project_local_skill_and_hook_configuration(tmp_p
 
     hooks = json.loads((repository / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     assert set(hooks["hooks"]) == {"UserPromptSubmit", "PostToolUse", "Stop"}
-    assert not (repository / ".mcp.json").exists()
+    claude_settings = json.loads(
+        (repository / ".claude" / "settings.json").read_text(encoding="utf-8")
+    )
+    assert set(claude_settings["hooks"]) == {"UserPromptSubmit", "PostToolUse", "Stop"}
+    assert (repository / ".claude" / "skills" / "memory-stale" / "SKILL.md").is_file()
+    assert (
+        json.loads((repository / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"][
+            "memory-stale"
+        ]["command"]
+        == "sh"
+    )
 
     command = hooks["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
     environment = os.environ.copy()
@@ -273,10 +283,10 @@ def test_installation_preserves_unrelated_project_codex_configuration(tmp_path: 
     assert len(stop_hooks) == 2
     mcp = json.loads((repository / ".mcp.json").read_text(encoding="utf-8"))
     assert mcp["mcpServers"]["existing"] == {"command": "existing-command"}
-    assert "memory-stale" not in mcp["mcpServers"]
+    assert mcp["mcpServers"]["memory-stale"]["command"] == "sh"
 
 
-def test_installation_leaves_a_project_mcp_registration_unchanged(tmp_path: Path) -> None:
+def test_installation_rejects_an_incompatible_project_mcp_registration(tmp_path: Path) -> None:
     repository = tmp_path / "target"
     repository.mkdir()
     subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
@@ -292,6 +302,86 @@ def test_installation_leaves_a_project_mcp_registration_unchanged(tmp_path: Path
         text=True,
     )
 
-    assert installation.returncode == 0, installation.stderr
+    assert installation.returncode == 1
+    assert "already registers an incompatible memory-stale server" in installation.stderr
     assert json.loads(mcp_path.read_text(encoding="utf-8")) == original
     assert (repository / ".agents" / "skills" / "memory-stale").exists()
+
+
+def test_installation_merges_claude_settings_and_is_idempotent(tmp_path: Path) -> None:
+    repository = tmp_path / "target"
+    repository.mkdir()
+    subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+    settings_path = repository / ".claude" / "settings.json"
+    settings_path.parent.mkdir()
+    settings_path.write_text(
+        json.dumps(
+            {
+                "permissions": {"allow": ["Bash(git status)"]},
+                "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "echo keep"}]}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    environment = _codex_environment(tmp_path / "commands", ":")
+
+    first = subprocess.run(
+        ["sh", str(SOURCE_ROOT / "scripts" / "install-project.sh"), str(repository)],
+        cwd=SOURCE_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    second = subprocess.run(
+        ["sh", str(SOURCE_ROOT / "scripts" / "install-project.sh"), str(repository)],
+        cwd=SOURCE_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    settings = json.loads(settings_path.read_text(encoding="utf-8"))
+    assert settings["permissions"] == {"allow": ["Bash(git status)"]}
+    assert settings["hooks"]["Stop"][0]["hooks"][0]["command"] == "echo keep"
+    assert set(settings["hooks"]) == {"UserPromptSubmit", "PostToolUse", "Stop"}
+    assert len(settings["hooks"]["UserPromptSubmit"]) == 1
+    assert len(settings["hooks"]["PostToolUse"]) == 1
+    assert len(settings["hooks"]["Stop"]) == 2
+    mcp = json.loads((repository / ".mcp.json").read_text(encoding="utf-8"))
+    assert mcp["mcpServers"]["memory-stale"] == {
+        "command": "sh",
+        "args": [
+            str(repository / ".agents" / "skills" / "memory-stale" / "scripts" / "run-python.sh"),
+            "-m",
+            "memory_stale.mcp_server",
+        ],
+    }
+    assert (repository / ".claude" / "skills" / "memory-stale" / "SKILL.md").is_file()
+
+
+def test_claude_only_installation_does_not_invoke_codex(tmp_path: Path) -> None:
+    repository = tmp_path / "target"
+    repository.mkdir()
+    subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+    environment = _codex_environment(tmp_path / "commands", "exit 99")
+
+    installation = subprocess.run(
+        [
+            "sh",
+            str(SOURCE_ROOT / "scripts" / "install-project.sh"),
+            str(repository),
+            "--host",
+            "claude",
+        ],
+        cwd=SOURCE_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert installation.returncode == 0, installation.stderr
+    assert not (repository / ".codex" / "hooks.json").exists()
+    assert (repository / ".claude" / "settings.json").is_file()
+    assert (repository / ".mcp.json").is_file()

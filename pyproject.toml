@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "memory-stale"
 version = "0.1.0"
-description = "Automatic, code-anchored memory maintenance for Codex."
+description = "Automatic, code-anchored memory maintenance for Codex and Claude Code."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

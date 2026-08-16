@@ -1,17 +1,20 @@
 # Memory Stale
 
-**Project memory for Codex that invalidates itself when its recorded code
-evidence changes.**
+**Project memory for Codex and Claude Code that invalidates itself when its
+recorded code evidence changes.**
 
 Memory Stale prevents Codex from silently reusing a stored project claim after
 the code recorded as its evidence has changed. Future tasks keep useful context
 across conversations, while every claim retains a deterministic freshness
 boundary and a reviewable source.
 
-It is installed per repository as a local Codex skill with hooks. Its MCP
-server is registered once in Codex's global configuration, but the entry points
-only to that project's installed runtime. It does not use Codex Plugins,
-another model, embeddings, a hosted service, or a vector database.
+It is installed per repository with host-specific hooks over one deterministic
+core. Codex and Claude Code both use the same local MCP server, memory store,
+evidence fingerprints, retrieval, and reconciliation. The Codex registration
+is global discovery metadata that points only to that project's installed
+runtime; Claude Code discovers the same runtime from the project `.mcp.json`.
+Memory Stale does not use Codex Plugins, another model, embeddings, a hosted
+service, or a vector database.
 
 ## Why it matters
 
@@ -56,33 +59,50 @@ or no longer resolves; it is not proof the claim is false.
 
 ## Install in a project
 
-From the target Git repository, ask Codex:
-
-> Install Memory Stale in this project from https://github.com/fagnermourafeitosa/memory-stale
-
-Or run:
+The installer defaults to both hosts:
 
 ```bash
 git clone https://github.com/fagnermourafeitosa/memory-stale.git /tmp/memory-stale
 sh /tmp/memory-stale/scripts/install-project.sh .
 ```
 
-The installer adds only target-project artifacts:
+For a single host, select it explicitly:
+
+```bash
+# Codex: hooks plus global MCP discovery that points to this project's runtime
+sh /tmp/memory-stale/scripts/install-project.sh . --host codex
+
+# Claude Code: project hooks, project skill, and project MCP discovery
+sh /tmp/memory-stale/scripts/install-project.sh . --host claude
+```
+
+Codex users may alternatively ask: “Install Memory Stale in this project from
+https://github.com/fagnermourafeitosa/memory-stale”. Start a new Codex or
+Claude Code conversation after installation so it reloads hooks and MCP.
+
+The installer adds only target-project artifacts and preserves unrelated hook,
+MCP, and Claude settings entries:
 
 ```text
 .agents/skills/memory-stale/  # skill, hooks, Python runtime, lockfile
 .codex/hooks.json             # lifecycle registrations
+.claude/settings.json         # Claude UserPromptSubmit, PostToolUse, Stop hooks
+.claude/skills/memory-stale/  # Claude capture instructions
+.mcp.json                     # Claude project MCP entry for the same local runtime
 .git/memory-stale/runtime/    # local uv and grammar caches
 ```
 
-It preserves unrelated hook entries and registers `memory-stale` with
-`codex mcp add` using the installed runtime's absolute path. The Codex
-registration is global, but it does not install Python packages globally or
-point to the source checkout. If Codex already has a `memory-stale` server,
-installation stops with the CLI's error instead of replacing it. Start a new
-Codex conversation after installation so it loads the registered server.
+For Codex, the installer registers `memory-stale` with `codex mcp add` using
+the installed runtime's absolute path. It does not install Python packages
+globally or point to the source checkout. Claude's `.mcp.json` server command
+uses that exact same bootstrap. Incompatible `memory-stale` registrations stop
+installation rather than being replaced. Repeating installation does not
+duplicate hooks or MCP configuration.
 
-Requirements: Git, `uv`, Python 3.10+, and the `codex` CLI with MCP support.
+Requirements: Git, `uv`, and Python 3.10+. Codex installation additionally
+requires the Codex CLI with MCP support. Claude lifecycle turns require a
+`prompt_id` to create isolated task state; when a payload omits it, Memory
+Stale silently skips that lifecycle turn.
 
 On the first hook or MCP invocation, the installed runtime uses its locked
 dependencies to run `uv sync --frozen --no-dev`. This creates or reuses an
@@ -102,7 +122,7 @@ segments, file extensions, snake case, kebab case, and camel case.
 
 ```mermaid
 flowchart TD
-    A[Codex starts a task] --> B[UserPromptSubmit hook]
+    A[Codex or Claude Code starts a task] --> B[UserPromptSubmit hook]
     B --> C[Load project memories]
     C --> D{"All recorded evidence<br/>still resolves and matches?"}
     D -->|Yes| E[Classify as active]
@@ -120,14 +140,14 @@ while a semantic change to its referenced source does.
 
 Every supported code change produces two complementary records. The local
 runtime creates deterministic provenance for the added or changed code
-locations. The Codex instance performing the task submits a concise semantic
+locations. The host instance performing the task submits a concise semantic
 claim describing what the coherent change now does or guarantees. Memory Stale
 does not ask another LLM or generate that claim inside the local engine.
 
 ```mermaid
 flowchart TD
-    A[UserPromptSubmit snapshots source and injects capture requirement] --> B[Codex changes code]
-    B --> C["Codex calls memory.capture<br/>once per coherent change"]
+    A[UserPromptSubmit snapshots source and injects capture requirement] --> B[Host changes code]
+    B --> C["Host calls memory.capture<br/>once per coherent change"]
     B --> D["Stop fingerprints<br/>final source and symbols"]
     C --> E[Stage semantic claim with evidence]
     D --> F[Stage automatic provenance records]
@@ -157,17 +177,17 @@ claim remains `active`. If semantic capture does not cover a changed location,
 
 ## Daily use
 
-Memory maintenance is automatic:
+Memory maintenance is automatic in both Codex and Claude Code:
 
 1. `UserPromptSubmit` retrieves relevant active memory.
 2. `PostToolUse` records work performed during the task.
-3. Codex calls `memory.capture` before its final response once per coherent
+3. The host calls `memory.capture` before its final response once per coherent
    supported-code change.
 4. `Stop` captures automatic provenance, persists both record types, reports
    semantic coverage gaps, and marks affected existing records stale.
 
-Ask Codex to work normally; the installed skill and hooks handle this protocol
-without requiring the user to issue a memory command. For explicit maintenance,
+Ask Codex or Claude Code to work normally; the installed skill and hooks handle
+this protocol without requiring a memory command. For explicit maintenance,
 use:
 
 ```text
@@ -207,7 +227,7 @@ freshness. An `active` memory is `stable` in the OKF lifecycle, while a `stale`
 or `superseded` revision is `deprecated`.
 
 Each completed supported-code change stores automatic symbol/source provenance
-and at least one Codex-authored semantic claim covering its coherent meaning.
+and at least one host-authored semantic claim covering its coherent meaning.
 Automatic primary evidence is a parsed symbol when available, otherwise a
 parsed source file; it supports Python, JavaScript/TypeScript, Go, Java, Kotlin,
 and Rust. Semantic captures may also use symbols, tests, configuration nodes,
@@ -215,12 +235,12 @@ and schema nodes. Unsupported languages intentionally have no fallback.
 
 ## Design boundaries
 
-- **Codex supplies meaning.** It decides whether a fact is durable and states
-  the claim.
+- **Codex or Claude Code supplies meaning.** The host decides whether a fact
+  is durable and states the claim.
 - **The local core supplies proof of freshness.** It resolves declared evidence,
   fingerprints it, retrieves active records, and manages lifecycle state.
-- **Hooks and MCP are adapters.** They keep the deterministic Python core
-  independent from Codex transport and configuration.
+- **Hooks and MCP are adapters.** Codex and Claude payload adapters normalize
+  into one deterministic Python lifecycle and share one MCP server.
 - **Failures do not block coding.** Hook failures return actionable, non-blocking
   messages; writes are atomic.
 
