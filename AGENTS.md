@@ -124,6 +124,13 @@ uv run mypy src tests
 uv run pytest
 ```
 
+The default suite must exclude the 100-trial repository evaluation. Run that
+benchmark only when the task explicitly requires an intentional measurement:
+
+```bash
+uv run pytest -m repository_evaluation
+```
+
 Coverage is a guardrail, not a substitute for behavioral tests. New production
 modules must remain at or above the configured branch-coverage threshold.
 

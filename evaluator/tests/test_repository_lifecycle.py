@@ -213,6 +213,7 @@ def test_repository_families_cannot_repeat_one_semantic_case_as_independent_brea
         load_repository_corpus(corpus)
 
 
+@pytest.mark.repository_evaluation
 def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path) -> None:
     root = Path(__file__).parents[2]
     evaluator_root = root / "evaluator"

@@ -123,10 +123,10 @@ and observes whether a later prompt receives the memory as active context.
 - Tests must assert the persisted status and the later injected context. Where
   stale, assert the item-specific reason; where active, assert the expected
   claim is injected by an exact path or symbol prompt.
-- The normal suite validates corpus schema, deterministic ordering, exact
-  statistics with independent literals, baseline consistency, and one
-  representative real repository trial for every family. A larger corpus may be
-  scheduled separately only when its runtime is bounded and reproducible.
+- The normal suite validates corpus schema and deterministic ordering through
+  small representative trials. Exact full-corpus statistics and baseline
+  consistency run only through the explicit repository-evaluation marker; the
+  heavy corpus must never run as part of the normal suite.
 - Run the required quality gates before completion:
 
   ```bash

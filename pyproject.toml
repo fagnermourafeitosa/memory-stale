@@ -37,6 +37,11 @@ addopts = [
     "--strict-config",
     "--strict-markers",
     "-ra",
+    "-m",
+    "not repository_evaluation",
+]
+markers = [
+    "repository_evaluation: runs the intentional 100-trial end-to-end repository benchmark",
 ]
 testpaths = ["tests", "evaluator/tests"]
 

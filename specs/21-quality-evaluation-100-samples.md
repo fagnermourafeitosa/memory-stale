@@ -100,8 +100,9 @@ state why the exact claim is preserved or changed, not merely restate the label.
 - Do not claim population-level accuracy or use Wilson intervals as evidence of
   generalization from the curated corpus.
 - Preserve the older isolated structural corpus; it answers a separate question.
-- Keep runtime bounded enough for the normal test suite and deterministic on the
-  Python version declared by `pyproject.toml`.
+- Keep the evaluator deterministic on the Python version declared by
+  `pyproject.toml`, exclude the complete 100-trial corpus from the normal test
+  suite, and require an explicit repository-evaluation marker to run it.
 
 ## Testing Decisions
 
@@ -119,6 +120,9 @@ state why the exact claim is preserved or changed, not merely restate the label.
 - Expected matrices and macro values are independent literals in tests and the
   checked-in result; tests must not calculate their own expected values with the
   production metric implementation.
+- Run the complete 100-trial corpus only when intentionally selected with
+  `uv run pytest -m repository_evaluation`; ordinary `uv run pytest` must
+  deselect it.
 - Before completion run:
 
   ```bash

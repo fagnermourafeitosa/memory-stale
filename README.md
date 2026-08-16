@@ -258,10 +258,11 @@ To update the statistics intentionally, keep labels and fixtures independent of
 product tuning, version any corpus or behavior change through a numbered spec,
 run the end-to-end evaluation, review every changed outcome, record a new dated
 baseline, and update this section in the same change. The reproducibility check
-is:
+is intentionally excluded from the standard test suite and runs only when its
+marker is selected explicitly:
 
 ```bash
-uv run pytest evaluator/tests/test_repository_lifecycle.py::test_checked_in_repository_corpus_has_a_reproducible_baseline
+uv run pytest -m repository_evaluation
 ```
 
 These are descriptive scores for a curated regression corpus, not estimates of

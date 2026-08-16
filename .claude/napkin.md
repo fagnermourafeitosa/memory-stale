@@ -18,8 +18,8 @@
 3. **[2026-08-11] Preserve project ideation in Markdown**
    Do instead: capture agreed product concepts in a clearly named project Markdown file before implementation.
 
-4. **[2026-08-12] Budget two minutes for the repository evaluation**
-   Do instead: use focused evaluator tests during red-green cycles, then run the 100-trial end-to-end corpus once in the final full suite.
+4. **[2026-08-16] Keep repository evaluation intentional**
+   Do instead: let the default suite exclude the 100-trial benchmark and run `uv run pytest -m repository_evaluation` only when the task explicitly requires it.
 
 ## User Directives
 
