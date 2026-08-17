@@ -11,7 +11,7 @@ from typing import cast
 import yaml
 
 from memory_stale.evidence import EvidenceEdge, EvidenceItem
-from memory_stale.lifecycle import Memory, migrate_legacy_memory
+from memory_stale.lifecycle import Memory, migrate_legacy_memory, normalize_retrieval_terms
 
 _OKF_TYPE = "Memory Stale Claim"
 _KNOWN_OKF_FIELDS = frozenset(
@@ -72,6 +72,8 @@ class MemoryStore:
             "observed_at": memory.observed_at or generated_at,
             "legacy_id": memory.legacy_id,
         }
+        if memory.retrieval_terms:
+            extension["retrieval_terms"] = list(memory.retrieval_terms)
         data: dict[str, object] = {
             "type": _OKF_TYPE,
             "title": _display_title(memory.claim),
@@ -140,6 +142,7 @@ def _load_v5(data: dict[str, object], claim: str, path: Path) -> Memory:
         legacy_id=_optional_string(extension, "legacy_id", path),
         supported_by=supported_by,
         dependencies=dependencies,
+        retrieval_terms=_retrieval_terms(extension, path),
         okf_extras=extras,
     )
 
@@ -339,6 +342,13 @@ def _stale_reasons(data: dict[str, object], path: Path) -> dict[str, str] | None
     ):
         raise ValueError(f"invalid stale reasons in {path}")
     return dict(sorted(cast(dict[str, str], value).items()))
+
+
+def _retrieval_terms(data: dict[str, object], path: Path) -> tuple[str, ...]:
+    try:
+        return normalize_retrieval_terms(data.get("retrieval_terms"))
+    except ValueError as error:
+        raise ValueError(f"invalid retrieval_terms in {path}: {error}") from error
 
 
 def _legacy_stale_reasons(data: dict[str, object], path: Path) -> dict[str, str] | None:

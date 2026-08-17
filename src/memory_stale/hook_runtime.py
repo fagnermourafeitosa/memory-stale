@@ -344,8 +344,9 @@ def start_task(cwd: Path, turn_id: str, prompt: str) -> str:
     from memory_stale.reporting import load_config
     from memory_stale.retrieval import retrieve
 
+    config = load_config(repository)
     context = retrieve(
-        MemoryStore(repository).load_all(), prompt, load_config(repository).context_budget
+        MemoryStore(repository).load_all(), prompt, config.context_budget, config.top_k
     )
     return f"{SEMANTIC_CAPTURE_PROTOCOL}\n\n{context}" if context else SEMANTIC_CAPTURE_PROTOCOL
 

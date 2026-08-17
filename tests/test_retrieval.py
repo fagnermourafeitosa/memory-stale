@@ -37,6 +37,20 @@ def test_retrieval_filters_stale_prioritizes_refs_and_respects_budget() -> None:
     assert "Never return this stale fact." not in context
 
 
+def test_retrieval_returns_only_the_configured_top_ranked_candidates() -> None:
+    memories = [
+        _memory("a-first", "First session behavior.", "auth.py:login"),
+        _memory("b-second", "Second session behavior.", "auth.py:login"),
+        _memory("c-third", "Third session behavior.", "auth.py:login"),
+    ]
+
+    context = retrieve(memories, "Change auth.py:login", budget=1500, top_k=2)
+
+    assert "First session behavior." in context
+    assert "Second session behavior." in context
+    assert "Third session behavior." not in context
+
+
 def test_retrieval_returns_empty_context_for_empty_or_unrelated_corpus() -> None:
     assert retrieve([], "anything", budget=1500) == ""
     assert (
@@ -159,6 +173,83 @@ def test_retrieval_weights_locator_above_claim() -> None:
     assert context.index("Credentials remain available.") < context.index(
         "Session behavior stays available."
     )
+
+
+def test_retrieval_rejects_declared_terms_without_claim_or_locator_corroboration() -> None:
+    memory = Memory(
+        "term-only",
+        "behavior",
+        "active",
+        "Login verifies a second factor before granting access.",
+        "Authentication changes must preserve the extra verification step.",
+        (EvidenceItem("symbol", "primary", "auth.py:login", "sig"),),
+        retrieval_terms=("MFA",),
+    )
+
+    assert retrieve([memory], "MFA", budget=1500) == ""
+    assert "Login verifies a second factor before granting access." in retrieve(
+        [memory], "MFA login", budget=1500
+    )
+
+
+def test_retrieval_excludes_weak_lexical_tail_below_the_relative_threshold() -> None:
+    target = Memory(
+        "target",
+        "behavior",
+        "active",
+        "Session login requires authorization.",
+        "Clients rely on the authentication policy.",
+        (EvidenceItem("symbol", "primary", "auth.py:login", "sig"),),
+        retrieval_terms=("MFA session authorization",),
+    )
+    weak = _memory(
+        "weak",
+        "Telemetry emits audit events.",
+        "telemetry.py:emit",
+    )
+
+    context = retrieve([target, weak], "MFA session authorization login telemetry", budget=1500)
+
+    assert "Session login requires authorization." in context
+    assert "Telemetry emits audit events." not in context
+
+
+def test_retrieval_keeps_exact_locators_and_excludes_weaker_declared_terms() -> None:
+    memories = [
+        Memory(
+            "a-terms",
+            "behavior",
+            "active",
+            "Credentials remain available.",
+            "Operators preserve access.",
+            (EvidenceItem("symbol", "primary", "auth.py:login", "sig"),),
+            retrieval_terms=("rotate_token",),
+        ),
+        _memory(
+            "z-exact",
+            "Session rotation invalidates old credentials.",
+            "src/security/session.py:rotate_token",
+        ),
+    ]
+
+    context = retrieve(memories, "rotate_token", budget=1500)
+
+    assert "Session rotation invalidates old credentials." in context
+    assert "Credentials remain available." not in context
+
+
+def test_retrieval_excludes_stale_memory_even_when_a_declared_term_matches() -> None:
+    memory = Memory(
+        "stale-term",
+        "behavior",
+        "stale",
+        "Credentials remain available.",
+        "Operators preserve access.",
+        (EvidenceItem("symbol", "primary", "auth.py:login", "sig"),),
+        retrieval_terms=("velociraptor",),
+    )
+
+    assert retrieve([memory], "velociraptor", budget=1500) == ""
 
 
 @pytest.mark.parametrize(

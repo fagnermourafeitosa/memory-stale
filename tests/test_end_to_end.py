@@ -433,6 +433,43 @@ def test_semantic_description_and_automatic_provenance_are_both_persisted_and_re
     assert "Checkout applies a five-unit discount to the current subtotal." in str(additional)
 
 
+def test_declared_retrieval_term_recovers_an_active_semantic_claim(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "auth.py"
+    source.write_text("def login() -> bool:\n    return True\n", encoding="utf-8")
+    harness.git("add", "auth.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Require another login factor")
+    source.write_text("def login() -> bool:\n    return verify_second_factor()\n", encoding="utf-8")
+    captured = harness.capture(
+        kind="behavior",
+        claim="Login verifies a second factor before granting access.",
+        evidence=[{"type": "symbol", "role": "primary", "locator": "auth.py:login"}],
+        durability_reason="Authentication must preserve the extra verification step.",
+        retrieval_terms=["velociraptor"],
+    )
+
+    assert cast(dict[str, object], captured["result"])["isError"] is False
+    harness.hook("Stop", "turn-1")
+
+    term_only_context = harness.hook("UserPromptSubmit", "turn-2", prompt="velociraptor")
+
+    assert term_only_context is not None
+    term_only_additional = cast(dict[str, object], term_only_context["hookSpecificOutput"])[
+        "additionalContext"
+    ]
+    assert "Login verifies a second factor before granting access." not in str(term_only_additional)
+
+    corroborated_context = harness.hook("UserPromptSubmit", "turn-3", prompt="velociraptor login")
+
+    assert corroborated_context is not None
+    corroborated_additional = cast(dict[str, object], corroborated_context["hookSpecificOutput"])[
+        "additionalContext"
+    ]
+    assert "Login verifies a second factor before granting access." in str(corroborated_additional)
+
+
 def test_partial_semantic_capture_reports_only_the_uncovered_location(tmp_path: Path) -> None:
     harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
     source = harness.root / "service.py"

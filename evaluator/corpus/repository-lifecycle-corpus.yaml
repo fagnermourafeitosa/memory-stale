@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "trials": [
     {
       "id": "python-return-value-change",
@@ -144,7 +144,9 @@
       "change_files": {
         "sample.py": "def compute():\n    # behavior-preserving note\n    return 1\n"
       },
-      "retrieval_prompt": "sample.py:compute"
+      "retrieval_prompt": "Typography palette for marketing pages",
+      "retrieval_case": "unrelated",
+      "expected_retrieval": false
     },
     {
       "id": "python-formatting-only",
@@ -376,7 +378,9 @@
       "change_files": {
         "sample.js": "function compute() {\n  // behavior-preserving note\n  return 1;\n}\n"
       },
-      "retrieval_prompt": "sample.js:compute"
+      "retrieval_prompt": "Ocean current simulation dataset",
+      "retrieval_case": "unrelated",
+      "expected_retrieval": false
     },
     {
       "id": "javascript-formatting-only",
@@ -608,7 +612,9 @@
       "change_files": {
         "sample.ts": "function compute(): number {\n  // behavior-preserving note\n  return 1;\n}\n"
       },
-      "retrieval_prompt": "sample.ts:compute"
+      "retrieval_prompt": "Invoice ledger reconciliation",
+      "retrieval_case": "unrelated",
+      "expected_retrieval": false
     },
     {
       "id": "typescript-formatting-only",
@@ -840,7 +846,9 @@
       "change_files": {
         "sample.go": "package sample\nfunc compute() int {\n // behavior-preserving note\n return 1\n}\n"
       },
-      "retrieval_prompt": "sample.go:compute"
+      "retrieval_prompt": "Garden irrigation schedule",
+      "retrieval_case": "unrelated",
+      "expected_retrieval": false
     },
     {
       "id": "go-formatting-only",
@@ -1072,7 +1080,9 @@
       "change_files": {
         "Sample.java": "class Sample { int compute() { // behavior-preserving note\n return 1; } }\n"
       },
-      "retrieval_prompt": "Sample.java:compute"
+      "retrieval_prompt": "Camera aperture calibration",
+      "retrieval_case": "unrelated",
+      "expected_retrieval": false
     },
     {
       "id": "java-formatting-only",
@@ -1304,7 +1314,9 @@
       "change_files": {
         "sample.kt": "fun compute(): Int {\n  // behavior-preserving note\n  return 1\n}\n"
       },
-      "retrieval_prompt": "sample.kt:compute"
+      "retrieval_prompt": "Music tempo synchronization",
+      "retrieval_case": "unrelated",
+      "expected_retrieval": false
     },
     {
       "id": "kotlin-formatting-only",
@@ -1536,7 +1548,9 @@
       "change_files": {
         "sample.rs": "fn compute() -> i32 {\n // behavior-preserving note\n 1\n}\n"
       },
-      "retrieval_prompt": "sample.rs:compute"
+      "retrieval_prompt": "Satellite orbit prediction",
+      "retrieval_case": "unrelated",
+      "expected_retrieval": false
     },
     {
       "id": "rust-formatting-only",
@@ -1647,12 +1661,19 @@
             "role": "primary",
             "locator": "service.py:compute"
           }
+        ],
+        "retrieval_terms": [
+          "audit trail",
+          "diagnostic breadcrumb"
         ]
       },
       "change_files": {
         "service.py": "def log_event():\n    return None\n\ndef compute():\n    log_event()\n    return 1\n"
       },
-      "retrieval_prompt": "service.py:compute"
+      "retrieval_prompt": "Audit trail compute recalculation",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": true,
+      "retrieval_partition": "calibration"
     },
     {
       "id": "python-conservative-defined-metric",
@@ -1676,12 +1697,19 @@
             "role": "primary",
             "locator": "service.py:compute"
           }
+        ],
+        "retrieval_terms": [
+          "telemetry counter",
+          "service metric"
         ]
       },
       "change_files": {
         "service.py": "def record_metric(value):\n    return None\n\ndef compute():\n    record_metric(1)\n    return 1\n"
       },
-      "retrieval_prompt": "service.py:compute"
+      "retrieval_prompt": "Telemetry counter compute calculation",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": true,
+      "retrieval_partition": "calibration"
     },
     {
       "id": "python-conservative-defined-tracing",
@@ -1705,12 +1733,19 @@
             "role": "primary",
             "locator": "service.py:compute"
           }
+        ],
+        "retrieval_terms": [
+          "distributed tracing",
+          "span instrumentation"
         ]
       },
       "change_files": {
         "service.py": "def trace_span():\n    return None\n\ndef compute():\n    trace_span()\n    return 1\n"
       },
-      "retrieval_prompt": "service.py:compute"
+      "retrieval_prompt": "Span instrumentation compute calculation",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": true,
+      "retrieval_partition": "calibration"
     },
     {
       "id": "python-conservative-temporary-variable",
@@ -1997,13 +2032,20 @@
             "role": "primary",
             "locator": "app.py:login"
           }
+        ],
+        "retrieval_terms": [
+          "authorization policy",
+          "access control"
         ]
       },
       "change_files": {
         "app.py": "from policy import allow_login\n\ndef login():\n    return allow_login()\n",
         "policy.py": "def allow_login():\n    return False\n"
       },
-      "retrieval_prompt": "app.py:login"
+      "retrieval_prompt": "Access control login policy",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": false,
+      "retrieval_partition": "calibration"
     },
     {
       "id": "incomplete-threshold-constant",
@@ -2061,13 +2103,21 @@
             "role": "primary",
             "locator": "app.py:login"
           }
+        ],
+        "retrieval_terms": [
+          "MFA",
+          "2FA",
+          "step-up authentication"
         ]
       },
       "change_files": {
         "app.py": "from pathlib import Path\n\ndef login():\n    return \"required: true\" in Path(\"settings.yaml\").read_text(encoding=\"utf-8\")\n",
         "settings.yaml": "mfa:\n  required: false\n"
       },
-      "retrieval_prompt": "app.py:login"
+      "retrieval_prompt": "2FA requirement repository settings",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": false,
+      "retrieval_partition": "calibration"
     },
     {
       "id": "incomplete-json-config",
@@ -2093,13 +2143,20 @@
             "role": "primary",
             "locator": "app.py:feature_enabled"
           }
+        ],
+        "retrieval_terms": [
+          "feature flag",
+          "kill switch"
         ]
       },
       "change_files": {
         "app.py": "import json\n\ndef feature_enabled():\n    return json.loads(open(\"feature.json\", encoding=\"utf-8\").read())[\"enabled\"]\n",
         "feature.json": "{\"enabled\": false}\n"
       },
-      "retrieval_prompt": "app.py:feature_enabled"
+      "retrieval_prompt": "Kill switch repository feature",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": false,
+      "retrieval_partition": "calibration"
     },
     {
       "id": "incomplete-toml-config",
@@ -2125,13 +2182,21 @@
             "role": "primary",
             "locator": "app.py:concurrency"
           }
+        ],
+        "retrieval_terms": [
+          "worker pool",
+          "execution pool",
+          "parallelism"
         ]
       },
       "change_files": {
         "app.py": "from pathlib import Path\n\ndef concurrency():\n    return int(Path(\"worker.toml\").read_text().split(\"=\")[1])\n",
         "worker.toml": "concurrency = 8\n"
       },
-      "retrieval_prompt": "app.py:concurrency"
+      "retrieval_prompt": "Execution pool worker concurrency",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": false,
+      "retrieval_partition": "calibration"
     },
     {
       "id": "incomplete-pricing-module",
@@ -2157,13 +2222,21 @@
             "role": "primary",
             "locator": "app.py:total"
           }
+        ],
+        "retrieval_terms": [
+          "billing rate",
+          "unit price",
+          "checkout pricing"
         ]
       },
       "change_files": {
         "app.py": "from pricing import rate\n\ndef total(value):\n    return value * rate()\n",
         "pricing.py": "def rate():\n    return 2\n"
       },
-      "retrieval_prompt": "app.py:total"
+      "retrieval_prompt": "Checkout billing total rate",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": false,
+      "retrieval_partition": "calibration"
     },
     {
       "id": "incomplete-permission-module",
@@ -2189,13 +2262,20 @@
             "role": "primary",
             "locator": "app.py:can_delete"
           }
+        ],
+        "retrieval_terms": [
+          "RBAC",
+          "delete permission"
         ]
       },
       "change_files": {
         "app.py": "from permissions import admin_required\n\ndef can_delete():\n    return admin_required()\n",
         "permissions.py": "def admin_required():\n    return False\n"
       },
-      "retrieval_prompt": "app.py:can_delete"
+      "retrieval_prompt": "RBAC administrators delete",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": false,
+      "retrieval_partition": "holdout"
     },
     {
       "id": "incomplete-schema-required",
@@ -2221,13 +2301,21 @@
             "role": "primary",
             "locator": "app.py:required_fields"
           }
+        ],
+        "retrieval_terms": [
+          "required field",
+          "validation schema",
+          "mandatory input"
         ]
       },
       "change_files": {
         "app.py": "import json\n\ndef required_fields():\n    return json.loads(open(\"schema.json\", encoding=\"utf-8\").read())[\"required\"]\n",
         "schema.json": "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",\"required\":[\"email\",\"name\"]}\n"
       },
-      "retrieval_prompt": "app.py:required_fields"
+      "retrieval_prompt": "Mandatory input email schema",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": false,
+      "retrieval_partition": "holdout"
     },
     {
       "id": "incomplete-locale-module",
@@ -2387,16 +2475,23 @@
               }
             ]
           }
+        ],
+        "retrieval_terms": [
+          "authorization gateway",
+          "access policy"
         ]
       },
       "change_files": {
         "auth.py": "from policy import policy\n\ndef login():\n    return policy()\n",
         "policy.py": "def policy():\n    return False\n"
       },
-      "retrieval_prompt": "auth.py:login",
+      "retrieval_prompt": "Authorization gateway login policy",
       "expected_stale_reasons": {
         "symbol:policy.py:policy": "changed via symbol:auth.py:login -> symbol:policy.py:policy"
-      }
+      },
+      "retrieval_case": "declared-term",
+      "expected_retrieval": false,
+      "retrieval_partition": "holdout"
     },
     {
       "id": "graph-two-hop-change",
@@ -2436,6 +2531,11 @@
               }
             ]
           }
+        ],
+        "retrieval_terms": [
+          "MFA",
+          "2FA",
+          "step-up authentication"
         ]
       },
       "change_files": {
@@ -2443,7 +2543,10 @@
         "policy.py": "from mfa import mfa\n\ndef policy():\n    return mfa()\n",
         "mfa.py": "def mfa():\n    return False\n"
       },
-      "retrieval_prompt": "auth.py:login"
+      "retrieval_prompt": "2FA step-up login policy",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": false,
+      "retrieval_partition": "holdout"
     },
     {
       "id": "graph-three-hop-change",
@@ -2531,13 +2634,20 @@
               }
             ]
           }
+        ],
+        "retrieval_terms": [
+          "feature flag",
+          "kill switch"
         ]
       },
       "change_files": {
         "app.py": "from pathlib import Path\n\ndef enabled():\n    return \"enabled: true\" in Path(\"settings.yaml\").read_text()\n",
         "settings.yaml": "feature:\n  enabled: false\n"
       },
-      "retrieval_prompt": "app.py:enabled"
+      "retrieval_prompt": "Kill switch repository feature",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": false,
+      "retrieval_partition": "holdout"
     },
     {
       "id": "graph-schema-change",
@@ -2652,13 +2762,20 @@
               }
             ]
           }
+        ],
+        "retrieval_terms": [
+          "authorization gateway",
+          "access policy"
         ]
       },
       "change_files": {
         "auth.py": "from policy import policy\n\ndef login():\n    return policy()\n",
         "policy.py": "# policy note\ndef policy():\n    return True\n"
       },
-      "retrieval_prompt": "auth.py:login"
+      "retrieval_prompt": "Authorization gateway login policy",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": true,
+      "retrieval_partition": "calibration"
     },
     {
       "id": "graph-two-hop-comment",
@@ -2698,6 +2815,11 @@
               }
             ]
           }
+        ],
+        "retrieval_terms": [
+          "MFA",
+          "2FA",
+          "step-up authentication"
         ]
       },
       "change_files": {
@@ -2705,7 +2827,10 @@
         "policy.py": "from mfa import mfa\n\ndef policy():\n    return mfa()\n",
         "mfa.py": "# mfa note\ndef mfa():\n    return True\n"
       },
-      "retrieval_prompt": "auth.py:login"
+      "retrieval_prompt": "2FA step-up login policy",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": true,
+      "retrieval_partition": "calibration"
     },
     {
       "id": "graph-three-hop-formatting",
@@ -2753,6 +2878,10 @@
               }
             ]
           }
+        ],
+        "retrieval_terms": [
+          "tenant isolation",
+          "workspace boundary"
         ]
       },
       "change_files": {
@@ -2761,7 +2890,10 @@
         "mfa.py": "from tenant import tenant\n\ndef mfa():\n    return tenant()\n",
         "tenant.py": "def tenant( ):\n  return True\n"
       },
-      "retrieval_prompt": "auth.py:login"
+      "retrieval_prompt": "Workspace boundary login policy",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": true,
+      "retrieval_partition": "holdout"
     },
     {
       "id": "graph-cycle-comment",
@@ -2796,13 +2928,20 @@
               }
             ]
           }
+        ],
+        "retrieval_terms": [
+          "dependency cycle",
+          "mutual recursion"
         ]
       },
       "change_files": {
         "left.py": "def left():\n    return True\n",
         "right.py": "# cycle note\ndef right():\n    return True\n"
       },
-      "retrieval_prompt": "left.py:left"
+      "retrieval_prompt": "Mutual recursion recorded cycle",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": true,
+      "retrieval_partition": "holdout"
     },
     {
       "id": "shape-primary-deletion",
@@ -2950,13 +3089,20 @@
             "role": "primary",
             "locator": "service.py:compute"
           }
+        ],
+        "retrieval_terms": [
+          "calculation contract",
+          "result invariant"
         ]
       },
       "change_files": {
         "service.py": "def compute():\n    return 1\n",
         "other.py": "def other():\n    return 2\n"
       },
-      "retrieval_prompt": "service.py:compute"
+      "retrieval_prompt": "Result invariant compute source edits",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": true,
+      "retrieval_partition": "holdout"
     },
     {
       "id": "shape-test-only-edit",
@@ -2982,13 +3128,20 @@
             "role": "primary",
             "locator": "service.py:compute"
           }
+        ],
+        "retrieval_terms": [
+          "production invariant",
+          "test fixture"
         ]
       },
       "change_files": {
         "service.py": "def compute():\n    return 1\n",
         "test_service.py": "def test_compute():\n    assert 1 == 1\n"
       },
-      "retrieval_prompt": "service.py:compute"
+      "retrieval_prompt": "Production invariant compute fixture",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": true,
+      "retrieval_partition": "holdout"
     },
     {
       "id": "shape-documentation-edit",
@@ -3014,13 +3167,20 @@
             "role": "primary",
             "locator": "service.py:compute"
           }
+        ],
+        "retrieval_terms": [
+          "runtime behavior",
+          "documentation only"
         ]
       },
       "change_files": {
         "service.py": "def compute():\n    return 1\n",
         "README.md": "new docs\n"
       },
-      "retrieval_prompt": "service.py:compute"
+      "retrieval_prompt": "Runtime behavior compute prose",
+      "retrieval_case": "declared-term",
+      "expected_retrieval": true,
+      "retrieval_partition": "holdout"
     },
     {
       "id": "shape-unrelated-config-edit",
@@ -3052,7 +3212,9 @@
         "service.py": "def compute():\n    return 1\n",
         "ui.yaml": "theme: dark\n"
       },
-      "retrieval_prompt": "service.py:compute"
+      "retrieval_prompt": "Email campaign segmentation",
+      "retrieval_case": "unrelated",
+      "expected_retrieval": false
     },
     {
       "id": "shape-added-file",
@@ -3082,7 +3244,9 @@
         "service.py": "def compute():\n    return 1\n",
         "new_module.py": "def new_feature():\n    return True\n"
       },
-      "retrieval_prompt": "service.py:compute"
+      "retrieval_prompt": "Weather forecast ingestion",
+      "retrieval_case": "unrelated",
+      "expected_retrieval": false
     },
     {
       "id": "shape-multiple-unrelated-edits",
@@ -3117,7 +3281,80 @@
         "a.py": "VALUE = 2\n",
         "b.yaml": "value: 2\n"
       },
-      "retrieval_prompt": "service.py:compute"
+      "retrieval_prompt": "Warehouse inventory forecasting",
+      "retrieval_case": "unrelated",
+      "expected_retrieval": false
     }
-  ]
+  ],
+  "retrieval_distractors": {
+    "files": {
+      "retrieval_context.py": "def requires_verified_email():\n    return True\n\ndef retention_days():\n    return 90\n\ndef reporting_currency():\n    return \"USD\"\n\ndef refresh_seconds():\n    return 30"
+    },
+    "captures": [
+      {
+        "kind": "behavior",
+        "claim": "Password recovery requires a verified email address.",
+        "durability_reason": "Recovery flows depend on verified ownership.",
+        "retrieval_terms": [
+          "2FA reset",
+          "account recovery"
+        ],
+        "evidence": [
+          {
+            "type": "symbol",
+            "role": "primary",
+            "locator": "retrieval_context.py:requires_verified_email"
+          }
+        ]
+      },
+      {
+        "kind": "behavior",
+        "claim": "Operational records are retained for ninety days.",
+        "durability_reason": "Retention controls storage and compliance jobs.",
+        "retrieval_terms": [
+          "audit trail",
+          "telemetry retention"
+        ],
+        "evidence": [
+          {
+            "type": "symbol",
+            "role": "primary",
+            "locator": "retrieval_context.py:retention_days"
+          }
+        ]
+      },
+      {
+        "kind": "behavior",
+        "claim": "The reporting currency is USD.",
+        "durability_reason": "Reports depend on the configured currency.",
+        "retrieval_terms": [
+          "billing rate",
+          "checkout reporting"
+        ],
+        "evidence": [
+          {
+            "type": "symbol",
+            "role": "primary",
+            "locator": "retrieval_context.py:reporting_currency"
+          }
+        ]
+      },
+      {
+        "kind": "behavior",
+        "claim": "The operations dashboard refreshes every thirty seconds.",
+        "durability_reason": "Operators depend on the dashboard refresh interval.",
+        "retrieval_terms": [
+          "execution pool",
+          "parallelism metric"
+        ],
+        "evidence": [
+          {
+            "type": "symbol",
+            "role": "primary",
+            "locator": "retrieval_context.py:refresh_seconds"
+          }
+        ]
+      }
+    ]
+  }
 }

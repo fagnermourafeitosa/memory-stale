@@ -67,6 +67,8 @@ def test_installation_creates_default_durable_memory_configuration(tmp_path: Pat
     assert configuration.read_text(encoding="utf-8") == (
         "# Maximum number of tokens of active memory injected into task context.\n"
         "context_budget = 1500\n\n"
+        "# Maximum number of highest-ranked active memories injected per task.\n"
+        "top_k = 5\n\n"
         "# Generate the optional HTML health report after each completed turn.\n"
         "auto_report = false\n\n"
         "# Repository-relative path used when an HTML report is requested.\n"

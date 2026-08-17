@@ -8,6 +8,7 @@ from evaluator.repository_lifecycle import (
     assert_repository_baseline,
     evaluate_repository_corpus,
     load_repository_corpus,
+    repository_baseline_document,
 )
 
 
@@ -16,6 +17,20 @@ def test_repository_trials_observe_real_lifecycle_availability(tmp_path: Path) -
     corpus = tmp_path / "repository-corpus.yaml"
     corpus.write_text(
         """version: 1
+retrieval_distractors:
+  files:
+    retrieval_context.py: |-
+      def reporting_currency():
+          return "USD"
+  captures:
+    - kind: behavior
+      claim: The reporting currency is USD.
+      durability_reason: Reports depend on the configured currency.
+      retrieval_terms: [arithmetic contract]
+      evidence:
+        - type: symbol
+          role: primary
+          locator: retrieval_context.py:reporting_currency
 trials:
   - id: python-literal-change
     family: direct-local
@@ -60,6 +75,7 @@ trials:
       kind: behavior
       claim: Compute returns two.
       durability_reason: Callers rely on the result.
+      retrieval_terms: [arithmetic contract]
       evidence:
         - type: symbol
           role: primary
@@ -69,7 +85,9 @@ trials:
         # implementation comment
         def compute():
             return 2
-    retrieval_prompt: service.py:compute
+    retrieval_case: declared-term
+    expected_retrieval: true
+    retrieval_prompt: arithmetic contract compute
 """,
         encoding="utf-8",
     )
@@ -90,11 +108,44 @@ trials:
         true_active=1,
     )
     assert [
-        (trial.identifier, trial.lifecycle_status, trial.retrieval_status)
+        (
+            trial.identifier,
+            trial.lifecycle_status,
+            trial.retrieval_case,
+            trial.expected_retrieval,
+            trial.target_retrieved,
+            trial.context_returned,
+            trial.returned_claim_count,
+            trial.term_baseline_target_retrieved,
+            trial.term_baseline_context_returned,
+            trial.term_baseline_returned_claim_count,
+        )
         for trial in result.trials
     ] == [
-        ("python-comment-only", "active", "active"),
-        ("python-literal-change", "stale", "stale"),
+        (
+            "python-comment-only",
+            "active",
+            "declared-term",
+            True,
+            True,
+            True,
+            2,
+            True,
+            True,
+            2,
+        ),
+        (
+            "python-literal-change",
+            "stale",
+            "standard",
+            False,
+            False,
+            True,
+            1,
+            None,
+            None,
+            None,
+        ),
     ]
     assert result.metrics.stale_recall.count == 1
     assert result.metrics.stale_recall.denominator == 1
@@ -105,6 +156,30 @@ trials:
         (0.0, 0.7935), abs=0.0001
     )
     assert result.metrics.overall_accuracy.rate == 1.0
+    assert result.retrieval_metrics.recall.rate == 1.0
+    assert result.retrieval_metrics.exclusion_rate.rate == 1.0
+    assert result.retrieval_metrics.overall_accuracy.rate == 1.0
+    assert result.retrieval_metrics.without_terms_overall_accuracy.rate == 1.0
+    assert result.retrieval_metrics.precision.rate == 0.5
+    assert result.retrieval_metrics.term_baseline_recall.rate == 1.0
+    assert result.retrieval_metrics.term_assisted_recall.rate == 1.0
+    assert result.retrieval_metrics.term_baseline_precision.rate == 0.5
+    assert result.retrieval_metrics.term_assisted_precision.rate == 0.5
+    assert result.retrieval_metrics.term_net_gain == 0
+    assert result.retrieval_partitions == ()
+    document = repository_baseline_document(result)
+    assert document["version"] == 3
+    assert document["retrieval_partitions"] == []
+    retrieval_metrics = document["retrieval_metrics"]
+    assert isinstance(retrieval_metrics, dict)
+    precision = retrieval_metrics["precision"]
+    assert isinstance(precision, dict)
+    assert precision["rate"] == 0.5
+    trials = document["trials"]
+    assert isinstance(trials, list)
+    first_trial = trials[0]
+    assert isinstance(first_trial, dict)
+    assert first_trial["returned_claim_count"] == 2
     assert [
         (family.family, family.sample_count, family.matrix, family.accuracy.rate)
         for family in result.families
@@ -213,6 +288,72 @@ def test_repository_families_cannot_repeat_one_semantic_case_as_independent_brea
         load_repository_corpus(corpus)
 
 
+def test_checked_in_repository_corpus_balances_retrieval_scenarios() -> None:
+    root = Path(__file__).parents[2]
+    corpus = root / "evaluator" / "corpus" / "repository-lifecycle-corpus.yaml"
+
+    version, trials = load_repository_corpus(corpus)
+
+    declared_terms = tuple(trial for trial in trials if trial.retrieval_case == "declared-term")
+    unrelated = tuple(trial for trial in trials if trial.retrieval_case == "unrelated")
+    assert version == 3
+    assert len(trials) == 100
+    assert len(declared_terms) == 20
+    assert sum(trial.expected_retrieval for trial in declared_terms) == 10
+    assert sum(not trial.expected_retrieval for trial in declared_terms) == 10
+    assert all("retrieval_terms" in trial.capture for trial in declared_terms)
+    assert {
+        trial.retrieval_partition
+        for trial in declared_terms
+        if trial.retrieval_partition is not None
+    } == {"calibration", "holdout"}
+    assert sum(trial.retrieval_partition == "calibration" for trial in declared_terms) == 10
+    assert sum(trial.retrieval_partition == "holdout" for trial in declared_terms) == 10
+    assert (
+        sum(
+            trial.retrieval_partition == "calibration" and trial.expected_retrieval
+            for trial in declared_terms
+        )
+        == 5
+    )
+    assert (
+        sum(
+            trial.retrieval_partition == "holdout" and trial.expected_retrieval
+            for trial in declared_terms
+        )
+        == 5
+    )
+    assert all(len(trial.distractor_captures) == 4 for trial in declared_terms)
+    assert all(set(trial.distractor_files) == {"retrieval_context.py"} for trial in declared_terms)
+    assert {trial.identifier for trial in declared_terms if trial.expected_retrieval} == {
+        "python-conservative-defined-logging",
+        "python-conservative-defined-metric",
+        "python-conservative-defined-tracing",
+        "graph-one-hop-comment",
+        "graph-two-hop-comment",
+        "graph-three-hop-formatting",
+        "graph-cycle-comment",
+        "shape-unrelated-source-edit",
+        "shape-test-only-edit",
+        "shape-documentation-edit",
+    }
+    assert {trial.identifier for trial in declared_terms if not trial.expected_retrieval} == {
+        "incomplete-policy-function",
+        "incomplete-yaml-config",
+        "incomplete-json-config",
+        "incomplete-toml-config",
+        "incomplete-pricing-module",
+        "incomplete-permission-module",
+        "incomplete-schema-required",
+        "graph-one-hop-change",
+        "graph-two-hop-change",
+        "graph-config-change",
+    }
+    assert len(unrelated) == 10
+    assert all(trial.label == "preserved" for trial in unrelated)
+    assert all(not trial.expected_retrieval for trial in unrelated)
+
+
 @pytest.mark.repository_evaluation
 def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path) -> None:
     root = Path(__file__).parents[2]
@@ -267,7 +408,50 @@ def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path
         ("repository-shape", 10, ConfusionMatrix(4, 0, 0, 6), 1.0),
     ]
     assert result.macro_family_accuracy == pytest.approx(13 / 18)
+    assert result.retrieval_metrics.recall.count == 32
+    assert result.retrieval_metrics.recall.denominator == 40
+    assert result.retrieval_metrics.recall.rate == 0.8
+    assert result.retrieval_metrics.exclusion_rate.count == 44
+    assert result.retrieval_metrics.exclusion_rate.denominator == 60
+    assert result.retrieval_metrics.exclusion_rate.rate == 44 / 60
+    assert result.retrieval_metrics.precision.count == 7
+    assert result.retrieval_metrics.precision.denominator == 35
+    assert result.retrieval_metrics.precision.rate == 7 / 35
+    assert result.retrieval_metrics.overall_accuracy.count == 76
+    assert result.retrieval_metrics.overall_accuracy.denominator == 100
+    assert result.retrieval_metrics.overall_accuracy.rate == 0.76
+    assert result.retrieval_metrics.without_terms_overall_accuracy.count == 76
+    assert result.retrieval_metrics.without_terms_overall_accuracy.denominator == 100
+    assert result.retrieval_metrics.without_terms_overall_accuracy.rate == 0.76
+    assert result.retrieval_metrics.term_baseline_recall.count == 7
+    assert result.retrieval_metrics.term_baseline_recall.denominator == 10
+    assert result.retrieval_metrics.term_assisted_recall.count == 7
+    assert result.retrieval_metrics.term_assisted_recall.denominator == 10
+    assert result.retrieval_metrics.term_baseline_exclusion_rate.count == 1
+    assert result.retrieval_metrics.term_baseline_exclusion_rate.denominator == 10
+    assert result.retrieval_metrics.term_assisted_exclusion_rate.count == 1
+    assert result.retrieval_metrics.term_assisted_exclusion_rate.denominator == 10
+    assert result.retrieval_metrics.term_baseline_precision.count == 7
+    assert result.retrieval_metrics.term_baseline_precision.denominator == 34
+    assert result.retrieval_metrics.term_assisted_precision.count == 7
+    assert result.retrieval_metrics.term_assisted_precision.denominator == 35
+    assert result.retrieval_metrics.term_net_gain == 0
+    assert [
+        (
+            partition.partition,
+            partition.sample_count,
+            partition.metrics.overall_accuracy.rate,
+            partition.metrics.without_terms_overall_accuracy.rate,
+            partition.metrics.recall.rate,
+            partition.metrics.exclusion_rate.rate,
+            partition.metrics.precision.rate,
+        )
+        for partition in result.retrieval_partitions
+    ] == [
+        ("calibration", 10, 0.2, 0.2, 0.4, 0.0, 2 / 17),
+        ("holdout", 10, 0.6, 0.6, 1.0, 0.2, 5 / 18),
+    ]
     assert_repository_baseline(
         result,
-        evaluator_root / "results" / "2026-08-16-repository-lifecycle-evaluation.yaml",
+        evaluator_root / "results" / "2026-08-17-repository-lifecycle-evaluation.yaml",
     )

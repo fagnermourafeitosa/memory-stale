@@ -12,6 +12,7 @@ from typing import TextIO, cast
 from memory_stale.dream import dream
 from memory_stale.evidence import EvidenceError, EvidenceGraph, parse_graph, resolve_item
 from memory_stale.hook_runtime import _atomic_json_write, _repository_root, _snapshot
+from memory_stale.lifecycle import normalize_retrieval_terms
 from memory_stale.memory_store import MemoryStore
 from memory_stale.project_paths import evidence_path, is_ignored_project_path
 from memory_stale.reporting import write_report
@@ -69,6 +70,7 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         raise ValueError(f"kind must be one of: {', '.join(sorted(KINDS))}")
     claim = _string(arguments, "claim")
     durability_reason = _string(arguments, "durability_reason")
+    retrieval_terms = normalize_retrieval_terms(arguments.get("retrieval_terms"))
     graph = parse_graph(arguments.get("evidence"))
     if any(
         is_ignored_project_path(evidence_path(item_type, locator))
@@ -116,18 +118,25 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         "supported_by": list(graph.supported_by),
         "dependencies": [{"from": edge.source, "to": edge.target} for edge in graph.dependencies],
         "durability_reason": durability_reason,
+        "retrieval_terms": list(retrieval_terms),
         "schema_version": 5,
         "observed_commit": observed_commit,
         "observed_at": datetime.now(timezone.utc).isoformat(),
     }
     captures = cast(list[object], task.setdefault("captures", []))
-    key = (kind, " ".join(claim.casefold().split()), _graph_identity(graph))
+    key = (
+        kind,
+        " ".join(claim.casefold().split()),
+        _graph_identity(graph),
+        retrieval_terms,
+    )
     for existing in captures:
         if isinstance(existing, dict):
             existing_key = (
                 existing.get("kind"),
                 " ".join(str(existing.get("claim", "")).casefold().split()),
                 _capture_graph_key(existing),
+                normalize_retrieval_terms(existing.get("retrieval_terms")),
             )
             if existing_key == key:
                 return _tool_result("Capture already staged for this turn.")
@@ -176,8 +185,9 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
                     "description": (
                         "Required once per coherent supported-code change. Stage a claim "
                         "describing what the resulting code does or guarantees, anchored to "
-                        "typed evidence. Active means recorded evidence is unchanged; stale "
-                        "requires revalidation."
+                        "typed evidence. Optional retrieval_terms are host-declared lexical "
+                        "vocabulary, not evidence. Active means recorded evidence is unchanged; "
+                        "stale requires revalidation."
                     ),
                     "inputSchema": {
                         "type": "object",
@@ -206,6 +216,11 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
                                 },
                             },
                             "durability_reason": {"type": "string"},
+                            "retrieval_terms": {
+                                "type": "array",
+                                "maxItems": 8,
+                                "items": {"type": "string", "minLength": 1, "maxLength": 80},
+                            },
                         },
                         "additionalProperties": False,
                     },

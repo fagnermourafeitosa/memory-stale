@@ -38,6 +38,10 @@ diagnostic and treat the memory result as incomplete. Never satisfy the
 requirement with a file path, symbol locator, task-history statement, or an
 `Automatic change record` claim.
 
+The hook injects at most the project's configured `top_k` active memories
+(five when omitted). It ranks eligible memories first and then applies the
+token budget; do not assume every lexical match is injected.
+
 When the user invokes `/memory-stale dream`, call the local `memory.dream` MCP
 tool. Review only the stale or broken items it reports. Use `memory.capture` for
 new durable facts supported by code; never rewrite a healthy active memory
@@ -63,6 +67,25 @@ supporting evidence. A string dependency reference may target an already
 declared `type:locator` node when a cycle must be represented. Do not infer
 relationships from imports or call sites. Explain the deterministic invalidation
 path returned by Dream or the report when a transitive node becomes stale.
+
+Optionally provide up to eight `retrieval_terms` with a semantic capture when
+the claim and locators do not contain durable product vocabulary a later task
+may use. These are short, literal terms chosen by you while authoring the claim,
+not entities inferred by Memory Stale. For example:
+
+```json
+{
+  "claim": "Login verifies a second factor before granting access.",
+  "retrieval_terms": ["MFA", "second-factor authentication"]
+}
+```
+
+Do not use broad keyword lists, infer synonyms, or treat terms as evidence.
+Prefer vocabulary specific enough not to describe unrelated memories: every
+literal match is only supplementary. A later prompt must also match the claim
+or an evidence locator; `MFA login` can use an `MFA` term, while `MFA` alone
+cannot inject the memory. Evidence still decides whether the memory is active
+or stale.
 
 When the user asks for the memory health report, call `memory.report` and return
 the generated local path. Do not generate the report on ordinary turns.

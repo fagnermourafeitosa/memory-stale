@@ -120,9 +120,31 @@ On every task, the `UserPromptSubmit` hook considers only records whose evidence
 is still valid. It retrieves relevant active claims deterministically: exact
 paths or symbols receive a `100.0` boost, and remaining matches use
 field-weighted lexical BM25 ranking. Claims have weight `1.0`, durability reasons
-have weight `0.5`, and evidence locators have weight `2.0`. Locator paths and
-symbols are split into searchable structural components, including path
-segments, file extensions, snake case, kebab case, and camel case.
+have weight `0.5`, host-declared retrieval terms have weight `0.75`, and
+evidence locators have weight `2.0`. Locator paths and symbols are split into
+searchable structural components, including path segments, file extensions,
+snake case, kebab case, and camel case.
+
+When a later task may add product vocabulary to a claim or code reference, the
+host may supply up to eight `retrieval_terms` during capture. For example, a
+claim about an extra login factor can declare `MFA` or `second-factor
+authentication`. Codex or Claude Code chooses these opaque terms while already
+authoring the claim; the local runtime only trims, bounds, stores, and matches
+them lexically. It does not extract entities, expand synonyms, use embeddings,
+or call another model. Terms are not evidence and never affect whether a memory
+is `active` or `stale`. A term alone is never enough to inject context: the
+same prompt must also match the claim or an evidence locator. For example,
+`MFA` alone does not retrieve a claim about a login flow, while `MFA login` can.
+
+Exact locators bypass lexical cutoffs. Other candidates need a combined BM25
+score of at least `0.25` and must be within 50% of the strongest candidate for
+the prompt. These fixed gates keep terms as supplementary ranking vocabulary;
+they are not a host assertion accepted as retrieval truth.
+
+After that ranking, Memory Stale retains only the first `top_k` candidates in
+deterministic score/ID order (five by default), then applies the token budget.
+This makes `top_k` a context-selection limit: a larger `context_budget` cannot
+cause lower-ranked candidates outside the selected prefix to be injected.
 
 ```mermaid
 flowchart TD
@@ -172,12 +194,15 @@ Alongside them, Codex submits the memory content used for conceptual retrieval:
 ```text
 Failed jobs retry at most three times before surfacing the final failure.
 Evidence: src/jobs.py:retry, tests/test_jobs.py:test_retry_limit
+Retrieval terms: retry limit, background job retries
 ```
 
 The claim supplies what later tasks should remember and participates in lexical
-retrieval. Provenance supplies exact code matching and determines whether the
-claim remains `active`. If semantic capture does not cover a changed location,
-`Stop` preserves its automatic provenance and reports the missing coverage.
+retrieval. Optional host-declared retrieval terms add bounded task vocabulary
+with less lexical weight than the claim. Provenance supplies exact code matching
+and determines whether the claim remains `active`. If semantic capture does not
+cover a changed location, `Stop` preserves its automatic provenance and reports
+the missing coverage.
 
 ## Daily use
 
@@ -215,6 +240,9 @@ The installer creates `config.toml` with these editable defaults:
 ```toml
 # Maximum number of tokens of active memory injected into task context.
 context_budget = 1500
+
+# Maximum number of highest-ranked active memories injected per task.
+top_k = 5
 
 # Generate the optional HTML health report after each completed turn.
 auto_report = false
@@ -255,7 +283,10 @@ verification events, and mapped lifecycle status. The `memory_stale` extension
 is required for current documents and records schema version, claim and
 revision IDs, exact evidence fingerprints, evidence relationships, deterministic
 freshness state, invalidation reasons, and the observed Git revision. `sources`
-and `memory_stale.evidence` describe the same evidence set.
+and `memory_stale.evidence` describe the same evidence set. An optional
+`memory_stale.retrieval_terms` collection records the host-declared vocabulary
+used by lexical retrieval. Changing those terms creates a new immutable revision
+but does not alter evidence validation.
 
 ### Example: an active memory
 
@@ -293,9 +324,10 @@ and schema nodes. Unsupported languages intentionally have no fallback.
 ## Design boundaries
 
 - **Codex or Claude Code supplies meaning.** The host decides whether a fact
-  is durable and states the claim.
+  is durable, states the claim, and may declare a few retrieval terms.
 - **The local core supplies proof of freshness.** It resolves declared evidence,
-  fingerprints it, retrieves active records, and manages lifecycle state.
+  fingerprints it, retrieves active records, matches declared terms literally,
+  and manages lifecycle state.
 - **Hooks and MCP are adapters.** Codex and Claude payload adapters normalize
   into one deterministic Python lifecycle and share one MCP server.
 - **Failures do not block coding.** Hook failures return actionable, non-blocking
@@ -330,6 +362,39 @@ policy, schema, constants, or dependencies were not declared as evidence. All
 transformations. Direct local changes, declared evidence graphs, preserving
 edits, and repository-shape cases matched their labels in this corpus.
 
+The same 100 cases now also contain 20 domain-oriented declared-term scenarios,
+10 unrelated negative prompts, and four source-backed competing memories in
+each declared-term repository. The declared-term scenarios deliberately include
+existing false-stale and missed-change cases; they were not selected only from
+outcomes the implementation already handles correctly. All 20 are evaluated
+again with terms removed while claims, prompts, source changes, and distractors
+remain fixed.
+
+| Retrieval metric | Result | Descriptive Wilson 95% interval |
+| --- | ---: | ---: |
+| Accuracy with terms | 76/100 (76.0%) | 66.8–83.3% |
+| Accuracy without terms, counterfactual | 76/100 (76.0%) | 66.8–83.3% |
+| Expected-target recall with terms | 32/40 (80.0%) | 65.2–89.5% |
+| No-context/target exclusion with terms | 44/60 (73.3%) | 61.0–82.9% |
+| Declared-term target recall, without → with | 7/10 → 7/10 | — |
+| Declared-term no-context exclusion, without → with | 1/10 → 1/10 | — |
+| Declared-term micro precision, without → with | 7/34 (20.6%) → 7/35 (20.0%) | — |
+
+The controlled net change is **0 correctly handled cases out of 100**. The
+term gate prevents an alias by itself from making a memory eligible, so terms
+are now a ranking boost over a claim or locator corroboration. Under the
+default `top_k = 5` selection limit, every candidate that survived the lexical
+cutoffs remained inside the selected prefix; the boost therefore changes no
+target outcome in this corpus. The 1,500-token context budget is applied only
+after that prefix is chosen.
+
+The 20 declared-term cases are pre-split before measurement: five expected
+inclusions and five expected exclusions form calibration, and the same balance
+forms holdout. Calibration is 2/10 (20.0%) with and without terms; holdout is
+6/10 (60.0%) with and without terms. The holdout's target recall is 5/5 and its
+no-context exclusion is 1/5, showing that the remaining errors are lifecycle
+misses and unrelated active context, not a post-hoc threshold selection.
+
 ### Methodology and reproducibility
 
 Each case starts from an independently written semantic label and rationale. The
@@ -341,15 +406,20 @@ and cannot disappear into the semantic confusion matrix.
 
 The inputs and exact per-case outcomes are reviewable in the
 [versioned corpus](evaluator/corpus/repository-lifecycle-corpus.yaml) and
-[dated result](evaluator/results/2026-08-16-repository-lifecycle-evaluation.yaml).
-The [evaluation contract](specs/21-quality-evaluation-100-samples.md) documents
-sample design and interpretation, while the
+[dated result](evaluator/results/2026-08-17-repository-lifecycle-evaluation.yaml).
+The [base evaluation contract](specs/21-quality-evaluation-100-samples.md) and
+[declared-term evaluation contract](specs/37-declared-retrieval-terms.md)
+document sample design and interpretation, while the
 [end-to-end test](evaluator/tests/test_repository_lifecycle.py) reruns the corpus
 and requires an exact baseline match.
 
-On 2026-08-16, the field-weighted locator retrieval implementation was run
-through all 100 cases. It reproduced the matrix and every per-case lifecycle
-and retrieval outcome above exactly, with no operational failures.
+On 2026-08-17, the declared-term implementation was run through all 100 cases
+plus the 20 held-constant counterfactual trials. It reproduced the lifecycle
+matrix above and completed with no operational failures. After adding the
+corroboration gate and fixed score cutoffs, retrieval accuracy was 76% both
+with terms and with terms removed; the detailed calibration, holdout, recall,
+exclusion, precision, distractor, and per-case outcomes are stored in the dated
+result.
 
 On 2026-08-15, commit `f6fe73d` was checked by repeating all 100 cases ten times:
 1,000/1,000 lifecycle executions matched the baseline, with no operational
@@ -374,6 +444,10 @@ accuracy across arbitrary repositories.
 
 - Retrieval is lexical and structural; conceptually related memories may not be
   retrieved when the prompt shares neither relevant terms nor code references.
+- Declared terms require a claim or locator corroboration and only affect
+  ranking. They cannot recover an alias-only prompt. Their ranking effect is
+  observable only when more eligible candidates exist than the selected
+  `top_k` prefix.
 - Stale records are excluded from retrieval, not automatically rewritten.
   Revalidate them with Dream or create a new capture.
 - Overloads, anonymous functions, generated code, macros, and partial classes

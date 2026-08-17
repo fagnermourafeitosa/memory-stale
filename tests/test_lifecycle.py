@@ -111,6 +111,35 @@ def test_lifecycle_is_idempotent_and_preserves_stale_history(tmp_path: Path) -> 
     assert MemoryStore(tmp_path).load_all() == []
 
 
+def test_lifecycle_preserves_retrieval_vocabulary_as_a_distinct_revision() -> None:
+    capture = {
+        "kind": "behavior",
+        "claim": "Login verifies a second factor before granting access.",
+        "durability_reason": "Authentication must preserve the extra verification step.",
+        "evidence": [
+            {
+                "type": "symbol",
+                "role": "primary",
+                "locator": "auth.py:login",
+                "fingerprint": "signature",
+            }
+        ],
+        "retrieval_terms": ["MFA"],
+    }
+
+    first = reconcile([], [capture], {})
+    revised = reconcile(
+        first,
+        [{**capture, "retrieval_terms": ["two-factor login"]}],
+        {"symbol:auth.py:login": RefEvidence("signature")},
+    )
+
+    assert len(revised) == 2
+    assert {memory.status for memory in revised} == {"active", "superseded"}
+    assert len({memory.claim_id for memory in revised}) == 1
+    assert {memory.retrieval_terms for memory in revised} == {("MFA",), ("two-factor login",)}
+
+
 def test_legacy_markdown_migrates_to_one_versioned_revision_without_losing_history(
     tmp_path: Path,
 ) -> None:

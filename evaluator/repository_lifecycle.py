@@ -7,7 +7,7 @@ import os
 import shutil
 import subprocess
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import sqrt
 from pathlib import Path, PurePosixPath
 from typing import cast
@@ -32,6 +32,11 @@ class RepositoryTrial:
     capture_files: dict[str, str]
     capture: dict[str, object]
     change_files: dict[str, str]
+    distractor_files: dict[str, str]
+    distractor_captures: tuple[dict[str, object], ...]
+    retrieval_case: str
+    retrieval_partition: str | None
+    expected_retrieval: bool
     retrieval_prompt: str
     expected_stale_reasons: dict[str, str] | None
 
@@ -53,7 +58,15 @@ class TrialOutcome:
     family: str
     label: str
     lifecycle_status: str
-    retrieval_status: str
+    retrieval_case: str
+    retrieval_partition: str | None
+    expected_retrieval: bool
+    target_retrieved: bool
+    context_returned: bool
+    returned_claim_count: int
+    term_baseline_target_retrieved: bool | None
+    term_baseline_context_returned: bool | None
+    term_baseline_returned_claim_count: int | None
 
 
 @dataclass(frozen=True)
@@ -89,6 +102,24 @@ class EvaluationMetrics:
 
 
 @dataclass(frozen=True)
+class RetrievalEvaluationMetrics:
+    """Availability rates, kept separate from lifecycle freshness rates."""
+
+    recall: RateMetric
+    exclusion_rate: RateMetric
+    precision: RateMetric
+    overall_accuracy: RateMetric
+    without_terms_overall_accuracy: RateMetric
+    term_baseline_recall: RateMetric
+    term_assisted_recall: RateMetric
+    term_baseline_exclusion_rate: RateMetric
+    term_assisted_exclusion_rate: RateMetric
+    term_baseline_precision: RateMetric
+    term_assisted_precision: RateMetric
+    term_net_gain: int
+
+
+@dataclass(frozen=True)
 class FamilyEvaluation:
     """One family's classifiable observations and unweighted accuracy input."""
 
@@ -96,6 +127,15 @@ class FamilyEvaluation:
     sample_count: int
     matrix: ConfusionMatrix
     accuracy: RateMetric
+
+
+@dataclass(frozen=True)
+class RetrievalPartitionEvaluation:
+    """Fixed declared-term split used to report calibration and holdout outcomes."""
+
+    partition: str
+    sample_count: int
+    metrics: RetrievalEvaluationMetrics
 
 
 @dataclass(frozen=True)
@@ -108,6 +148,8 @@ class RepositoryEvaluationResult:
     trials: tuple[TrialOutcome, ...]
     matrix: ConfusionMatrix
     metrics: EvaluationMetrics
+    retrieval_metrics: RetrievalEvaluationMetrics
+    retrieval_partitions: tuple[RetrievalPartitionEvaluation, ...]
     families: tuple[FamilyEvaluation, ...]
     macro_family_accuracy: float | None
     operational_outcomes: tuple[OperationalOutcome, ...]
@@ -116,13 +158,16 @@ class RepositoryEvaluationResult:
 def load_repository_corpus(path: Path) -> tuple[int, tuple[RepositoryTrial, ...]]:
     """Load a versioned repository corpus without inferring semantic labels."""
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(loaded, dict) or loaded.get("version") not in {1, 2}:
-        raise RepositoryCorpusError("repository corpus version must be 1 or 2")
+    if not isinstance(loaded, dict) or loaded.get("version") not in {1, 2, 3}:
+        raise RepositoryCorpusError("repository corpus version must be 1, 2, or 3")
     version = cast(int, loaded["version"])
     raw_trials = loaded.get("trials")
     if not isinstance(raw_trials, list) or not raw_trials:
         raise RepositoryCorpusError("repository corpus trials must be a non-empty list")
     trials: list[RepositoryTrial] = []
+    distractor_files, distractor_captures = _retrieval_distractors(
+        loaded.get("retrieval_distractors")
+    )
     identifiers: set[str] = set()
     for raw_trial in raw_trials:
         if not isinstance(raw_trial, dict):
@@ -135,6 +180,37 @@ def load_repository_corpus(path: Path) -> tuple[int, tuple[RepositoryTrial, ...]
         if label not in {"changed", "preserved"}:
             raise RepositoryCorpusError(f"{identifier}: label must be changed or preserved")
         capture = _capture_definition(raw_trial.get("capture"), identifier)
+        retrieval_case = raw_trial.get("retrieval_case", "standard")
+        if retrieval_case not in {"standard", "declared-term", "unrelated"}:
+            raise RepositoryCorpusError(
+                f"{identifier}: retrieval_case must be standard, declared-term, or unrelated"
+            )
+        expected_retrieval = raw_trial.get("expected_retrieval", label == "preserved")
+        if not isinstance(expected_retrieval, bool):
+            raise RepositoryCorpusError(f"{identifier}: expected_retrieval must be a boolean")
+        if retrieval_case == "declared-term" and "retrieval_terms" not in capture:
+            raise RepositoryCorpusError(
+                f"{identifier}: declared-term retrieval cases require retrieval_terms"
+            )
+        raw_partition = raw_trial.get("retrieval_partition")
+        if retrieval_case == "declared-term":
+            if version >= 3 and raw_partition not in {"calibration", "holdout"}:
+                raise RepositoryCorpusError(
+                    f"{identifier}: declared-term retrieval cases require a calibration or holdout partition"
+                )
+        elif raw_partition is not None:
+            raise RepositoryCorpusError(
+                f"{identifier}: retrieval_partition is only valid for declared-term cases"
+            )
+        trial_sources = (
+            set(cast(dict[object, object], raw_trial.get("initial_files", {})))
+            | set(cast(dict[object, object], raw_trial.get("capture_files", {})))
+            | set(cast(dict[object, object], raw_trial.get("change_files", {})))
+        )
+        if retrieval_case == "declared-term" and trial_sources & set(distractor_files):
+            raise RepositoryCorpusError(
+                f"{identifier}: retrieval distractor files conflict with trial files"
+            )
         trials.append(
             RepositoryTrial(
                 identifier=identifier,
@@ -146,6 +222,13 @@ def load_repository_corpus(path: Path) -> tuple[int, tuple[RepositoryTrial, ...]
                 capture_files=_sources(raw_trial.get("capture_files"), identifier, "capture_files"),
                 capture=capture,
                 change_files=_sources(raw_trial.get("change_files"), identifier, "change_files"),
+                distractor_files=(distractor_files if retrieval_case == "declared-term" else {}),
+                distractor_captures=(
+                    distractor_captures if retrieval_case == "declared-term" else ()
+                ),
+                retrieval_case=cast(str, retrieval_case),
+                retrieval_partition=cast(str | None, raw_partition),
+                expected_retrieval=expected_retrieval,
                 retrieval_prompt=_required_string(raw_trial, "retrieval_prompt", identifier),
                 expected_stale_reasons=_stale_reasons(
                     raw_trial.get("expected_stale_reasons"), identifier
@@ -176,6 +259,25 @@ def evaluate_repository_corpus(
     for trial in trials:
         outcome, failures = _run_trial(trial, repositories_root / trial.identifier, runtime_root)
         if outcome is not None:
+            if trial.retrieval_case == "declared-term":
+                baseline, baseline_failures = _run_trial(
+                    trial,
+                    repositories_root / f"{trial.identifier}-without-retrieval-terms",
+                    runtime_root,
+                    include_retrieval_terms=False,
+                )
+                operational.extend(baseline_failures)
+                if baseline is None:
+                    operational.append(
+                        _failure(trial, "counterfactual_failure", "term baseline was unavailable")
+                    )
+                else:
+                    outcome = replace(
+                        outcome,
+                        term_baseline_target_retrieved=baseline.target_retrieved,
+                        term_baseline_context_returned=baseline.context_returned,
+                        term_baseline_returned_claim_count=baseline.returned_claim_count,
+                    )
             outcomes.append(outcome)
         operational.extend(failures)
     ordered_outcomes = tuple(sorted(outcomes, key=lambda outcome: outcome.identifier))
@@ -188,6 +290,8 @@ def evaluate_repository_corpus(
         trials=ordered_outcomes,
         matrix=matrix,
         metrics=_metrics(matrix),
+        retrieval_metrics=_retrieval_metrics(ordered_outcomes),
+        retrieval_partitions=_retrieval_partitions(ordered_outcomes),
         families=families,
         macro_family_accuracy=(
             sum(cast(float, family.accuracy.rate) for family in families) / len(families)
@@ -205,15 +309,15 @@ def evaluate_repository_corpus(
 def assert_repository_baseline(result: RepositoryEvaluationResult, baseline_path: Path) -> None:
     """Require a checked-in baseline to state the exact observed evaluation result."""
     loaded = yaml.safe_load(baseline_path.read_text(encoding="utf-8"))
-    if not isinstance(loaded, dict) or loaded.get("version") not in {1, 2}:
-        raise RepositoryCorpusError("repository baseline version must be 1 or 2")
+    if not isinstance(loaded, dict) or loaded.get("version") not in {1, 2, 3}:
+        raise RepositoryCorpusError("repository baseline version must be 1, 2, or 3")
     baseline = cast(dict[object, object], loaded)
     baseline_version = cast(int, baseline["version"])
     if baseline.get("corpus_version") != result.corpus_version:
         raise RepositoryCorpusError("repository baseline corpus_version differs")
     if baseline.get("sample_count") != result.sample_count:
         raise RepositoryCorpusError("repository baseline sample_count differs")
-    if baseline_version == 2 and baseline.get("attempted_count") != result.attempted_count:
+    if baseline_version >= 2 and baseline.get("attempted_count") != result.attempted_count:
         raise RepositoryCorpusError("repository baseline attempted_count differs")
     _assert_mapping(baseline.get("matrix"), _matrix_mapping(result.matrix), "matrix")
     raw_metrics = baseline.get("metrics")
@@ -221,7 +325,7 @@ def assert_repository_baseline(result: RepositoryEvaluationResult, baseline_path
         raise RepositoryCorpusError("repository baseline metrics must be an object")
     for name, metric in _metric_mapping(result.metrics).items():
         _assert_mapping(raw_metrics.get(name), metric, f"metrics.{name}")
-    if baseline_version == 2:
+    if baseline_version >= 2:
         expected_families = [
             {
                 "family": item.family,
@@ -235,30 +339,120 @@ def assert_repository_baseline(result: RepositoryEvaluationResult, baseline_path
             raise RepositoryCorpusError("repository baseline families differs")
         if baseline.get("macro_family_accuracy") != result.macro_family_accuracy:
             raise RepositoryCorpusError("repository baseline macro_family_accuracy differs")
+    if baseline_version == 3:
+        _assert_mapping(
+            baseline.get("retrieval_metrics"),
+            _retrieval_metric_mapping(result.retrieval_metrics),
+            "retrieval_metrics",
+        )
+        expected_partitions = [
+            _retrieval_partition_mapping(item) for item in result.retrieval_partitions
+        ]
+        if baseline.get("retrieval_partitions") != expected_partitions:
+            raise RepositoryCorpusError("repository baseline retrieval_partitions differs")
     expected_operational = [
         {"id": item.identifier, "kind": item.kind, "detail": item.detail}
         for item in result.operational_outcomes
     ]
     if baseline.get("operational_outcomes") != expected_operational:
         raise RepositoryCorpusError("repository baseline operational_outcomes differs")
-    expected_trials = [
-        {
-            "id": item.identifier,
-            **({"family": item.family} if baseline_version == 2 else {}),
-            "label": item.label,
-            "lifecycle_status": item.lifecycle_status,
-            "retrieval_status": item.retrieval_status,
-        }
-        for item in result.trials
-    ]
+    if baseline_version == 3:
+        expected_trials = [
+            {
+                "id": item.identifier,
+                "family": item.family,
+                "label": item.label,
+                "lifecycle_status": item.lifecycle_status,
+                "retrieval_case": item.retrieval_case,
+                "retrieval_partition": item.retrieval_partition,
+                "expected_retrieval": item.expected_retrieval,
+                "target_retrieved": item.target_retrieved,
+                "context_returned": item.context_returned,
+                "returned_claim_count": item.returned_claim_count,
+                "term_baseline_target_retrieved": item.term_baseline_target_retrieved,
+                "term_baseline_context_returned": item.term_baseline_context_returned,
+                "term_baseline_returned_claim_count": item.term_baseline_returned_claim_count,
+            }
+            for item in result.trials
+        ]
+    else:
+        expected_trials = [
+            {
+                "id": item.identifier,
+                **({"family": item.family} if baseline_version == 2 else {}),
+                "label": item.label,
+                "lifecycle_status": item.lifecycle_status,
+                "retrieval_status": item.lifecycle_status,
+            }
+            for item in result.trials
+        ]
     if baseline.get("trials") != expected_trials:
         raise RepositoryCorpusError("repository baseline trials differs")
+
+
+def repository_baseline_document(result: RepositoryEvaluationResult) -> dict[str, object]:
+    """Render one complete version-three evaluator result for review and storage."""
+    return {
+        "version": 3,
+        "corpus_version": result.corpus_version,
+        "attempted_count": result.attempted_count,
+        "sample_count": result.sample_count,
+        "matrix": _matrix_mapping(result.matrix),
+        "metrics": _metric_mapping(result.metrics),
+        "retrieval_metrics": _retrieval_metric_mapping(result.retrieval_metrics),
+        "retrieval_partitions": [
+            _retrieval_partition_mapping(item) for item in result.retrieval_partitions
+        ],
+        "families": [
+            {
+                "family": item.family,
+                "sample_count": item.sample_count,
+                "matrix": _matrix_mapping(item.matrix),
+                "accuracy": _metric_value(item.accuracy),
+            }
+            for item in result.families
+        ],
+        "macro_family_accuracy": result.macro_family_accuracy,
+        "operational_outcomes": [
+            {"id": item.identifier, "kind": item.kind, "detail": item.detail}
+            for item in result.operational_outcomes
+        ],
+        "trials": [_trial_mapping_v3(item) for item in result.trials],
+    }
+
+
+def _trial_mapping_v3(item: TrialOutcome) -> dict[str, object]:
+    return {
+        "id": item.identifier,
+        "family": item.family,
+        "label": item.label,
+        "lifecycle_status": item.lifecycle_status,
+        "retrieval_case": item.retrieval_case,
+        "retrieval_partition": item.retrieval_partition,
+        "expected_retrieval": item.expected_retrieval,
+        "target_retrieved": item.target_retrieved,
+        "context_returned": item.context_returned,
+        "returned_claim_count": item.returned_claim_count,
+        "term_baseline_target_retrieved": item.term_baseline_target_retrieved,
+        "term_baseline_context_returned": item.term_baseline_context_returned,
+        "term_baseline_returned_claim_count": item.term_baseline_returned_claim_count,
+    }
+
+
+def _retrieval_partition_mapping(item: RetrievalPartitionEvaluation) -> dict[str, object]:
+    return {
+        "partition": item.partition,
+        "sample_count": item.sample_count,
+        "metrics": _retrieval_metric_mapping(item.metrics),
+    }
 
 
 def _run_trial(
     trial: RepositoryTrial,
     repository: Path,
     runtime_root: Path,
+    *,
+    include_retrieval_terms: bool = True,
 ) -> tuple[TrialOutcome | None, list[OperationalOutcome]]:
     failures: list[OperationalOutcome] = []
     shutil.rmtree(repository, ignore_errors=True)
@@ -266,7 +460,12 @@ def _run_trial(
     _git(repository, "init", "--quiet")
     _git(repository, "config", "user.email", "evaluation@example.test")
     _git(repository, "config", "user.name", "Repository evaluation")
-    managed_paths = set(trial.initial_files) | set(trial.capture_files) | set(trial.change_files)
+    managed_paths = (
+        set(trial.initial_files)
+        | set(trial.capture_files)
+        | set(trial.change_files)
+        | set(trial.distractor_files)
+    )
     _replace_sources(repository, trial.initial_files, managed_paths)
     _git(repository, "add", "--all")
     _git(repository, "commit", "--quiet", "-m", "initial repository blueprint")
@@ -276,17 +475,40 @@ def _run_trial(
     )
     if isinstance(capture_start, str):
         return None, [_failure(trial, "hook_failure", capture_start)]
-    _replace_sources(repository, trial.capture_files, managed_paths)
-    capture_response = _capture(runtime_root, repository, trial.capture)
+    _replace_sources(
+        repository, _sources_with_distractors(trial.capture_files, trial), managed_paths
+    )
+    capture_arguments = dict(trial.capture)
+    if not include_retrieval_terms:
+        capture_arguments.pop("retrieval_terms", None)
+    capture_response = _capture(runtime_root, repository, capture_arguments)
     if isinstance(capture_response, str):
         _hook(runtime_root, repository, "Stop", "capture")
         return None, [_failure(trial, "capture_failure", capture_response)]
+    for distractor in trial.distractor_captures:
+        distractor_arguments = dict(distractor)
+        if not include_retrieval_terms:
+            distractor_arguments.pop("retrieval_terms", None)
+        distractor_response = _capture(runtime_root, repository, distractor_arguments)
+        if isinstance(distractor_response, str):
+            _hook(runtime_root, repository, "Stop", "capture")
+            return None, [_failure(trial, "capture_failure", distractor_response)]
     capture_stop = _hook(runtime_root, repository, "Stop", "capture")
     if isinstance(capture_stop, str):
         return None, [_failure(trial, "hook_failure", capture_stop)]
     capture_status = _memory_status(repository, str(trial.capture["claim"]))
     if capture_status != "active":
         return None, [_failure(trial, "capture_failure", f"persisted status: {capture_status}")]
+    for distractor in trial.distractor_captures:
+        distractor_status = _memory_status(repository, str(distractor["claim"]))
+        if distractor_status != "active":
+            return None, [
+                _failure(
+                    trial,
+                    "capture_failure",
+                    f"distractor persisted status: {distractor_status}",
+                )
+            ]
     _git(repository, "add", "--all")
     _git(repository, "commit", "--quiet", "-m", "capture labeled claim")
 
@@ -295,7 +517,9 @@ def _run_trial(
     )
     if isinstance(change_start, str):
         return None, [_failure(trial, "hook_failure", change_start)]
-    _replace_sources(repository, trial.change_files, managed_paths)
+    _replace_sources(
+        repository, _sources_with_distractors(trial.change_files, trial), managed_paths
+    )
     change_stop = _hook(runtime_root, repository, "Stop", "change")
     if isinstance(change_stop, str):
         return None, [_failure(trial, "hook_failure", change_stop)]
@@ -314,17 +538,22 @@ def _run_trial(
         return None, [_failure(trial, "hook_failure", retrieval)]
     context = _additional_context(retrieval)
     claim = str(trial.capture["claim"])
-    if lifecycle_status == "active" and claim in context:
-        retrieval_status = "active"
-    elif lifecycle_status == "stale" and claim not in context:
-        retrieval_status = "stale"
-    else:
-        return None, [
-            _failure(trial, "retrieval_miss", f"{lifecycle_status} claim availability mismatch")
-        ]
+    returned_claims = _returned_claims(context)
     return (
         TrialOutcome(
-            trial.identifier, trial.family, trial.label, lifecycle_status, retrieval_status
+            identifier=trial.identifier,
+            family=trial.family,
+            label=trial.label,
+            lifecycle_status=lifecycle_status,
+            retrieval_case=trial.retrieval_case,
+            retrieval_partition=trial.retrieval_partition,
+            expected_retrieval=trial.expected_retrieval,
+            target_retrieved=claim in returned_claims,
+            context_returned=bool(returned_claims),
+            returned_claim_count=len(returned_claims),
+            term_baseline_target_retrieved=None,
+            term_baseline_context_returned=None,
+            term_baseline_returned_claim_count=None,
         ),
         failures,
     )
@@ -333,19 +562,19 @@ def _run_trial(
 def _matrix(outcomes: tuple[TrialOutcome, ...]) -> ConfusionMatrix:
     return ConfusionMatrix(
         true_stale=sum(
-            outcome.label == "changed" and outcome.retrieval_status == "stale"
+            outcome.label == "changed" and outcome.lifecycle_status == "stale"
             for outcome in outcomes
         ),
         false_stale=sum(
-            outcome.label == "preserved" and outcome.retrieval_status == "stale"
+            outcome.label == "preserved" and outcome.lifecycle_status == "stale"
             for outcome in outcomes
         ),
         missed_change=sum(
-            outcome.label == "changed" and outcome.retrieval_status == "active"
+            outcome.label == "changed" and outcome.lifecycle_status == "active"
             for outcome in outcomes
         ),
         true_active=sum(
-            outcome.label == "preserved" and outcome.retrieval_status == "active"
+            outcome.label == "preserved" and outcome.lifecycle_status == "active"
             for outcome in outcomes
         ),
     )
@@ -387,6 +616,93 @@ def _metrics(matrix: ConfusionMatrix) -> EvaluationMetrics:
             matrix.true_stale + matrix.false_stale + matrix.missed_change + matrix.true_active,
         ),
     )
+
+
+def _retrieval_metrics(
+    outcomes: tuple[TrialOutcome, ...],
+) -> RetrievalEvaluationMetrics:
+    expected = tuple(outcome for outcome in outcomes if outcome.expected_retrieval)
+    excluded = tuple(outcome for outcome in outcomes if not outcome.expected_retrieval)
+    term_assisted = tuple(
+        outcome
+        for outcome in outcomes
+        if outcome.retrieval_case == "declared-term" and outcome.expected_retrieval
+    )
+    declared_terms = tuple(
+        outcome for outcome in outcomes if outcome.retrieval_case == "declared-term"
+    )
+    term_excluded = tuple(outcome for outcome in declared_terms if not outcome.expected_retrieval)
+    baseline_hits = sum(outcome.term_baseline_target_retrieved is True for outcome in term_assisted)
+    assisted_hits = sum(outcome.target_retrieved for outcome in term_assisted)
+    returned_claim_count = sum(outcome.returned_claim_count for outcome in declared_terms)
+    baseline_returned_claim_count = sum(
+        outcome.term_baseline_returned_claim_count or 0 for outcome in declared_terms
+    )
+    assisted_correct = sum(_retrieval_success(outcome) for outcome in outcomes)
+    baseline_correct = sum(_counterfactual_success(outcome) for outcome in outcomes)
+    return RetrievalEvaluationMetrics(
+        recall=_rate(sum(outcome.target_retrieved for outcome in expected), len(expected)),
+        exclusion_rate=_rate(
+            sum(_retrieval_success(outcome) for outcome in excluded), len(excluded)
+        ),
+        precision=_rate(
+            sum(outcome.target_retrieved for outcome in term_assisted),
+            returned_claim_count,
+        ),
+        overall_accuracy=_rate(assisted_correct, len(outcomes)),
+        without_terms_overall_accuracy=_rate(baseline_correct, len(outcomes)),
+        term_baseline_recall=_rate(baseline_hits, len(term_assisted)),
+        term_assisted_recall=_rate(assisted_hits, len(term_assisted)),
+        term_baseline_exclusion_rate=_rate(
+            sum(outcome.term_baseline_context_returned is False for outcome in term_excluded),
+            len(term_excluded),
+        ),
+        term_assisted_exclusion_rate=_rate(
+            sum(not outcome.context_returned for outcome in term_excluded),
+            len(term_excluded),
+        ),
+        term_baseline_precision=_rate(baseline_hits, baseline_returned_claim_count),
+        term_assisted_precision=_rate(assisted_hits, returned_claim_count),
+        term_net_gain=assisted_correct - baseline_correct,
+    )
+
+
+def _retrieval_partitions(
+    outcomes: tuple[TrialOutcome, ...],
+) -> tuple[RetrievalPartitionEvaluation, ...]:
+    partitions = sorted(
+        {
+            outcome.retrieval_partition
+            for outcome in outcomes
+            if outcome.retrieval_partition is not None
+        }
+    )
+    return tuple(
+        RetrievalPartitionEvaluation(
+            partition=partition,
+            sample_count=sum(outcome.retrieval_partition == partition for outcome in outcomes),
+            metrics=_retrieval_metrics(
+                tuple(outcome for outcome in outcomes if outcome.retrieval_partition == partition)
+            ),
+        )
+        for partition in partitions
+    )
+
+
+def _retrieval_success(outcome: TrialOutcome) -> bool:
+    if outcome.expected_retrieval:
+        return outcome.target_retrieved
+    if outcome.retrieval_case == "standard":
+        return not outcome.target_retrieved
+    return not outcome.context_returned
+
+
+def _counterfactual_success(outcome: TrialOutcome) -> bool:
+    if outcome.term_baseline_target_retrieved is None:
+        return _retrieval_success(outcome)
+    if outcome.expected_retrieval:
+        return outcome.term_baseline_target_retrieved
+    return outcome.term_baseline_context_returned is False
 
 
 def _rate(count: int, denominator: int) -> RateMetric:
@@ -437,9 +753,28 @@ def _metric_value(metric: RateMetric) -> dict[str, int | float | list[float] | N
     }
 
 
+def _retrieval_metric_mapping(
+    metrics: RetrievalEvaluationMetrics,
+) -> dict[str, object]:
+    return {
+        "recall": _metric_value(metrics.recall),
+        "exclusion_rate": _metric_value(metrics.exclusion_rate),
+        "precision": _metric_value(metrics.precision),
+        "overall_accuracy": _metric_value(metrics.overall_accuracy),
+        "without_terms_overall_accuracy": _metric_value(metrics.without_terms_overall_accuracy),
+        "term_baseline_recall": _metric_value(metrics.term_baseline_recall),
+        "term_assisted_recall": _metric_value(metrics.term_assisted_recall),
+        "term_baseline_exclusion_rate": _metric_value(metrics.term_baseline_exclusion_rate),
+        "term_assisted_exclusion_rate": _metric_value(metrics.term_assisted_exclusion_rate),
+        "term_baseline_precision": _metric_value(metrics.term_baseline_precision),
+        "term_assisted_precision": _metric_value(metrics.term_assisted_precision),
+        "term_net_gain": metrics.term_net_gain,
+    }
+
+
 def _assert_mapping(
     value: object,
-    expected: Mapping[str, int | float | list[float] | None],
+    expected: Mapping[str, object],
     name: str,
 ) -> None:
     if not isinstance(value, dict) or value != expected:
@@ -479,6 +814,27 @@ def _capture_definition(value: object, identifier: str) -> dict[str, object]:
     return {str(key): item for key, item in capture.items() if isinstance(key, str)}
 
 
+def _retrieval_distractors(
+    value: object,
+) -> tuple[dict[str, str], tuple[dict[str, object], ...]]:
+    if value is None:
+        return {}, ()
+    if not isinstance(value, dict):
+        raise RepositoryCorpusError("retrieval_distractors must be an object")
+    files = _sources(value.get("files"), "retrieval_distractors", "files")
+    raw_captures = value.get("captures")
+    if not isinstance(raw_captures, list) or not raw_captures:
+        raise RepositoryCorpusError("retrieval_distractors captures must be a non-empty list")
+    captures = tuple(
+        _capture_definition(item, f"retrieval_distractors[{index}]")
+        for index, item in enumerate(raw_captures)
+    )
+    claims = [str(capture["claim"]) for capture in captures]
+    if len(set(claims)) != len(claims):
+        raise RepositoryCorpusError("retrieval_distractor claims must be distinct")
+    return files, captures
+
+
 def _stale_reasons(value: object, identifier: str) -> dict[str, str] | None:
     if value is None:
         return None
@@ -508,6 +864,10 @@ def _replace_sources(root: Path, sources: dict[str, str], managed_paths: set[str
         target = root / _relative_path(path, "repository")
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
+
+
+def _sources_with_distractors(sources: dict[str, str], trial: RepositoryTrial) -> dict[str, str]:
+    return {**sources, **trial.distractor_files}
 
 
 def _git(repository: Path, *args: str) -> None:
@@ -641,6 +1001,16 @@ def _additional_context(output: dict[str, object]) -> str:
         return ""
     context = specific.get("additionalContext")
     return context if isinstance(context, str) else ""
+
+
+def _returned_claims(context: str) -> tuple[str, ...]:
+    marker = "Memory Stale active context:\n"
+    _before, separator, retrieval_context = context.partition(marker)
+    if not separator:
+        return ()
+    return tuple(
+        line.removeprefix("- ") for line in retrieval_context.splitlines() if line.startswith("- ")
+    )
 
 
 def _failure(trial: RepositoryTrial, kind: str, detail: str) -> OperationalOutcome:

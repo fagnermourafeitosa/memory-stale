@@ -482,6 +482,44 @@ def test_prompt_hook_injects_only_relevant_active_memory(tmp_path: Path) -> None
     assert "Auth changes require review." in output["hookSpecificOutput"]["additionalContext"]
 
 
+def test_prompt_hook_applies_the_project_top_k_setting(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path)
+    MemoryStore(repository).write_all(
+        [
+            Memory(
+                "a-first",
+                "behavior",
+                "active",
+                "First login behavior.",
+                "Security boundary.",
+                (EvidenceItem("symbol", "primary", "auth.py:login", "sig"),),
+            ),
+            Memory(
+                "b-second",
+                "behavior",
+                "active",
+                "Second login behavior.",
+                "Security boundary.",
+                (EvidenceItem("symbol", "primary", "auth.py:login", "sig"),),
+            ),
+        ]
+    )
+    config_directory = repository / ".agents" / "skills" / ".agent-memory"
+    config_directory.mkdir(parents=True, exist_ok=True)
+    (config_directory / "config.toml").write_text("top_k = 1\n", encoding="utf-8")
+
+    result = _run_hook(
+        "UserPromptSubmit",
+        repository,
+        {"turn_id": "turn-context", "cwd": str(repository), "prompt": "Change auth.py:login"},
+    )
+
+    assert result.returncode == 0
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+    assert "First login behavior." in context
+    assert "Second login behavior." not in context
+
+
 def test_prompt_hook_injects_memory_found_through_locator_vocabulary(tmp_path: Path) -> None:
     repository = _create_repository(tmp_path)
     MemoryStore(repository).write_all(

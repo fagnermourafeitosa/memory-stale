@@ -1,0 +1,2004 @@
+{
+  "attempted_count": 100,
+  "corpus_version": 3,
+  "families": [
+    {
+      "accuracy": {
+        "count": 4,
+        "denominator": 12,
+        "rate": 0.3333333333333333,
+        "wilson_95": [
+          0.13812009109121315,
+          0.6093779111272004
+        ]
+      },
+      "family": "conservative-false-stale",
+      "matrix": {
+        "false_stale": 8,
+        "missed_change": 0,
+        "true_active": 4,
+        "true_stale": 0
+      },
+      "sample_count": 12
+    },
+    {
+      "accuracy": {
+        "count": 28,
+        "denominator": 28,
+        "rate": 1.0,
+        "wilson_95": [
+          0.8793566952341543,
+          0.9999999999999998
+        ]
+      },
+      "family": "direct-local",
+      "matrix": {
+        "false_stale": 0,
+        "missed_change": 0,
+        "true_active": 0,
+        "true_stale": 28
+      },
+      "sample_count": 28
+    },
+    {
+      "accuracy": {
+        "count": 10,
+        "denominator": 10,
+        "rate": 1.0,
+        "wilson_95": [
+          0.7224672001371107,
+          0.9999999999999999
+        ]
+      },
+      "family": "evidence-graph",
+      "matrix": {
+        "false_stale": 0,
+        "missed_change": 0,
+        "true_active": 4,
+        "true_stale": 6
+      },
+      "sample_count": 10
+    },
+    {
+      "accuracy": {
+        "count": 0,
+        "denominator": 12,
+        "rate": 0.0,
+        "wilson_95": [
+          2.7755575615628914e-17,
+          0.24249400665524085
+        ]
+      },
+      "family": "incomplete-provenance",
+      "matrix": {
+        "false_stale": 0,
+        "missed_change": 12,
+        "true_active": 0,
+        "true_stale": 0
+      },
+      "sample_count": 12
+    },
+    {
+      "accuracy": {
+        "count": 28,
+        "denominator": 28,
+        "rate": 1.0,
+        "wilson_95": [
+          0.8793566952341543,
+          0.9999999999999998
+        ]
+      },
+      "family": "preserving",
+      "matrix": {
+        "false_stale": 0,
+        "missed_change": 0,
+        "true_active": 28,
+        "true_stale": 0
+      },
+      "sample_count": 28
+    },
+    {
+      "accuracy": {
+        "count": 10,
+        "denominator": 10,
+        "rate": 1.0,
+        "wilson_95": [
+          0.7224672001371107,
+          0.9999999999999999
+        ]
+      },
+      "family": "repository-shape",
+      "matrix": {
+        "false_stale": 0,
+        "missed_change": 0,
+        "true_active": 6,
+        "true_stale": 4
+      },
+      "sample_count": 10
+    }
+  ],
+  "macro_family_accuracy": 0.7222222222222222,
+  "matrix": {
+    "false_stale": 8,
+    "missed_change": 12,
+    "true_active": 42,
+    "true_stale": 38
+  },
+  "metrics": {
+    "missed_semantic_change_rate": {
+      "count": 12,
+      "denominator": 50,
+      "rate": 0.24,
+      "wilson_95": [
+        0.1429739139699173,
+        0.3741268375794292
+      ]
+    },
+    "overall_accuracy": {
+      "count": 80,
+      "denominator": 100,
+      "rate": 0.8,
+      "wilson_95": [
+        0.7111708344068411,
+        0.8666330666689676
+      ]
+    },
+    "specificity": {
+      "count": 42,
+      "denominator": 50,
+      "rate": 0.84,
+      "wilson_95": [
+        0.7148578393696501,
+        0.916625793219666
+      ]
+    },
+    "stale_precision": {
+      "count": 38,
+      "denominator": 46,
+      "rate": 0.8260869565217391,
+      "wilson_95": [
+        0.692766462836215,
+        0.9091420829775368
+      ]
+    },
+    "stale_recall": {
+      "count": 38,
+      "denominator": 50,
+      "rate": 0.76,
+      "wilson_95": [
+        0.6258731624205708,
+        0.8570260860300828
+      ]
+    },
+    "unnecessary_revalidation_rate": {
+      "count": 8,
+      "denominator": 50,
+      "rate": 0.16,
+      "wilson_95": [
+        0.08337420678033404,
+        0.2851421606303499
+      ]
+    }
+  },
+  "operational_outcomes": [],
+  "retrieval_metrics": {
+    "exclusion_rate": {
+      "count": 44,
+      "denominator": 60,
+      "rate": 0.7333333333333333,
+      "wilson_95": [
+        0.6099128690331636,
+        0.8286735999671945
+      ]
+    },
+    "overall_accuracy": {
+      "count": 76,
+      "denominator": 100,
+      "rate": 0.76,
+      "wilson_95": [
+        0.6676766365018553,
+        0.8330867444305122
+      ]
+    },
+    "precision": {
+      "count": 7,
+      "denominator": 35,
+      "rate": 0.2,
+      "wilson_95": [
+        0.10042446473798625,
+        0.3589161306566562
+      ]
+    },
+    "recall": {
+      "count": 32,
+      "denominator": 40,
+      "rate": 0.8,
+      "wilson_95": [
+        0.652426936536005,
+        0.895000102745623
+      ]
+    },
+    "term_assisted_exclusion_rate": {
+      "count": 1,
+      "denominator": 10,
+      "rate": 0.1,
+      "wilson_95": [
+        0.017876213095072896,
+        0.4041500267952385
+      ]
+    },
+    "term_assisted_precision": {
+      "count": 7,
+      "denominator": 35,
+      "rate": 0.2,
+      "wilson_95": [
+        0.10042446473798625,
+        0.3589161306566562
+      ]
+    },
+    "term_assisted_recall": {
+      "count": 7,
+      "denominator": 10,
+      "rate": 0.7,
+      "wilson_95": [
+        0.39677814746114537,
+        0.8922087325936989
+      ]
+    },
+    "term_baseline_exclusion_rate": {
+      "count": 1,
+      "denominator": 10,
+      "rate": 0.1,
+      "wilson_95": [
+        0.017876213095072896,
+        0.4041500267952385
+      ]
+    },
+    "term_baseline_precision": {
+      "count": 7,
+      "denominator": 34,
+      "rate": 0.20588235294117646,
+      "wilson_95": [
+        0.10349526899031913,
+        0.36798388051163594
+      ]
+    },
+    "term_baseline_recall": {
+      "count": 7,
+      "denominator": 10,
+      "rate": 0.7,
+      "wilson_95": [
+        0.39677814746114537,
+        0.8922087325936989
+      ]
+    },
+    "term_net_gain": 0,
+    "without_terms_overall_accuracy": {
+      "count": 76,
+      "denominator": 100,
+      "rate": 0.76,
+      "wilson_95": [
+        0.6676766365018553,
+        0.8330867444305122
+      ]
+    }
+  },
+  "retrieval_partitions": [
+    {
+      "metrics": {
+        "exclusion_rate": {
+          "count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "wilson_95": [
+            0.0,
+            0.43448246478317476
+          ]
+        },
+        "overall_accuracy": {
+          "count": 2,
+          "denominator": 10,
+          "rate": 0.2,
+          "wilson_95": [
+            0.05668215145437519,
+            0.5098375284633583
+          ]
+        },
+        "precision": {
+          "count": 2,
+          "denominator": 17,
+          "rate": 0.11764705882352941,
+          "wilson_95": [
+            0.03287977376379267,
+            0.3433635059488588
+          ]
+        },
+        "recall": {
+          "count": 2,
+          "denominator": 5,
+          "rate": 0.4,
+          "wilson_95": [
+            0.11762077423264783,
+            0.769275718723987
+          ]
+        },
+        "term_assisted_exclusion_rate": {
+          "count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "wilson_95": [
+            0.0,
+            0.43448246478317476
+          ]
+        },
+        "term_assisted_precision": {
+          "count": 2,
+          "denominator": 17,
+          "rate": 0.11764705882352941,
+          "wilson_95": [
+            0.03287977376379267,
+            0.3433635059488588
+          ]
+        },
+        "term_assisted_recall": {
+          "count": 2,
+          "denominator": 5,
+          "rate": 0.4,
+          "wilson_95": [
+            0.11762077423264783,
+            0.769275718723987
+          ]
+        },
+        "term_baseline_exclusion_rate": {
+          "count": 0,
+          "denominator": 5,
+          "rate": 0.0,
+          "wilson_95": [
+            0.0,
+            0.43448246478317476
+          ]
+        },
+        "term_baseline_precision": {
+          "count": 2,
+          "denominator": 17,
+          "rate": 0.11764705882352941,
+          "wilson_95": [
+            0.03287977376379267,
+            0.3433635059488588
+          ]
+        },
+        "term_baseline_recall": {
+          "count": 2,
+          "denominator": 5,
+          "rate": 0.4,
+          "wilson_95": [
+            0.11762077423264783,
+            0.769275718723987
+          ]
+        },
+        "term_net_gain": 0,
+        "without_terms_overall_accuracy": {
+          "count": 2,
+          "denominator": 10,
+          "rate": 0.2,
+          "wilson_95": [
+            0.05668215145437519,
+            0.5098375284633583
+          ]
+        }
+      },
+      "partition": "calibration",
+      "sample_count": 10
+    },
+    {
+      "metrics": {
+        "exclusion_rate": {
+          "count": 1,
+          "denominator": 5,
+          "rate": 0.2,
+          "wilson_95": [
+            0.03622410863243014,
+            0.6244653702374747
+          ]
+        },
+        "overall_accuracy": {
+          "count": 6,
+          "denominator": 10,
+          "rate": 0.6,
+          "wilson_95": [
+            0.31267376973365824,
+            0.8318196702937638
+          ]
+        },
+        "precision": {
+          "count": 5,
+          "denominator": 18,
+          "rate": 0.2777777777777778,
+          "wilson_95": [
+            0.12499753379553993,
+            0.5087265656029746
+          ]
+        },
+        "recall": {
+          "count": 5,
+          "denominator": 5,
+          "rate": 1.0,
+          "wilson_95": [
+            0.5655175352168251,
+            1.0
+          ]
+        },
+        "term_assisted_exclusion_rate": {
+          "count": 1,
+          "denominator": 5,
+          "rate": 0.2,
+          "wilson_95": [
+            0.03622410863243014,
+            0.6244653702374747
+          ]
+        },
+        "term_assisted_precision": {
+          "count": 5,
+          "denominator": 18,
+          "rate": 0.2777777777777778,
+          "wilson_95": [
+            0.12499753379553993,
+            0.5087265656029746
+          ]
+        },
+        "term_assisted_recall": {
+          "count": 5,
+          "denominator": 5,
+          "rate": 1.0,
+          "wilson_95": [
+            0.5655175352168251,
+            1.0
+          ]
+        },
+        "term_baseline_exclusion_rate": {
+          "count": 1,
+          "denominator": 5,
+          "rate": 0.2,
+          "wilson_95": [
+            0.03622410863243014,
+            0.6244653702374747
+          ]
+        },
+        "term_baseline_precision": {
+          "count": 5,
+          "denominator": 17,
+          "rate": 0.29411764705882354,
+          "wilson_95": [
+            0.1327998961029523,
+            0.5313311006653985
+          ]
+        },
+        "term_baseline_recall": {
+          "count": 5,
+          "denominator": 5,
+          "rate": 1.0,
+          "wilson_95": [
+            0.5655175352168251,
+            1.0
+          ]
+        },
+        "term_net_gain": 0,
+        "without_terms_overall_accuracy": {
+          "count": 6,
+          "denominator": 10,
+          "rate": 0.6,
+          "wilson_95": [
+            0.31267376973365824,
+            0.8318196702937638
+          ]
+        }
+      },
+      "partition": "holdout",
+      "sample_count": 10
+    }
+  ],
+  "sample_count": 100,
+  "trials": [
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "go-boolean-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "go-comparison-boundary-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "go-control-flow-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "go-equivalent-expression",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "go-formatting-only",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": false,
+      "expected_retrieval": false,
+      "family": "preserving",
+      "id": "go-leading-comment",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "unrelated",
+      "retrieval_partition": null,
+      "returned_claim_count": 0,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "go-local-variable-rename",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "go-return-value-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": false,
+      "expected_retrieval": false,
+      "family": "evidence-graph",
+      "id": "graph-config-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "holdout",
+      "returned_claim_count": 0,
+      "target_retrieved": false,
+      "term_baseline_context_returned": false,
+      "term_baseline_returned_claim_count": 0,
+      "term_baseline_target_retrieved": false
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "evidence-graph",
+      "id": "graph-cycle-comment",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "holdout",
+      "returned_claim_count": 1,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 1,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "evidence-graph",
+      "id": "graph-one-hop-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "holdout",
+      "returned_claim_count": 2,
+      "target_retrieved": false,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 2,
+      "term_baseline_target_retrieved": false
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "evidence-graph",
+      "id": "graph-one-hop-comment",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "calibration",
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 2,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "evidence-graph",
+      "id": "graph-schema-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "evidence-graph",
+      "id": "graph-shared-support-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "evidence-graph",
+      "id": "graph-three-hop-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "evidence-graph",
+      "id": "graph-three-hop-formatting",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "holdout",
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 3,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "evidence-graph",
+      "id": "graph-two-hop-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "holdout",
+      "returned_claim_count": 2,
+      "target_retrieved": false,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 2,
+      "term_baseline_target_retrieved": false
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "evidence-graph",
+      "id": "graph-two-hop-comment",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "calibration",
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 3,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-json-config",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "calibration",
+      "returned_claim_count": 1,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 1,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-locale-module",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-permission-module",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "holdout",
+      "returned_claim_count": 1,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 1,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-policy-function",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "calibration",
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 2,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-pricing-module",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "calibration",
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 3,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-schema-required",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "holdout",
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 2,
+      "term_baseline_target_retrieved": false
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-threshold-constant",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-timeout-module",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-toml-config",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "calibration",
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 2,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-transform-module",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-validator-module",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "incomplete-provenance",
+      "id": "incomplete-yaml-config",
+      "label": "changed",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "calibration",
+      "returned_claim_count": 1,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 1,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "java-boolean-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "java-comparison-boundary-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "java-control-flow-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "java-equivalent-expression",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 4,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "java-formatting-only",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": false,
+      "expected_retrieval": false,
+      "family": "preserving",
+      "id": "java-leading-comment",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "unrelated",
+      "retrieval_partition": null,
+      "returned_claim_count": 0,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "java-local-variable-rename",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "java-return-value-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "javascript-boolean-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "javascript-comparison-boundary-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "javascript-control-flow-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "javascript-equivalent-expression",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "javascript-formatting-only",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "preserving",
+      "id": "javascript-leading-comment",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "unrelated",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "javascript-local-variable-rename",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "javascript-return-value-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "kotlin-boolean-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "kotlin-comparison-boundary-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "kotlin-control-flow-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "kotlin-equivalent-expression",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "kotlin-formatting-only",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": false,
+      "expected_retrieval": false,
+      "family": "preserving",
+      "id": "kotlin-leading-comment",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "unrelated",
+      "retrieval_partition": null,
+      "returned_claim_count": 0,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "kotlin-local-variable-rename",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "kotlin-return-value-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "python-boolean-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "python-comparison-boundary-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-constant-conditional",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-defined-logging",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "calibration",
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 1,
+      "term_baseline_target_retrieved": false
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-defined-metric",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "calibration",
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 1,
+      "term_baseline_target_retrieved": false
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-defined-tracing",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "calibration",
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 1,
+      "term_baseline_target_retrieved": false
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-double-negation",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-harmless-guard",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-identity-helper",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-neutral-arithmetic",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-single-item-index",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-temporary-variable",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-try-finally-pass",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "conservative-false-stale",
+      "id": "python-conservative-unreachable-branch",
+      "label": "preserved",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "python-control-flow-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "python-equivalent-expression",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "python-formatting-only",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "preserving",
+      "id": "python-leading-comment",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "unrelated",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "python-local-variable-rename",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "python-return-value-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "rust-boolean-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "rust-comparison-boundary-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "rust-control-flow-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "rust-equivalent-expression",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "rust-formatting-only",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": false,
+      "expected_retrieval": false,
+      "family": "preserving",
+      "id": "rust-leading-comment",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "unrelated",
+      "retrieval_partition": null,
+      "returned_claim_count": 0,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "rust-local-variable-rename",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "rust-return-value-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": false,
+      "expected_retrieval": false,
+      "family": "repository-shape",
+      "id": "shape-added-file",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "unrelated",
+      "retrieval_partition": null,
+      "returned_claim_count": 0,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "repository-shape",
+      "id": "shape-documentation-edit",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "holdout",
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 2,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "repository-shape",
+      "id": "shape-multi-module-primary-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": false,
+      "expected_retrieval": false,
+      "family": "repository-shape",
+      "id": "shape-multiple-unrelated-edits",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "unrelated",
+      "retrieval_partition": null,
+      "returned_claim_count": 0,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "repository-shape",
+      "id": "shape-primary-and-unrelated-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": false,
+      "expected_retrieval": false,
+      "family": "repository-shape",
+      "id": "shape-primary-deletion",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 0,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "repository-shape",
+      "id": "shape-primary-rename",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "repository-shape",
+      "id": "shape-test-only-edit",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "holdout",
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 2,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": false,
+      "expected_retrieval": false,
+      "family": "repository-shape",
+      "id": "shape-unrelated-config-edit",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "unrelated",
+      "retrieval_partition": null,
+      "returned_claim_count": 0,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "repository-shape",
+      "id": "shape-unrelated-source-edit",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "declared-term",
+      "retrieval_partition": "holdout",
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": true,
+      "term_baseline_returned_claim_count": 2,
+      "term_baseline_target_retrieved": true
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "typescript-boolean-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "typescript-comparison-boundary-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "typescript-control-flow-result-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "typescript-equivalent-expression",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "typescript-formatting-only",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 2,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": false,
+      "expected_retrieval": false,
+      "family": "preserving",
+      "id": "typescript-leading-comment",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "unrelated",
+      "retrieval_partition": null,
+      "returned_claim_count": 0,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": true,
+      "family": "preserving",
+      "id": "typescript-local-variable-rename",
+      "label": "preserved",
+      "lifecycle_status": "active",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 3,
+      "target_retrieved": true,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    },
+    {
+      "context_returned": true,
+      "expected_retrieval": false,
+      "family": "direct-local",
+      "id": "typescript-return-value-change",
+      "label": "changed",
+      "lifecycle_status": "stale",
+      "retrieval_case": "standard",
+      "retrieval_partition": null,
+      "returned_claim_count": 1,
+      "target_retrieved": false,
+      "term_baseline_context_returned": null,
+      "term_baseline_returned_claim_count": null,
+      "term_baseline_target_retrieved": null
+    }
+  ],
+  "version": 3
+}

@@ -49,6 +49,9 @@ memory_stale:
   observed_commit: f281852e627e38dfe2a210ebea5638e00b2623d4
   observed_at: '2026-08-17T01:16:59.552400+00:00'
   legacy_id: null
+  retrieval_terms:
+    - German defender roster
+    - national team defenders
 ---
 
 GET /api/teams/germany/defenders returns exactly two German defenders in the defenders JSON field, enforced by a fixed-cardinality response schema and a regression test.

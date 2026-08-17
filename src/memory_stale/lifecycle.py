@@ -9,6 +9,9 @@ from typing import cast
 
 from memory_stale.evidence import EvidenceEdge, EvidenceItem
 
+MAX_RETRIEVAL_TERMS = 8
+MAX_RETRIEVAL_TERM_LENGTH = 80
+
 
 @dataclass(frozen=True)
 class RefEvidence:
@@ -33,6 +36,7 @@ class Memory:
     legacy_id: str | None = None
     supported_by: tuple[str, ...] = ()
     dependencies: tuple[EvidenceEdge, ...] = ()
+    retrieval_terms: tuple[str, ...] = ()
     okf_extras: dict[str, object] = field(default_factory=dict, compare=False)
 
     def __post_init__(self) -> None:
@@ -62,12 +66,14 @@ def _revision_id(
     evidence: Sequence[EvidenceItem],
     supported_by: Sequence[str],
     dependencies: Sequence[EvidenceEdge],
+    retrieval_terms: Sequence[str],
 ) -> str:
     fingerprints = "\0".join(
         f"{item.type}\0{item.role}\0{item.locator}\0{item.fingerprint}" for item in evidence
     )
     graph = "\0".join((*supported_by, *(f"{edge.source}\0{edge.target}" for edge in dependencies)))
-    return _identifier(f"{claim_id}\0{fingerprints}\0{graph}")
+    terms = "\0".join(term.casefold() for term in retrieval_terms)
+    return _identifier(f"{claim_id}\0{fingerprints}\0{graph}\0{terms}")
 
 
 def _capture_memory(capture: Mapping[str, object]) -> Memory:
@@ -80,8 +86,9 @@ def _capture_memory(capture: Mapping[str, object]) -> Memory:
     evidence = _stored_items(evidence_value)
     supported_by = _stored_supported_by(capture.get("supported_by"), evidence)
     dependencies = _stored_edges(capture.get("dependencies"), evidence)
+    retrieval_terms = normalize_retrieval_terms(capture.get("retrieval_terms"))
     claim_id = _claim_id(kind, claim, evidence)
-    revision_id = _revision_id(claim_id, evidence, supported_by, dependencies)
+    revision_id = _revision_id(claim_id, evidence, supported_by, dependencies, retrieval_terms)
     return Memory(
         id=revision_id,
         kind=kind,
@@ -96,7 +103,34 @@ def _capture_memory(capture: Mapping[str, object]) -> Memory:
         or _optional_string(capture, "observed_at"),
         supported_by=supported_by,
         dependencies=dependencies,
+        retrieval_terms=retrieval_terms,
     )
+
+
+def normalize_retrieval_terms(value: object) -> tuple[str, ...]:
+    """Return canonical, bounded host-declared retrieval vocabulary."""
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError("retrieval_terms must be an array")
+    if len(value) > MAX_RETRIEVAL_TERMS:
+        raise ValueError(f"retrieval_terms must contain at most {MAX_RETRIEVAL_TERMS} items")
+    terms: list[tuple[str, str]] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError("retrieval_terms must contain only strings")
+        term = item.strip()
+        if not term:
+            raise ValueError("retrieval_terms must not contain blank strings")
+        if len(term) > MAX_RETRIEVAL_TERM_LENGTH:
+            raise ValueError(
+                f"retrieval_terms entries must contain at most {MAX_RETRIEVAL_TERM_LENGTH} characters"
+            )
+        terms.append((term.casefold(), term))
+    canonical = tuple(sorted(terms))
+    if len({term for term, _display in canonical}) != len(canonical):
+        raise ValueError("retrieval_terms must not contain duplicates")
+    return tuple(display for _term, display in canonical)
 
 
 def _stored_items(value: list[object]) -> tuple[EvidenceItem, ...]:
@@ -186,7 +220,7 @@ def migrate_legacy_memory(
     )
     claim_id = _claim_id(kind, claim, evidence)
     supported_by = tuple(item.key for item in evidence)
-    revision_id = _revision_id(claim_id, evidence, supported_by, ())
+    revision_id = _revision_id(claim_id, evidence, supported_by, (), ())
     remapped_reasons = (
         {f"symbol:{locator}": reason for locator, reason in stale_reasons.items()}
         if stale_reasons

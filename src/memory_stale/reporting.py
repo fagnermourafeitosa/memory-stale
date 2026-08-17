@@ -18,6 +18,7 @@ class Config:
     context_budget: int = 1500
     auto_report: bool = False
     report_path: Path = Path("memory-report.html")
+    top_k: int = 5
 
 
 class ConfigError(ValueError):
@@ -31,10 +32,13 @@ def load_config(repository: Path) -> Config:
     with path.open("rb") as stream:
         data = cast(dict[str, object], tomli.load(stream))
     budget = data.get("context_budget", 1500)
+    top_k = data.get("top_k", 5)
     auto_report = data.get("auto_report", False)
     report_text = data.get("report_path", "memory-report.html")
     if not isinstance(budget, int) or isinstance(budget, bool) or budget <= 0:
         raise ConfigError("context_budget must be a positive integer")
+    if not isinstance(top_k, int) or isinstance(top_k, bool) or top_k <= 0:
+        raise ConfigError("top_k must be a positive integer")
     if not isinstance(auto_report, bool):
         raise ConfigError("auto_report must be a boolean")
     if not isinstance(report_text, str) or not report_text:
@@ -42,7 +46,12 @@ def load_config(repository: Path) -> Config:
     report_path = Path(report_text)
     if report_path.is_absolute() or ".." in report_path.parts:
         raise ConfigError("report_path must stay inside the repository")
-    return Config(budget, auto_report, report_path)
+    return Config(
+        context_budget=budget,
+        auto_report=auto_report,
+        report_path=report_path,
+        top_k=top_k,
+    )
 
 
 def _render(memories: list[Memory]) -> str:
@@ -51,7 +60,7 @@ def _render(memories: list[Memory]) -> str:
     for memory in memories:
         groups.setdefault(memory.claim_id or memory.id, []).append(memory)
     for claim_id, revisions in sorted(groups.items()):
-        rows.append(f'<tr class="claim"><th colspan="10">Claim {html.escape(claim_id)}</th></tr>')
+        rows.append(f'<tr class="claim"><th colspan="11">Claim {html.escape(claim_id)}</th></tr>')
         for memory in sorted(revisions, key=lambda revision: revision.id):
             evidence = "<br>".join(
                 html.escape(f"{item.type} · {item.role} · {item.locator} · {item.fingerprint}")
@@ -68,6 +77,7 @@ def _render(memories: list[Memory]) -> str:
                 f"{html.escape(ref)}: {html.escape(reason)}"
                 for ref, reason in sorted((memory.stale_reasons or {}).items())
             )
+            retrieval_terms = "<br>".join(html.escape(term) for term in memory.retrieval_terms)
             rows.append(
                 "<tr>"
                 f"<td>{html.escape(memory.id)}</td>"
@@ -75,11 +85,11 @@ def _render(memories: list[Memory]) -> str:
                 f"<td>{html.escape(memory.kind)}</td>"
                 f"<td>{html.escape(memory.claim)}</td>"
                 f"<td>{html.escape(memory.durability_reason)}</td>"
-                f"<td>{evidence}</td><td>{graph}</td><td>{reasons}</td>"
+                f"<td>{evidence}</td><td>{graph}</td><td>{retrieval_terms}</td><td>{reasons}</td>"
                 f"<td>{html.escape(memory.observed_commit or '')}</td>"
                 f"<td>{html.escape(memory.observed_at or '')}</td></tr>"
             )
-    body = "".join(rows) or '<tr><td colspan="10">No memories.</td></tr>'
+    body = "".join(rows) or '<tr><td colspan="11">No memories.</td></tr>'
     return (
         '<!doctype html><html><head><meta charset="utf-8"><title>Memory Stale</title>'
         "<style>body{font-family:system-ui;margin:2rem}table{border-collapse:collapse;width:100%}"
@@ -89,7 +99,8 @@ def _render(memories: list[Memory]) -> str:
         "<p><code>active</code> means recorded evidence is unchanged; "
         "<code>stale</code> means evidence requires revalidation. Neither state "
         "proves claim truth or falsehood.</p><table><thead><tr><th>Revision</th><th>Status</th>"
-        "<th>Kind</th><th>Claim</th><th>Durability</th><th>Evidence</th><th>Graph</th><th>Reasons</th>"
+        "<th>Kind</th><th>Claim</th><th>Durability</th><th>Evidence</th><th>Graph</th>"
+        "<th>Retrieval terms</th><th>Reasons</th>"
         "<th>Observed commit</th><th>Observed at</th>"
         f"</tr></thead><tbody>{body}</tbody></table></body></html>\n"
     )

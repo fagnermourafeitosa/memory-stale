@@ -18,7 +18,10 @@ BM25_B = 0.75
 CLAIM_WEIGHT = 1.0
 DURABILITY_REASON_WEIGHT = 0.5
 LOCATOR_WEIGHT = 2.0
+RETRIEVAL_TERMS_WEIGHT = 0.75
 EXACT_LOCATOR_WEIGHT = 100.0
+MINIMUM_LEXICAL_SCORE = 0.25
+MINIMUM_RELATIVE_SCORE = 0.5
 
 
 def _tokens(text: str) -> list[str]:
@@ -70,7 +73,7 @@ def _is_exact_locator_match(locator: str, prompt_folded: str) -> bool:
     return bool(pointer_separator and document_path and document_path.casefold() in prompt_folded)
 
 
-def retrieve(memories: Sequence[Memory], prompt: str, budget: int = 1500) -> str:
+def retrieve(memories: Sequence[Memory], prompt: str, budget: int = 1500, top_k: int = 5) -> str:
     active = [
         memory
         for memory in memories
@@ -81,7 +84,7 @@ def retrieve(memories: Sequence[Memory], prompt: str, budget: int = 1500) -> str
         )
     ]
     query = _tokens(prompt)
-    if not active or not query or budget <= 0:
+    if not active or not query or budget <= 0 or top_k <= 0:
         return ""
     claim_documents = [_tokens(memory.claim) for memory in active]
     durability_reason_documents = [_tokens(memory.durability_reason) for memory in active]
@@ -89,33 +92,49 @@ def retrieve(memories: Sequence[Memory], prompt: str, budget: int = 1500) -> str
         [token for item in memory.evidence for token in _locator_tokens(item.locator)]
         for memory in active
     ]
+    retrieval_term_documents = [_tokens(" ".join(memory.retrieval_terms)) for memory in active]
     claim_scores = _bm25_scores(claim_documents, query)
     durability_reason_scores = _bm25_scores(durability_reason_documents, query)
     locator_scores = _bm25_scores(locator_documents, query)
-    scored: list[tuple[float, Memory]] = []
+    retrieval_term_scores = _bm25_scores(retrieval_term_documents, query)
+    scored: list[tuple[float, Memory, bool]] = []
     prompt_folded = prompt.casefold()
-    for memory, claim_score, durability_reason_score, locator_score in zip(
+    for memory, claim_score, durability_reason_score, locator_score, retrieval_term_score in zip(
         active,
         claim_scores,
         durability_reason_scores,
         locator_scores,
+        retrieval_term_scores,
         strict=True,
     ):
         score = (
             claim_score * CLAIM_WEIGHT
             + durability_reason_score * DURABILITY_REASON_WEIGHT
             + locator_score * LOCATOR_WEIGHT
+            + retrieval_term_score * RETRIEVAL_TERMS_WEIGHT
         )
         exact = sum(
             1 for item in memory.evidence if _is_exact_locator_match(item.locator, prompt_folded)
         )
         score += exact * EXACT_LOCATOR_WEIGHT
-        if score > 0:
-            scored.append((score, memory))
+        if exact:
+            scored.append((score, memory, True))
+            continue
+        if retrieval_term_score > 0 and claim_score <= 0 and locator_score <= 0:
+            continue
+        if score >= MINIMUM_LEXICAL_SCORE:
+            scored.append((score, memory, False))
+    if not scored:
+        return ""
+    strongest_score = max(score for score, _memory, _exact in scored)
+    scored = [
+        item for item in scored if item[2] or item[0] >= strongest_score * MINIMUM_RELATIVE_SCORE
+    ]
     scored.sort(key=lambda item: (-item[0], item[1].id))
+    scored = scored[:top_k]
     selected: list[str] = []
     used = 0
-    for _score, memory in scored:
+    for _score, memory, _exact in scored:
         block = (
             f"- {memory.claim}\n  Evidence: {', '.join(item.locator for item in memory.evidence)}"
         )

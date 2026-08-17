@@ -88,6 +88,7 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
                             {"type": "symbol", "role": "primary", "locator": "auth.py:login"}
                         ],
                         "durability_reason": "Future authentication changes must preserve MFA.",
+                        "retrieval_terms": ["MFA"],
                     },
                 },
             },
@@ -109,6 +110,7 @@ def test_capture_stages_candidate_without_persisting_memory(tmp_path: Path) -> N
     assert capture["claim"] == "Login validates MFA before creating a session."
     assert capture["evidence"][0]["locator"] == "auth.py:login"
     assert capture["durability_reason"] == "Future authentication changes must preserve MFA."
+    assert capture["retrieval_terms"] == ["MFA"]
     fingerprint = capture["evidence"][0]["fingerprint"]
     assert fingerprint.startswith("v2:")
     assert len(fingerprint) == 67
@@ -241,8 +243,9 @@ def test_capture_rejects_invalid_or_unchanged_refs_and_is_idempotent(tmp_path: P
     assert isinstance(tools, list) and tools[0]["name"] == "memory.capture"
     assert tools[0]["description"] == (
         "Required once per coherent supported-code change. Stage a claim describing what the "
-        "resulting code does or guarantees, anchored to typed evidence. Active means recorded "
-        "evidence is unchanged; stale requires revalidation."
+        "resulting code does or guarantees, anchored to typed evidence. Optional retrieval_terms "
+        "are host-declared lexical vocabulary, not evidence. Active means recorded evidence is "
+        "unchanged; stale requires revalidation."
     )
     for response in (missing, unknown, unchanged, invalid):
         result = response["result"]
@@ -255,6 +258,100 @@ def test_capture_rejects_invalid_or_unchanged_refs_and_is_idempotent(tmp_path: P
     task_files = list((repository / ".git" / "memory-stale" / "tasks").glob("*.json"))
     task = json.loads(task_files[0].read_text(encoding="utf-8"))
     assert len(task["captures"]) == 1
+
+
+def test_capture_rejects_invalid_retrieval_terms(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    _start_turn(repository)
+    (repository / "auth.py").write_text("def login():\n    return False\n", encoding="utf-8")
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(RUNTIME_ROOT / "src")
+    server = subprocess.Popen(
+        [sys.executable, "-m", "memory_stale.mcp_server"],
+        cwd=repository,
+        env=environment,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    arguments: dict[str, object] = {
+        "kind": "behavior",
+        "claim": "Login returns the authentication result.",
+        "evidence": [{"type": "symbol", "role": "primary", "locator": "auth.py:login"}],
+        "durability_reason": "Callers depend on the authentication outcome.",
+    }
+    try:
+        responses = [
+            _rpc(
+                server,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory.capture",
+                        "arguments": {**arguments, "retrieval_terms": ["   "]},
+                    },
+                },
+            ),
+            _rpc(
+                server,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory.capture",
+                        "arguments": {**arguments, "retrieval_terms": ["MFA", "mfa"]},
+                    },
+                },
+            ),
+            _rpc(
+                server,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 3,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory.capture",
+                        "arguments": {
+                            **arguments,
+                            "retrieval_terms": [
+                                "one",
+                                "two",
+                                "three",
+                                "four",
+                                "five",
+                                "six",
+                                "seven",
+                                "eight",
+                                "nine",
+                            ],
+                        },
+                    },
+                },
+            ),
+            _rpc(
+                server,
+                {
+                    "jsonrpc": "2.0",
+                    "id": 4,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "memory.capture",
+                        "arguments": {**arguments, "retrieval_terms": ["x" * 81]},
+                    },
+                },
+            ),
+        ]
+    finally:
+        assert server.stdin is not None
+        server.stdin.close()
+        server.wait(timeout=5)
+
+    for response in responses:
+        assert cast(dict[str, object], response["result"])["isError"] is True
 
 
 def test_capture_rejects_source_evidence_reserved_for_automatic_capture(tmp_path: Path) -> None:

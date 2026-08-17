@@ -114,6 +114,9 @@ CLAUDE_HOOK_COMMANDS: dict[str, list[dict[str, object]]] = {
 DEFAULT_MEMORY_CONFIG = """# Maximum number of tokens of active memory injected into task context.
 context_budget = 1500
 
+# Maximum number of highest-ranked active memories injected per task.
+top_k = 5
+
 # Generate the optional HTML health report after each completed turn.
 auto_report = false
 
