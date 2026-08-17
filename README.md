@@ -199,6 +199,13 @@ locations. The host instance performing the task submits a concise semantic
 claim describing what the coherent change now does or guarantees. Memory Stale
 does not ask another LLM or generate that claim inside the local engine.
 
+The host writes the semantic claim, durability reason, and retrieval terms in
+the same natural language as the user's prompt. Memory Stale does not detect or
+translate the language. This keeps lexical BM25 retrieval aligned with the
+language that originated the memory; semantic retrieval across different
+languages is not guaranteed, while exact paths and symbols remain
+language-independent.
+
 ```mermaid
 flowchart TD
     A[UserPromptSubmit snapshots source and injects capture requirement] --> B[Host changes code]

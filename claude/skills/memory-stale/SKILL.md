@@ -7,6 +7,14 @@ description: Maintain deterministic, code-anchored project memory through Memory
 
 Memory Stale runs automatically during Claude Code turns. Active memory means its recorded evidence still matches the capture; stale memory must be revalidated because its evidence changed, disappeared, or no longer resolves.
 
+Write semantic memory in the same natural language as the user's prompt. Do
+not translate semantic memory to English or default to English. The claim,
+durability reason, and retrieval terms must use that prompt language so the
+lexical retriever compares text in the language that originated the memory.
+For mixed-language prompts, use the main user-facing language and preserve
+technical identifiers, paths, symbols, and version strings as written. If the
+prompt has no natural-language prose, use English as the stable fallback.
+
 Each prompt injects at most the project's configured `top_k` active memories
 (five when omitted), selected by deterministic retrieval ranking before the
 token budget is applied.

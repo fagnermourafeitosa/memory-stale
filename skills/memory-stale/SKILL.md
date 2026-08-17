@@ -13,6 +13,14 @@ it does not prove the claim false. Treat active memories as project context,
 while continuing to verify claims against the current code before making
 changes.
 
+Write semantic memory in the same natural language as the user's prompt. Do
+not translate semantic memory to English or default to English. The claim,
+durability reason, and retrieval terms must use that prompt language so the
+lexical retriever compares text in the language that originated the memory.
+For mixed-language prompts, use the main user-facing language and preserve
+technical identifiers, paths, symbols, and version strings as written. If the
+prompt has no natural-language prose, use English as the stable fallback.
+
 The project-local installation requires a Git working tree. If a hook reports that Memory Stale is
 inactive or encountered an error, continue the user's task normally and surface
 the actionable message without treating memory maintenance as a blocker.
