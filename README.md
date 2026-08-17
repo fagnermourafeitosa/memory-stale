@@ -255,8 +255,33 @@ verification events, and mapped lifecycle status. The `memory_stale` extension
 is required for current documents and records schema version, claim and
 revision IDs, exact evidence fingerprints, evidence relationships, deterministic
 freshness state, invalidation reasons, and the observed Git revision. `sources`
-and `memory_stale.evidence` describe the same evidence set. See a
-[complete, representative memory document](examples/memory-stale-claim.md).
+and `memory_stale.evidence` describe the same evidence set.
+
+### Example: an active memory
+
+**Claim**
+
+GET `/api/teams/germany/defenders` returns exactly two German defenders in its
+`defenders` JSON field. A fixed-cardinality response schema and a regression
+test enforce that contract.
+
+**Why it is durable**
+
+This is the endpoint's public response contract, so its schema,
+implementation, and regression test must stay synchronized.
+
+**Current state**: `active`
+
+**Evidence**
+
+- `app/api/teams.py:GermanDefendersResponse`
+- `app/api/teams.py:german_defenders`
+- `tests/api/test_teams.py:test_german_defenders_returns_two_players`
+
+The [complete stored document](examples/memory-stale-claim.md) includes the
+machine-readable YAML frontmatter, IDs, fingerprints, and timestamps that the
+runtime uses to verify this same claim. It is a storage format, not the
+reader-oriented example above.
 
 Each completed supported-code change stores automatic symbol/source provenance
 and at least one host-authored semantic claim covering its coherent meaning.
