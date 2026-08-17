@@ -206,6 +206,22 @@ Durable records and configuration live in the target project:
 .agents/skills/.agent-memory/config.toml
 ```
 
+The installer creates `config.toml` with these editable defaults:
+
+```toml
+# Maximum number of tokens of active memory injected into task context.
+context_budget = 1500
+
+# Generate the optional HTML health report after each completed turn.
+auto_report = false
+
+# Repository-relative path used when an HTML report is requested.
+report_path = "memory-report.html"
+```
+
+The HTML health report is optional: it is created only when explicitly
+requested or after setting `auto_report = true`.
+
 The repository-root `.agents/` tree is operational infrastructure, not project
 evidence. Memory Stale excludes it from change discovery, automatic capture,
 explicit evidence, retrieval, and Dream audits even when its files are tracked.
@@ -225,6 +241,18 @@ invalidation reasons under the `memory_stale` extension. OKF is the portable
 envelope; Memory Stale remains responsible for resolving evidence and deciding
 freshness. An `active` memory is `stable` in the OKF lifecycle, while a `stale`
 or `superseded` revision is `deprecated`.
+
+### Memory document contract
+
+Each `memories/*.md` file is one immutable revision. Its Markdown body is the
+complete semantic claim used for identity and retrieval; its OKF frontmatter
+contains the display title, durability reason, sources, generation and
+verification events, and mapped lifecycle status. The `memory_stale` extension
+is required for current documents and records schema version, claim and
+revision IDs, exact evidence fingerprints, evidence relationships, deterministic
+freshness state, invalidation reasons, and the observed Git revision. `sources`
+and `memory_stale.evidence` describe the same evidence set. See a
+[complete, representative memory document](examples/memory-stale-claim.md).
 
 Each completed supported-code change stores automatic symbol/source provenance
 and at least one host-authored semantic claim covering its coherent meaning.

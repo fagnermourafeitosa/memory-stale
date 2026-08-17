@@ -49,6 +49,62 @@ def test_installation_registers_the_installed_mcp_server_with_codex(tmp_path: Pa
     ]
 
 
+def test_installation_creates_default_durable_memory_configuration(tmp_path: Path) -> None:
+    repository = tmp_path / "target"
+    repository.mkdir()
+    subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+
+    installation = subprocess.run(
+        ["sh", str(SOURCE_ROOT / "scripts" / "install-project.sh"), str(repository)],
+        cwd=SOURCE_ROOT,
+        env=_codex_environment(tmp_path / "commands", ":"),
+        capture_output=True,
+        text=True,
+    )
+
+    assert installation.returncode == 0, installation.stderr
+    configuration = repository / ".agents" / "skills" / ".agent-memory" / "config.toml"
+    assert configuration.read_text(encoding="utf-8") == (
+        "# Maximum number of tokens of active memory injected into task context.\n"
+        "context_budget = 1500\n\n"
+        "# Generate the optional HTML health report after each completed turn.\n"
+        "auto_report = false\n\n"
+        "# Repository-relative path used when an HTML report is requested.\n"
+        'report_path = "memory-report.html"\n'
+    )
+    assert not (repository / "memory-report.html").exists()
+
+
+def test_reinstallation_preserves_custom_durable_memory_configuration(tmp_path: Path) -> None:
+    repository = tmp_path / "target"
+    repository.mkdir()
+    subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
+    environment = _codex_environment(tmp_path / "commands", ":")
+    command = ["sh", str(SOURCE_ROOT / "scripts" / "install-project.sh"), str(repository)]
+
+    first_installation = subprocess.run(
+        command,
+        cwd=SOURCE_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    assert first_installation.returncode == 0, first_installation.stderr
+    configuration = repository / ".agents" / "skills" / ".agent-memory" / "config.toml"
+    configuration.write_text("context_budget = 700\n", encoding="utf-8")
+
+    reinstallation = subprocess.run(
+        command,
+        cwd=SOURCE_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+
+    assert reinstallation.returncode == 0, reinstallation.stderr
+    assert configuration.read_text(encoding="utf-8") == "context_budget = 700\n"
+
+
 def test_installation_reports_a_failed_mcp_registration(tmp_path: Path) -> None:
     repository = tmp_path / "target"
     repository.mkdir()

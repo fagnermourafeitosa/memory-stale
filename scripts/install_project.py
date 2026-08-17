@@ -111,6 +111,16 @@ CLAUDE_HOOK_COMMANDS: dict[str, list[dict[str, object]]] = {
     ],
 }
 
+DEFAULT_MEMORY_CONFIG = """# Maximum number of tokens of active memory injected into task context.
+context_budget = 1500
+
+# Generate the optional HTML health report after each completed turn.
+auto_report = false
+
+# Repository-relative path used when an HTML report is requested.
+report_path = \"memory-report.html\"
+"""
+
 
 class InstallationError(RuntimeError):
     """Raised when target-local installation cannot proceed safely."""
@@ -133,13 +143,24 @@ def _read_json(path: Path, expected_key: str) -> dict[str, object]:
 
 
 def _atomic_write_json(path: Path, value: dict[str, object]) -> None:
+    _atomic_write_text(path, json.dumps(value, indent=2) + "\n")
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", delete=False
     ) as temporary:
-        temporary.write(json.dumps(value, indent=2) + "\n")
+        temporary.write(text)
         temporary_path = Path(temporary.name)
     temporary_path.replace(path)
+
+
+def _write_default_memory_config(repository: Path) -> None:
+    _atomic_write_text(
+        repository / ".agents" / "skills" / ".agent-memory" / "config.toml",
+        DEFAULT_MEMORY_CONFIG,
+    )
 
 
 def _target_repository(target: Path) -> Path:
@@ -248,6 +269,7 @@ def install(source: Path, target: Path, hosts: frozenset[str]) -> Path:
     first_install = not destination.exists()
     if first_install:
         _copy_artifacts(source, repository)
+        _write_default_memory_config(repository)
     if "codex" in hosts:
         _atomic_write_json(repository / ".codex" / "hooks.json", _codex_configuration(repository))
     if "claude" in hosts:
