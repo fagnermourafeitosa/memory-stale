@@ -15,6 +15,9 @@ from memory_stale.symbol_index import SIGNATURE_VERSION, SymbolIndexer, SymbolIn
 
 EVIDENCE_TYPES = frozenset({"source", "symbol", "config", "schema", "test"})
 EVIDENCE_ROLES = frozenset({"primary", "supporting"})
+STATIC_EXTRACTOR_VERSION = "static-v1"
+MAX_STATIC_DEPENDENCY_DEPTH = 3
+MAX_STATIC_DEPENDENCY_NODES = 64
 
 
 class EvidenceError(ValueError):
@@ -41,6 +44,8 @@ class EvidenceEdge:
 
     source: str
     target: str
+    relationship: str = "depends_on"
+    origin: str = "declared"
 
 
 @dataclass(frozen=True)
@@ -50,6 +55,71 @@ class EvidenceGraph:
     items: tuple[tuple[str, str, str], ...]
     supported_by: tuple[str, ...]
     dependencies: tuple[EvidenceEdge, ...]
+
+
+@dataclass(frozen=True)
+class StaticExpansion:
+    """One bounded, deterministic expansion of declared code evidence."""
+
+    graph: EvidenceGraph
+    complete: bool
+
+
+def expand_static_graph(repository: Path, graph: EvidenceGraph) -> StaticExpansion:
+    """Add only uniquely resolved repository-local syntax dependencies."""
+    nodes = {
+        f"{item_type}:{locator}": (item_type, role, locator)
+        for item_type, role, locator in graph.items
+    }
+    edges = set(graph.dependencies)
+    declared_adjacency: dict[str, list[str]] = {}
+    for edge in graph.dependencies:
+        declared_adjacency.setdefault(edge.source, []).append(edge.target)
+    reachable = set(graph.supported_by)
+    pending = sorted(graph.supported_by)
+    while pending:
+        source = pending.pop(0)
+        for target in sorted(declared_adjacency.get(source, [])):
+            if target not in reachable:
+                reachable.add(target)
+                pending.append(target)
+    queue: list[tuple[str, int]] = [
+        (key, 0) for key in sorted(reachable) if nodes[key][0] in {"symbol", "test"}
+    ]
+    expanded: set[str] = set()
+    complete = True
+    indexer = SymbolIndexer(repository)
+    while queue:
+        source_key, depth = queue.pop(0)
+        if source_key in expanded:
+            continue
+        expanded.add(source_key)
+        if depth >= MAX_STATIC_DEPENDENCY_DEPTH:
+            complete = False
+            continue
+        _item_type, _role, source_locator = nodes[source_key]
+        for dependency in indexer.static_dependencies(source_locator):
+            target_key = f"symbol:{dependency.locator}"
+            if target_key not in nodes:
+                if len(nodes) >= MAX_STATIC_DEPENDENCY_NODES:
+                    complete = False
+                    continue
+                nodes[target_key] = ("symbol", "supporting", dependency.locator)
+            if not any(edge.source == source_key and edge.target == target_key for edge in edges):
+                edges.add(
+                    EvidenceEdge(
+                        source_key,
+                        target_key,
+                        relationship=dependency.relationship,
+                        origin="static",
+                    )
+                )
+            if target_key not in expanded:
+                queue.append((target_key, depth + 1))
+    return StaticExpansion(
+        EvidenceGraph(tuple(nodes.values()), graph.supported_by, tuple(sorted(edges))),
+        complete,
+    )
 
 
 def parse_items(value: object) -> tuple[tuple[str, str, str], ...]:

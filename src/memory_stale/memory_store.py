@@ -64,14 +64,16 @@ class MemoryStore:
                 for item in memory.evidence
             ],
             "supported_by": list(memory.supported_by),
-            "dependencies": [
-                {"from": edge.source, "to": edge.target} for edge in memory.dependencies
-            ],
+            "dependencies": [_stored_edge(edge) for edge in memory.dependencies],
             "stale_reasons": memory.stale_reasons,
             "observed_commit": memory.observed_commit,
             "observed_at": memory.observed_at or generated_at,
             "legacy_id": memory.legacy_id,
         }
+        if memory.dependency_extractor_version is not None:
+            extension["dependency_extractor_version"] = memory.dependency_extractor_version
+        if memory.dependency_expansion_complete is not None:
+            extension["dependency_expansion_complete"] = memory.dependency_expansion_complete
         if memory.retrieval_terms:
             extension["retrieval_terms"] = list(memory.retrieval_terms)
         data: dict[str, object] = {
@@ -142,6 +144,12 @@ def _load_v5(data: dict[str, object], claim: str, path: Path) -> Memory:
         legacy_id=_optional_string(extension, "legacy_id", path),
         supported_by=supported_by,
         dependencies=dependencies,
+        dependency_extractor_version=_optional_string(
+            extension, "dependency_extractor_version", path
+        ),
+        dependency_expansion_complete=_optional_bool(
+            extension, "dependency_expansion_complete", path
+        ),
         retrieval_terms=_retrieval_terms(extension, path),
         okf_extras=extras,
     )
@@ -294,10 +302,22 @@ def _dependencies(data: dict[str, object], path: Path) -> tuple[EvidenceEdge, ..
         raise ValueError(f"invalid dependencies in {path}")
     edges: list[EvidenceEdge] = []
     for item in raw:
-        if not isinstance(item, dict) or set(item) != {"from", "to"}:
+        if not isinstance(item, dict) or not {"from", "to"} <= set(item) <= {
+            "from",
+            "to",
+            "relationship",
+            "origin",
+        }:
             raise ValueError(f"invalid dependency in {path}")
         edge = cast(dict[str, object], item)
-        edges.append(EvidenceEdge(_string(edge, "from", path), _string(edge, "to", path)))
+        edges.append(
+            EvidenceEdge(
+                _string(edge, "from", path),
+                _string(edge, "to", path),
+                _optional_string(edge, "relationship", path) or "depends_on",
+                _optional_string(edge, "origin", path) or "declared",
+            )
+        )
     result = tuple(sorted(set(edges)))
     if len(result) != len(edges):
         raise ValueError(f"duplicate dependency in {path}")
@@ -315,6 +335,13 @@ def _validate_graph(
         raise ValueError(f"supported_by references unknown evidence in {path}")
     if any(edge.source not in keys or edge.target not in keys for edge in dependencies):
         raise ValueError(f"dependency references unknown evidence in {path}")
+
+
+def _stored_edge(edge: EvidenceEdge) -> dict[str, str]:
+    stored = {"from": edge.source, "to": edge.target}
+    if edge.relationship != "depends_on" or edge.origin != "declared":
+        stored.update({"relationship": edge.relationship, "origin": edge.origin})
+    return stored
 
 
 def _generated_at(data: dict[str, object], path: Path) -> str:
@@ -377,6 +404,15 @@ def _optional_string(data: Mapping[str, object], key: str, path: Path) -> str | 
     if value is None:
         return None
     if not isinstance(value, str) or not value:
+        raise ValueError(f"invalid {key} in {path}")
+    return value
+
+
+def _optional_bool(data: Mapping[str, object], key: str, path: Path) -> bool | None:
+    value = data.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, bool):
         raise ValueError(f"invalid {key} in {path}")
     return value
 

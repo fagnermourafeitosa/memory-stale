@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 
 from tree_sitter import Node, Tree
@@ -33,6 +34,14 @@ SYMBOL_TYPES = {
     "method_declaration",
     "type_declaration",
     "object_declaration",
+}
+INDEXED_SYMBOL_TYPES = SYMBOL_TYPES | {
+    "assignment",
+    "const_item",
+    "const_spec",
+    "property_declaration",
+    "static_item",
+    "variable_declarator",
 }
 SCOPE_TYPES = {"class_definition", "class_declaration", "struct_item", "object_declaration"}
 COMMENT_TYPES = {"comment", "line_comment", "block_comment"}
@@ -67,6 +76,14 @@ SAFE_LOCAL_IDENTIFIER_PARENTS = {
     "jump_expression",
     "block",
 }
+
+
+@dataclass(frozen=True, order=True)
+class StaticDependency:
+    """One uniquely resolved repository-local syntax dependency."""
+
+    relationship: str
+    locator: str
 
 
 class SymbolIndexError(RuntimeError):
@@ -108,11 +125,18 @@ class SymbolIndexer:
 
     def source_symbols(self, path_text: str) -> dict[str, str]:
         """Return unambiguous named symbols in one supported source file."""
+        return self._symbols(path_text, include_named_declarations=False)
+
+    def _symbols(self, path_text: str, *, include_named_declarations: bool) -> dict[str, str]:
         tree, source = self._source_tree(path_text)
         candidates: dict[str, list[Node]] = {}
 
         def visit(node: Node, scope: tuple[str, ...]) -> None:
-            name = self._symbol_name(node, source)
+            name = (
+                self._symbol_name(node, source)
+                if include_named_declarations or node.type in SYMBOL_TYPES
+                else None
+            )
             locator = f"{path_text}:{'.'.join((*scope, name))}" if name else None
             if locator is not None:
                 candidates.setdefault(locator, []).append(node)
@@ -126,6 +150,184 @@ class SymbolIndexer:
             for locator, nodes in sorted(candidates.items())
             if len(nodes) == 1
         }
+
+    def static_dependencies(self, ref: str) -> tuple[StaticDependency, ...]:
+        """Return conservative direct dependencies for one exact code symbol."""
+        node, source = self._resolve(ref)
+        path_text, _separator, symbol = ref.rpartition(":")
+        caller_scope = symbol.rpartition(".")[0]
+        candidates: dict[str, set[str]] = {}
+        for locator in self._symbols(path_text, include_named_declarations=True):
+            target_symbol = locator.rpartition(":")[2]
+            target_scope, _dot, target_name = target_symbol.rpartition(".")
+            if target_scope == caller_scope:
+                candidates.setdefault(target_name, set()).add(locator)
+        for name, locator in self._python_imported_symbols(path_text, node, source):
+            candidates.setdefault(name, set()).add(locator)
+        for name, locator in self._javascript_imported_symbols(path_text, node, source):
+            candidates.setdefault(name, set()).add(locator)
+        local_names = set(self._local_bindings(node, source))
+        parameters = node.child_by_field_name("parameters")
+        if parameters is not None:
+            local_names.update(
+                source[item.start_byte : item.end_byte].decode("utf-8")
+                for item in self._walk_nodes(parameters)
+                if item.type in IDENTIFIER_TYPES
+            )
+        dependencies: set[StaticDependency] = set()
+        for candidate in self._walk_nodes(node):
+            if candidate is not node and self._is_in_nested_scope(candidate, node):
+                continue
+            if candidate.type not in {"call", "call_expression", "method_invocation"}:
+                if candidate.type not in IDENTIFIER_TYPES:
+                    continue
+                name = source[candidate.start_byte : candidate.end_byte].decode("utf-8")
+                if name in local_names or self._is_declaration_identifier(candidate):
+                    continue
+                if self._is_call_callee(candidate):
+                    continue
+                locators = candidates.get(name, set())
+                if len(locators) == 1:
+                    locator = next(iter(locators))
+                    if locator != ref:
+                        dependencies.add(StaticDependency("reads", locator))
+                continue
+            callee = candidate.child_by_field_name("function") or candidate.child_by_field_name(
+                "name"
+            )
+            if callee is None:
+                callee = next(
+                    (child for child in candidate.named_children if child.type in IDENTIFIER_TYPES),
+                    None,
+                )
+            if callee is not None and callee.type in IDENTIFIER_TYPES:
+                name = source[callee.start_byte : callee.end_byte].decode("utf-8")
+                locators = candidates.get(name, set())
+                if len(locators) == 1:
+                    locator = next(iter(locators))
+                    if locator != ref:
+                        dependencies.add(StaticDependency("calls", locator))
+        return tuple(sorted(dependencies))
+
+    def _is_call_callee(self, node: Node) -> bool:
+        parent = node.parent
+        if parent is None or parent.type not in {"call", "call_expression", "method_invocation"}:
+            return False
+        callee = parent.child_by_field_name("function") or parent.child_by_field_name("name")
+        if callee is None:
+            callee = next(
+                (child for child in parent.named_children if child.type in IDENTIFIER_TYPES), None
+            )
+        return callee == node
+
+    def _is_declaration_identifier(self, node: Node) -> bool:
+        parent = node.parent
+        return bool(parent is not None and parent.child_by_field_name("name") == node)
+
+    def _python_imported_symbols(
+        self, path_text: str, node: Node, source: bytes
+    ) -> tuple[tuple[str, str], ...]:
+        if Path(path_text).suffix.lower() != ".py":
+            return ()
+        root = node
+        while root.parent is not None:
+            root = root.parent
+        imported: list[tuple[str, str]] = []
+        for statement in root.named_children:
+            if statement.type != "import_from_statement":
+                continue
+            module_node = statement.child_by_field_name("module_name")
+            name_node = statement.child_by_field_name("name")
+            if module_node is None or name_node is None:
+                continue
+            module = source[module_node.start_byte : module_node.end_byte].decode("utf-8")
+            imported_name_node = name_node.child_by_field_name("name")
+            alias_node = name_node.child_by_field_name("alias")
+            if imported_name_node is None:
+                imported_name_node = name_node
+            imported_name = source[
+                imported_name_node.start_byte : imported_name_node.end_byte
+            ].decode("utf-8")
+            local_name = (
+                source[alias_node.start_byte : alias_node.end_byte].decode("utf-8")
+                if alias_node is not None
+                else imported_name
+            )
+            relative = Path(*module.split(".")).with_suffix(".py")
+            possible = {
+                candidate
+                for candidate in (
+                    self._root / relative,
+                    self._root / Path(path_text).parent / relative,
+                )
+                if candidate.is_file()
+            }
+            if len(possible) != 1:
+                continue
+            target_path = next(iter(possible)).relative_to(self._root).as_posix()
+            target_locator = f"{target_path}:{imported_name}"
+            try:
+                self.signature(target_locator)
+            except SymbolIndexError:
+                continue
+            imported.append((local_name, target_locator))
+        return tuple(sorted(imported))
+
+    def _javascript_imported_symbols(
+        self, path_text: str, node: Node, source: bytes
+    ) -> tuple[tuple[str, str], ...]:
+        suffix = Path(path_text).suffix.lower()
+        if suffix not in {".js", ".jsx", ".ts", ".tsx"}:
+            return ()
+        root = node
+        while root.parent is not None:
+            root = root.parent
+        imported: list[tuple[str, str]] = []
+        for statement in root.named_children:
+            if statement.type != "import_statement":
+                continue
+            source_node = statement.child_by_field_name("source")
+            if source_node is None:
+                continue
+            fragment = next(
+                (child for child in source_node.named_children if child.type == "string_fragment"),
+                None,
+            )
+            if fragment is None:
+                continue
+            module = source[fragment.start_byte : fragment.end_byte].decode("utf-8")
+            if not module.startswith(("./", "../")):
+                continue
+            base = (self._root / Path(path_text).parent / module).resolve()
+            try:
+                base.relative_to(self._root)
+            except ValueError:
+                continue
+            possible = [base] if base.suffix else [base.with_suffix(item) for item in (suffix,)]
+            matches = [candidate for candidate in possible if candidate.is_file()]
+            if len(matches) != 1:
+                continue
+            target_path = matches[0].relative_to(self._root).as_posix()
+            for specifier in self._walk_nodes(statement):
+                if specifier.type != "import_specifier":
+                    continue
+                name_node = specifier.child_by_field_name("name")
+                alias_node = specifier.child_by_field_name("alias")
+                if name_node is None:
+                    continue
+                imported_name = source[name_node.start_byte : name_node.end_byte].decode("utf-8")
+                local_name = (
+                    source[alias_node.start_byte : alias_node.end_byte].decode("utf-8")
+                    if alias_node is not None
+                    else imported_name
+                )
+                target_locator = f"{target_path}:{imported_name}"
+                try:
+                    self.signature(target_locator)
+                except SymbolIndexError:
+                    continue
+                imported.append((local_name, target_locator))
+        return tuple(sorted(imported))
 
     def _signature_for(self, node: Node, source: bytes) -> str:
         local_bindings = self._local_bindings(node, source)
@@ -187,8 +389,54 @@ class SymbolIndexer:
         return None
 
     def _symbol_name(self, node: Node, source: bytes) -> str | None:
-        if node.type not in SYMBOL_TYPES:
+        if node.type not in INDEXED_SYMBOL_TYPES:
             return None
+        if node.type == "assignment":
+            if node.parent is None or node.parent.type != "module":
+                return None
+            left = node.child_by_field_name("left")
+            if left is None or left.type not in IDENTIFIER_TYPES:
+                return None
+            return source[left.start_byte : left.end_byte].decode("utf-8")
+        if node.type == "variable_declarator":
+            declaration = node.parent
+            scope = declaration.parent if declaration is not None else None
+            if declaration is None or declaration.type not in {
+                "field_declaration",
+                "lexical_declaration",
+            }:
+                return None
+            if scope is None or scope.type not in {"class_body", "program"}:
+                return None
+        elif node.type == "const_spec":
+            declaration = node.parent
+            scope = declaration.parent if declaration is not None else None
+            if (
+                declaration is None
+                or declaration.type != "const_declaration"
+                or scope is None
+                or scope.type != "source_file"
+            ):
+                return None
+        elif node.type == "property_declaration":
+            if node.parent is None or node.parent.type not in {"source_file", "class_body"}:
+                return None
+            declaration = next(
+                (child for child in node.named_children if child.type == "variable_declaration"),
+                None,
+            )
+            if declaration is None:
+                return None
+            name_node = next(
+                (child for child in declaration.named_children if child.type in IDENTIFIER_TYPES),
+                None,
+            )
+            if name_node is None:
+                return None
+            return source[name_node.start_byte : name_node.end_byte].decode("utf-8")
+        elif node.type in {"const_item", "static_item"}:
+            if node.parent is None or node.parent.type != "source_file":
+                return None
         name_node = node.child_by_field_name("name")
         if name_node is None:
             name_node = next(

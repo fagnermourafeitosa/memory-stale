@@ -60,6 +60,8 @@ def test_stop_persists_an_okf_memory_claim(tmp_path: Path) -> None:
         ],
         "supported_by": ["symbol:jobs.py:retry"],
         "dependencies": [],
+        "dependency_extractor_version": "static-v1",
+        "dependency_expansion_complete": True,
         "stale_reasons": None,
         "observed_commit": None,
         "observed_at": generated["at"],
@@ -776,6 +778,407 @@ def test_transitive_evidence_dependency_marks_claim_stale_with_provenance_path(
             "-> symbol:mfa.py:mfa_policy"
         )
     }
+
+
+def test_static_call_dependency_invalidates_a_claim_about_its_unchanged_caller(
+    tmp_path: Path,
+) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "service.py"
+    source.write_text(
+        "def allow_login():\n    return True\n\n\ndef login():\n    return False\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "service.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Implement service.py:login")
+    source.write_text(
+        "def allow_login():\n    return True\n\n\ndef login():\n    return allow_login()\n",
+        encoding="utf-8",
+    )
+    captured = harness.capture(
+        kind="behavior",
+        claim="Login follows the repository access policy.",
+        evidence=[{"type": "symbol", "role": "primary", "locator": "service.py:login"}],
+        durability_reason="The login result is delegated to the access policy.",
+    )
+    assert cast(dict[str, object], captured["result"])["isError"] is False, captured
+    harness.hook("Stop", "turn-1")
+
+    active = next(
+        memory
+        for memory in MemoryStore(harness.root).load_all()
+        if memory.claim == "Login follows the repository access policy."
+    )
+    assert [
+        (edge.source, edge.target, edge.relationship, edge.origin) for edge in active.dependencies
+    ] == [("symbol:service.py:login", "symbol:service.py:allow_login", "calls", "static")]
+
+    harness.hook("UserPromptSubmit", "turn-2", prompt="Change service.py:allow_login")
+    source.write_text(
+        "def allow_login():\n    return False\n\n\ndef login():\n    return allow_login()\n",
+        encoding="utf-8",
+    )
+    harness.hook("Stop", "turn-2")
+
+    stale = next(
+        memory
+        for memory in MemoryStore(harness.root).load_all()
+        if memory.claim == "Login follows the repository access policy."
+    )
+    assert stale.status == "stale"
+    assert stale.stale_reasons == {
+        "symbol:service.py:allow_login": (
+            "changed via symbol:service.py:login -[calls]-> symbol:service.py:allow_login"
+        )
+    }
+
+    context = harness.hook("UserPromptSubmit", "turn-3", prompt="Review service.py:login")
+    assert context is not None
+    additional = cast(dict[str, object], context["hookSpecificOutput"])["additionalContext"]
+    assert "Login follows the repository access policy." not in str(additional)
+
+
+def test_static_import_tracks_only_the_called_repository_symbol(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    app = harness.root / "app.py"
+    policy = harness.root / "policy.py"
+    app.write_text("def login():\n    return False\n", encoding="utf-8")
+    policy.write_text(
+        "def allow_login():\n    return True\n\n\ndef audit_label():\n    return 'old'\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "app.py", "policy.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Implement app.py:login")
+    app.write_text(
+        "from policy import allow_login as permitted\n\n\ndef login():\n    return permitted()\n",
+        encoding="utf-8",
+    )
+    captured = harness.capture(
+        kind="behavior",
+        claim="Login delegates to the repository policy.",
+        evidence=[{"type": "symbol", "role": "primary", "locator": "app.py:login"}],
+        durability_reason="The policy result controls login.",
+    )
+    assert cast(dict[str, object], captured["result"])["isError"] is False, captured
+    harness.hook("Stop", "turn-1")
+
+    memory = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Login delegates to the repository policy."
+    )
+    assert [(edge.target, edge.relationship) for edge in memory.dependencies] == [
+        ("symbol:policy.py:allow_login", "calls")
+    ]
+
+    harness.hook("UserPromptSubmit", "turn-2", prompt="Change the policy audit label")
+    policy.write_text(
+        "def allow_login():\n    return True\n\n\ndef audit_label():\n    return 'new'\n",
+        encoding="utf-8",
+    )
+    harness.hook("Stop", "turn-2")
+    unchanged = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Login delegates to the repository policy."
+    )
+    assert unchanged.status == "active"
+
+    harness.hook("UserPromptSubmit", "turn-3", prompt="Change policy.py:allow_login")
+    policy.write_text(
+        "def allow_login():\n    return False\n\n\ndef audit_label():\n    return 'new'\n",
+        encoding="utf-8",
+    )
+    harness.hook("Stop", "turn-3")
+    changed = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Login delegates to the repository policy."
+    )
+    assert changed.status == "stale"
+
+
+def test_static_named_read_invalidates_a_claim_about_its_unchanged_reader(
+    tmp_path: Path,
+) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "jobs.py"
+    source.write_text(
+        "MAX_RETRIES = 3\n\n\ndef retry_limit():\n    return 0\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "jobs.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Implement jobs.py:retry_limit")
+    source.write_text(
+        "MAX_RETRIES = 3\n\n\ndef retry_limit():\n    return MAX_RETRIES\n",
+        encoding="utf-8",
+    )
+    captured = harness.capture(
+        kind="behavior",
+        claim="Jobs retry at most three times.",
+        evidence=[{"type": "symbol", "role": "primary", "locator": "jobs.py:retry_limit"}],
+        durability_reason="The retry function reads the repository limit.",
+    )
+    assert cast(dict[str, object], captured["result"])["isError"] is False, captured
+    harness.hook("Stop", "turn-1")
+
+    active = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Jobs retry at most three times."
+    )
+    assert [(edge.target, edge.relationship) for edge in active.dependencies] == [
+        ("symbol:jobs.py:MAX_RETRIES", "reads")
+    ]
+
+    harness.hook("UserPromptSubmit", "turn-2", prompt="Raise MAX_RETRIES")
+    source.write_text(
+        "MAX_RETRIES = 5\n\n\ndef retry_limit():\n    return MAX_RETRIES\n",
+        encoding="utf-8",
+    )
+    harness.hook("Stop", "turn-2")
+
+    stale = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Jobs retry at most three times."
+    )
+    assert stale.status == "stale"
+    assert stale.stale_reasons == {
+        "symbol:jobs.py:MAX_RETRIES": (
+            "changed via symbol:jobs.py:retry_limit -[reads]-> symbol:jobs.py:MAX_RETRIES"
+        )
+    }
+
+
+def test_declared_code_dependency_is_also_expanded_statically(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "auth.py"
+    source.write_text(
+        "def rule():\n    return True\n\n\ndef policy():\n    return rule()\n\n\ndef login():\n"
+        "    return False\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "auth.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Implement auth.py:login")
+    source.write_text(
+        "def rule():\n    return True\n\n\ndef policy():\n    return rule()\n\n\ndef login():\n"
+        "    return True\n",
+        encoding="utf-8",
+    )
+    captured = harness.capture(
+        kind="behavior",
+        claim="Login follows the declared policy and its static rule.",
+        evidence=[
+            {
+                "type": "symbol",
+                "role": "primary",
+                "locator": "auth.py:login",
+                "depends_on": [{"type": "symbol", "locator": "auth.py:policy"}],
+            }
+        ],
+        durability_reason="The declared policy delegates to the repository rule.",
+    )
+    assert cast(dict[str, object], captured["result"])["isError"] is False, captured
+    harness.hook("Stop", "turn-1")
+
+    active = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Login follows the declared policy and its static rule."
+    )
+    assert [
+        (edge.source, edge.target, edge.relationship, edge.origin) for edge in active.dependencies
+    ] == [
+        ("symbol:auth.py:login", "symbol:auth.py:policy", "depends_on", "declared"),
+        ("symbol:auth.py:policy", "symbol:auth.py:rule", "calls", "static"),
+    ]
+
+
+def test_automatic_symbol_record_tracks_its_static_dependencies(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "access.py"
+    source.write_text(
+        "def policy():\n    return True\n\n\ndef login():\n    return False\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "access.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Implement access.py:login")
+    source.write_text(
+        "def policy():\n    return True\n\n\ndef login():\n    return policy()\n",
+        encoding="utf-8",
+    )
+    harness.hook("Stop", "turn-1")
+
+    automatic = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Automatic change record: changed symbol access.py:login."
+    )
+    assert [(edge.target, edge.relationship) for edge in automatic.dependencies] == [
+        ("symbol:access.py:policy", "calls")
+    ]
+
+    harness.hook("UserPromptSubmit", "turn-2", prompt="Change access.py:policy")
+    source.write_text(
+        "def policy():\n    return False\n\n\ndef login():\n    return policy()\n",
+        encoding="utf-8",
+    )
+    harness.hook("Stop", "turn-2")
+
+    automatic = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Automatic change record: changed symbol access.py:login."
+    )
+    assert automatic.status == "stale"
+
+
+def test_static_dependency_expansion_reports_its_depth_bound(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "chain.py"
+    source.write_text(
+        "def fourth():\n    return True\n\n\ndef third():\n    return fourth()\n\n\ndef second():\n"
+        "    return third()\n\n\ndef first():\n    return second()\n\n\ndef entry():\n    return False\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "chain.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Implement chain.py:entry")
+    source.write_text(
+        "def fourth():\n    return True\n\n\ndef third():\n    return fourth()\n\n\ndef second():\n"
+        "    return third()\n\n\ndef first():\n    return second()\n\n\ndef entry():\n    return first()\n",
+        encoding="utf-8",
+    )
+    captured = harness.capture(
+        kind="behavior",
+        claim="Entry follows the bounded repository chain.",
+        evidence=[{"type": "symbol", "role": "primary", "locator": "chain.py:entry"}],
+        durability_reason="The entry result is delegated through repository functions.",
+    )
+    assert cast(dict[str, object], captured["result"])["isError"] is False, captured
+    harness.hook("Stop", "turn-1")
+
+    memory = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Entry follows the bounded repository chain."
+    )
+    assert memory.dependency_extractor_version == "static-v1"
+    assert memory.dependency_expansion_complete is False
+    assert {item.locator for item in memory.evidence} == {
+        "chain.py:entry",
+        "chain.py:first",
+        "chain.py:second",
+        "chain.py:third",
+    }
+
+
+def test_static_dependency_expansion_reports_its_node_bound(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "fanout.py"
+    dependencies = "\n\n".join(
+        f"def dependency_{index}():\n    return {index}" for index in range(70)
+    )
+    source.write_text(f"{dependencies}\n\n\ndef entry():\n    return 0\n", encoding="utf-8")
+    harness.git("add", "fanout.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Implement fanout.py:entry")
+    calls = ", ".join(f"dependency_{index}()" for index in range(70))
+    source.write_text(
+        f"{dependencies}\n\n\ndef entry():\n    return ({calls})\n",
+        encoding="utf-8",
+    )
+    captured = harness.capture(
+        kind="behavior",
+        claim="Entry aggregates the repository dependency fanout.",
+        evidence=[{"type": "symbol", "role": "primary", "locator": "fanout.py:entry"}],
+        durability_reason="The aggregate reads a bounded dependency set.",
+    )
+    assert cast(dict[str, object], captured["result"])["isError"] is False, captured
+    harness.hook("Stop", "turn-1")
+
+    memory = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Entry aggregates the repository dependency fanout."
+    )
+    assert memory.dependency_expansion_complete is False
+    assert len(memory.evidence) == 64
+
+
+def test_static_dependency_cycle_is_finite_and_complete(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "cycle.py"
+    source.write_text(
+        "def policy():\n    return login()\n\n\ndef login():\n    return False\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "cycle.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Implement cycle.py:login")
+    source.write_text(
+        "def policy():\n    return login()\n\n\ndef login():\n    return policy()\n",
+        encoding="utf-8",
+    )
+    harness.hook("Stop", "turn-1")
+
+    memory = next(
+        item
+        for item in MemoryStore(harness.root).load_all()
+        if item.claim == "Automatic change record: changed symbol cycle.py:login."
+    )
+    assert memory.dependency_expansion_complete is True
+    assert [(edge.source, edge.target, edge.relationship) for edge in memory.dependencies] == [
+        ("symbol:cycle.py:login", "symbol:cycle.py:policy", "calls"),
+        ("symbol:cycle.py:policy", "symbol:cycle.py:login", "calls"),
+    ]
+
+
+def test_repeated_static_graph_capture_is_idempotent(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    source = harness.root / "idempotent.py"
+    source.write_text(
+        "def policy():\n    return True\n\n\ndef login():\n    return False\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "idempotent.py")
+    harness.git("commit", "--quiet", "-m", "baseline")
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Implement idempotent.py:login")
+    source.write_text(
+        "def policy():\n    return True\n\n\ndef login():\n    return policy()\n",
+        encoding="utf-8",
+    )
+    arguments = {
+        "kind": "behavior",
+        "claim": "Login follows the idempotent policy.",
+        "evidence": [{"type": "symbol", "role": "primary", "locator": "idempotent.py:login"}],
+        "durability_reason": "The policy result controls login.",
+    }
+
+    first = harness.capture(**arguments)
+    duplicate = harness.capture(**arguments)
+
+    first_result = cast(dict[str, object], first["result"])
+    duplicate_result = cast(dict[str, object], duplicate["result"])
+    assert first_result["isError"] is False
+    assert duplicate_result["isError"] is False
+    assert cast(list[dict[str, object]], duplicate_result["content"])[0]["text"] == (
+        "Capture already staged for this turn."
+    )
 
 
 def test_recapturing_a_stale_claim_preserves_history_and_restores_active_context(

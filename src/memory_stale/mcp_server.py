@@ -10,7 +10,15 @@ from pathlib import Path
 from typing import TextIO, cast
 
 from memory_stale.dream import dream
-from memory_stale.evidence import EvidenceError, EvidenceGraph, parse_graph, resolve_item
+from memory_stale.evidence import (
+    STATIC_EXTRACTOR_VERSION,
+    EvidenceEdge,
+    EvidenceError,
+    EvidenceGraph,
+    expand_static_graph,
+    parse_graph,
+    resolve_item,
+)
 from memory_stale.hook_runtime import _atomic_json_write, _repository_root, _snapshot
 from memory_stale.lifecycle import normalize_retrieval_terms
 from memory_stale.memory_store import MemoryStore
@@ -81,6 +89,8 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         raise ValueError("source evidence is reserved for automatic capture")
     _validate_semantic_claim(claim, graph)
     repository = _repository_root(cwd)
+    expansion = expand_static_graph(repository, graph)
+    graph = expansion.graph
     observed_commit = subprocess.run(
         ["git", "-C", str(repository), "rev-parse", "HEAD"],
         check=True,
@@ -116,7 +126,17 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         "claim": claim,
         "evidence": evidence,
         "supported_by": list(graph.supported_by),
-        "dependencies": [{"from": edge.source, "to": edge.target} for edge in graph.dependencies],
+        "dependencies": [
+            {
+                "from": edge.source,
+                "to": edge.target,
+                "relationship": edge.relationship,
+                "origin": edge.origin,
+            }
+            for edge in graph.dependencies
+        ],
+        "dependency_extractor_version": STATIC_EXTRACTOR_VERSION,
+        "dependency_expansion_complete": expansion.complete,
         "durability_reason": durability_reason,
         "retrieval_terms": list(retrieval_terms),
         "schema_version": 5,
@@ -147,7 +167,30 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
 
 def _capture_graph_key(capture: dict[str, object]) -> tuple[object, ...]:
     graph = parse_graph(capture.get("evidence"))
-    return _graph_identity(graph)
+    raw_supported_by = capture.get("supported_by")
+    supported_by = (
+        tuple(sorted(cast(list[str], raw_supported_by)))
+        if isinstance(raw_supported_by, list)
+        and all(isinstance(item, str) for item in raw_supported_by)
+        else graph.supported_by
+    )
+    raw_dependencies = capture.get("dependencies")
+    dependencies: list[EvidenceEdge] = []
+    if isinstance(raw_dependencies, list):
+        for raw in raw_dependencies:
+            if not isinstance(raw, dict):
+                continue
+            source = raw.get("from")
+            target = raw.get("to")
+            if not isinstance(source, str) or not isinstance(target, str):
+                continue
+            relationship = raw.get("relationship", "depends_on")
+            origin = raw.get("origin", "declared")
+            if isinstance(relationship, str) and isinstance(origin, str):
+                dependencies.append(EvidenceEdge(source, target, relationship, origin))
+    return _graph_identity(
+        EvidenceGraph(graph.items, supported_by, tuple(sorted(set(dependencies))))
+    )
 
 
 def _graph_identity(graph: EvidenceGraph) -> tuple[object, ...]:

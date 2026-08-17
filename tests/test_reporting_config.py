@@ -62,3 +62,34 @@ def test_html_report_escapes_content_and_is_explicit_by_default(tmp_path: Path) 
     assert "Observed commit" in html
     assert "Retrieval terms" in html
     assert "MFA" in html
+
+
+def test_html_report_explains_static_edges_and_bounded_expansion(tmp_path: Path) -> None:
+    memory = Memory(
+        "static-graph",
+        "behavior",
+        "active",
+        "Login follows policy.",
+        "The caller delegates to policy.",
+        (
+            EvidenceItem("symbol", "primary", "auth.py:login", "login-sig"),
+            EvidenceItem("symbol", "supporting", "policy.py:allow", "policy-sig"),
+        ),
+        supported_by=("symbol:auth.py:login",),
+        dependencies=(
+            EvidenceEdge(
+                "symbol:auth.py:login",
+                "symbol:policy.py:allow",
+                "calls",
+                "static",
+            ),
+        ),
+        dependency_extractor_version="static-v1",
+        dependency_expansion_complete=False,
+    )
+
+    path = write_report(tmp_path, [memory], requested=True)
+    assert path is not None
+    html = path.read_text(encoding="utf-8")
+    assert "calls (static): symbol:auth.py:login → symbol:policy.py:allow" in html
+    assert "static-v1 · bounded" in html

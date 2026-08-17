@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="Memory Stale logo" width="240">
+  <img src="./logo.png" alt="Memory Stale logo" width="240">
 </p>
 
 # Memory Stale
@@ -36,8 +36,9 @@ Task 3  Codex works on authentication again.
 
 Without a freshness check, Task 3 can receive the password-only claim as if it
 still described the current implementation. Memory Stale fingerprints the
-recorded evidence, detects that `AuthService.login` changed, marks the claim
-`stale`, and excludes it from ordinary context.
+recorded evidence and its bounded, statically resolved repository dependencies,
+detects when any reachable evidence changes, marks the claim `stale`, and
+excludes it from ordinary context.
 
 | After recorded code changes | Plain stored context | Memory Stale |
 | --- | --- | --- |
@@ -47,14 +48,15 @@ recorded evidence, detects that `AuthService.login` changed, marks the claim
 | Hosted dependency | System-dependent | None; storage and evaluation stay local |
 
 ```text
-unchanged evidence → active memory → available to Codex
-changed evidence   → stale memory  → excluded until revalidated
+unchanged evidence closure → active memory → available to Codex
+changed reachable evidence → stale memory  → excluded until revalidated
 ```
 
-In the checked-in 100-case end-to-end corpus, Memory Stale reached **80.0%
-overall accuracy**, **82.6% stale precision**, and **76.0% stale recall**. It
-classified every direct local change and every declared evidence-graph case
-correctly; the remaining weaknesses are documented in
+In the checked-in 100-case end-to-end corpus, the post-graph runtime reached
+**86.0% overall accuracy**, **84.6% stale precision**, and **88.0% stale
+recall**. It classified every direct local change and every declared
+evidence-graph case correctly; the before/after result and remaining weaknesses
+are documented in
 [Measured evaluation](#measured-evaluation), not hidden behind the aggregate.
 
 `active` means the recorded evidence is unchanged; it is not proof that a claim
@@ -150,7 +152,7 @@ cause lower-ranked candidates outside the selected prefix to be injected.
 flowchart TD
     A[Codex or Claude Code starts a task] --> B[UserPromptSubmit hook]
     B --> C[Load project memories]
-    C --> D{"All recorded evidence<br/>still resolves and matches?"}
+    C --> D{"All recorded evidence and<br/>static dependencies still match?"}
     D -->|Yes| E[Classify as active]
     D -->|No| F["Classify as stale<br/>and retain for audit"]
     E --> G{"Relevant to this task?<br/>Exact code ref or lexical match"}
@@ -160,7 +162,34 @@ flowchart TD
 ```
 
 This means a comment-only or formatting-only edit does not invalidate a memory,
-while a semantic change to its referenced source does.
+while a semantic change to its referenced source or a safely resolved dependency
+does.
+
+For `symbol` and `test` evidence, the runtime constructs a small static
+provenance graph before persisting the revision. It records direct calls and
+reads of uniquely resolved repository declarations, then follows those
+dependencies transitively up to three edges and 64 total evidence nodes. Every
+automatic edge is fingerprinted and stored with the revision:
+
+```text
+claim
+  → supported_by auth.py:login
+      → calls policy.py:allow_login
+      → reads auth.py:MFA_REQUIRED
+```
+
+Same-source calls and named reads are supported for Python, JavaScript,
+TypeScript, Go, Java, Kotlin, and Rust. Python named imports and JavaScript or
+TypeScript relative named imports may cross files only when they map to exactly
+one repository declaration. Imports never make a revision depend on a complete
+module. Ambiguous names, dynamic receivers, callbacks, wildcard imports,
+inheritance dispatch, framework conventions, external packages, and runtime
+configuration are omitted rather than guessed; they may still be represented
+through explicit `depends_on` evidence.
+
+The stored extractor version and `complete` or `bounded` status describe the
+static expansion that was actually attempted. They do not claim that the graph
+captures every runtime dependency or proves the claim true.
 
 ## How a memory is created
 
@@ -177,8 +206,9 @@ flowchart TD
     B --> D["Stop fingerprints<br/>final source and symbols"]
     C --> E[Stage semantic claim with evidence]
     D --> F[Stage automatic provenance records]
-    E --> G[Reconcile final evidence]
-    F --> G
+    E --> I[Expand safe static dependencies]
+    F --> I
+    I --> G[Reconcile final evidence closure]
     G --> H[Write both record types as Markdown]
 ```
 
@@ -318,16 +348,19 @@ Each completed supported-code change stores automatic symbol/source provenance
 and at least one host-authored semantic claim covering its coherent meaning.
 Automatic primary evidence is a parsed symbol when available, otherwise a
 parsed source file; it supports Python, JavaScript/TypeScript, Go, Java, Kotlin,
-and Rust. Semantic captures may also use symbols, tests, configuration nodes,
-and schema nodes. Unsupported languages intentionally have no fallback.
+and Rust. Exact symbol and test evidence is expanded into the safely resolved
+bounded static graph described above. Semantic captures may also use symbols,
+tests, configuration nodes, and schema nodes. Unsupported languages intentionally
+have no fallback.
 
 ## Design boundaries
 
 - **Codex or Claude Code supplies meaning.** The host decides whether a fact
   is durable, states the claim, and may declare a few retrieval terms.
-- **The local core supplies proof of freshness.** It resolves declared evidence,
-  fingerprints it, retrieves active records, matches declared terms literally,
-  and manages lifecycle state.
+- **The local core supplies proof of recorded freshness.** It resolves declared
+  evidence, adds only unambiguous static dependencies, fingerprints the bounded
+  closure, retrieves active records, matches declared terms literally, and
+  manages lifecycle state.
 - **Hooks and MCP are adapters.** Codex and Claude payload adapters normalize
   into one deterministic Python lifecycle and share one MCP server.
 - **Failures do not block coding.** Hook failures return actionable, non-blocking
@@ -342,25 +375,30 @@ make a memory stale is the positive class.
 
 | Human label | Observed stale | Observed active |
 | --- | ---: | ---: |
-| Changed | 38 true stale | 12 missed changes |
+| Changed | 44 true stale | 6 missed changes |
 | Preserved | 8 false stale | 42 true active |
 
 | Corpus metric | Result | Descriptive Wilson 95% interval |
 | --- | ---: | ---: |
-| Overall accuracy | 80/100 (80.0%) | 71.1–86.7% |
-| Stale precision | 38/46 (82.6%) | 69.3–90.9% |
-| Stale recall | 38/50 (76.0%) | 62.6–85.7% |
-| Stale F1 | 79.2% | — |
+| Overall accuracy | 86/100 (86.0%) | 77.9–91.5% |
+| Stale precision | 44/52 (84.6%) | 72.5–92.0% |
+| Stale recall | 44/50 (88.0%) | 76.2–94.4% |
+| Stale F1 | 86.3% | — |
 | Specificity | 42/50 (84.0%) | 71.5–91.7% |
 | Unnecessary revalidation | 8/50 (16.0%) | 8.3–28.5% |
-| Missed semantic changes | 12/50 (24.0%) | 14.3–37.4% |
-| Unweighted macro-family accuracy | 72.2% | — |
+| Missed semantic changes | 6/50 (12.0%) | 5.6–23.8% |
+| Unweighted macro-family accuracy | 80.6% | — |
 
-All 12 missed changes are incomplete-provenance cases, where changed config,
-policy, schema, constants, or dependencies were not declared as evidence. All
-8 false-stale results are conservative classifications of behavior-preserving
-transformations. Direct local changes, declared evidence graphs, preserving
-edits, and repository-shape cases matched their labels in this corpus.
+Before automatic static provenance, the same corpus produced 38 true stale, 12
+missed changes, and 80.0% overall accuracy. The graph recovered 6 of the 12
+incomplete-provenance cases: Python functions reached through uniquely resolved
+named imports. It introduced no additional false-stale result in this corpus.
+The 6 remaining misses are the deliberately excluded YAML, JSON, TOML, and JSON
+Schema reads plus module-qualified constant reads such as `limits.LIMIT` and
+`defaults.timeout_seconds`. All 8 false-stale results remain conservative
+classifications of behavior-preserving transformations. This is a controlled
+before/after regression comparison, not an estimate for arbitrary real-world
+repositories.
 
 The same 100 cases now also contain 20 domain-oriented declared-term scenarios,
 10 unrelated negative prompts, and four source-backed competing memories in
@@ -372,27 +410,27 @@ remain fixed.
 
 | Retrieval metric | Result | Descriptive Wilson 95% interval |
 | --- | ---: | ---: |
-| Accuracy with terms | 76/100 (76.0%) | 66.8–83.3% |
-| Accuracy without terms, counterfactual | 76/100 (76.0%) | 66.8–83.3% |
+| Accuracy with terms | 81/100 (81.0%) | 72.2–87.5% |
+| Accuracy without terms, counterfactual | 81/100 (81.0%) | 72.2–87.5% |
 | Expected-target recall with terms | 32/40 (80.0%) | 65.2–89.5% |
-| No-context/target exclusion with terms | 44/60 (73.3%) | 61.0–82.9% |
+| No-context/target exclusion with terms | 49/60 (81.7%) | 70.1–89.4% |
 | Declared-term target recall, without → with | 7/10 → 7/10 | — |
-| Declared-term no-context exclusion, without → with | 1/10 → 1/10 | — |
-| Declared-term micro precision, without → with | 7/34 (20.6%) → 7/35 (20.0%) | — |
+| Declared-term no-context exclusion, without → with | 3/10 → 3/10 | — |
+| Declared-term micro precision, without → with | 7/27 (25.9%) → 7/28 (25.0%) | — |
 
-The controlled net change is **0 correctly handled cases out of 100**. The
-term gate prevents an alias by itself from making a memory eligible, so terms
-are now a ranking boost over a claim or locator corroboration. Under the
-default `top_k = 5` selection limit, every candidate that survived the lexical
-cutoffs remained inside the selected prefix; the boost therefore changes no
-target outcome in this corpus. The 1,500-token context budget is applied only
-after that prefix is chosen.
+Holding lifecycle outcomes fixed, the controlled net change from declared terms
+remains **0 correctly handled cases out of 100**. The term gate prevents an
+alias by itself from making a memory eligible, so terms are a ranking boost over
+a claim or locator corroboration. Under the default `top_k = 5` selection limit,
+every candidate that survived the lexical cutoffs remained inside the selected
+prefix; the boost therefore changes no target outcome in this corpus. The
+1,500-token context budget is applied only after that prefix is chosen.
 
 The 20 declared-term cases are pre-split before measurement: five expected
 inclusions and five expected exclusions form calibration, and the same balance
 forms holdout. Calibration is 2/10 (20.0%) with and without terms; holdout is
-6/10 (60.0%) with and without terms. The holdout's target recall is 5/5 and its
-no-context exclusion is 1/5, showing that the remaining errors are lifecycle
+8/10 (80.0%) with and without terms. The holdout's target recall is 5/5 and its
+no-context exclusion is 3/5, showing that the remaining errors are lifecycle
 misses and unrelated active context, not a post-hoc threshold selection.
 
 ### Methodology and reproducibility
@@ -405,21 +443,22 @@ is compared with the human label. Operational failures are reported separately
 and cannot disappear into the semantic confusion matrix.
 
 The inputs and exact per-case outcomes are reviewable in the
-[versioned corpus](evaluator/corpus/repository-lifecycle-corpus.yaml) and
-[dated result](evaluator/results/2026-08-17-repository-lifecycle-evaluation.yaml).
+[versioned corpus](evaluator/corpus/repository-lifecycle-corpus.yaml), the
+[pre-graph result](evaluator/results/2026-08-17-repository-lifecycle-evaluation.yaml),
+and the
+[post-graph result](evaluator/results/2026-08-17-post-static-provenance-graph.yaml).
 The [base evaluation contract](specs/21-quality-evaluation-100-samples.md) and
 [declared-term evaluation contract](specs/37-declared-retrieval-terms.md)
 document sample design and interpretation, while the
 [end-to-end test](evaluator/tests/test_repository_lifecycle.py) reruns the corpus
 and requires an exact baseline match.
 
-On 2026-08-17, the declared-term implementation was run through all 100 cases
-plus the 20 held-constant counterfactual trials. It reproduced the lifecycle
-matrix above and completed with no operational failures. After adding the
-corroboration gate and fixed score cutoffs, retrieval accuracy was 76% both
-with terms and with terms removed; the detailed calibration, holdout, recall,
-exclusion, precision, distractor, and per-case outcomes are stored in the dated
-result.
+On 2026-08-17, the post-graph runtime was run once through all 100 cases plus the
+20 held-constant counterfactual trials. It completed with no operational
+failures. Lifecycle accuracy increased from 80% to 86%, while retrieval accuracy
+increased from 76% to 81% both with terms and with terms removed. The detailed
+calibration, holdout, recall, exclusion, precision, distractor, and per-case
+outcomes are stored in the separate post-graph result.
 
 On 2026-08-15, commit `f6fe73d` was checked by repeating all 100 cases ten times:
 1,000/1,000 lifecycle executions matched the baseline, with no operational

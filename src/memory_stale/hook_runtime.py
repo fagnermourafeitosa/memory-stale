@@ -292,7 +292,13 @@ def _run_lifecycle(
     _ledger: list[LedgerEntry],
     captures: list[object],
 ) -> None:
-    from memory_stale.evidence import resolve_stored_item
+    from memory_stale.evidence import (
+        STATIC_EXTRACTOR_VERSION,
+        expand_static_graph,
+        parse_graph,
+        resolve_item,
+        resolve_stored_item,
+    )
     from memory_stale.lifecycle import RefEvidence, reconcile
     from memory_stale.memory_store import MemoryStore
 
@@ -312,9 +318,43 @@ def _run_lifecycle(
                 evidence[item.key] = RefEvidence(resolve_stored_item(repository, item))
             except EvidenceError as error:
                 evidence[item.key] = RefEvidence(None, _evidence_error_reason(error))
-    capture_mappings = [
-        cast(Mapping[str, object], item) for item in captures if isinstance(item, dict)
-    ]
+    capture_mappings: list[Mapping[str, object]] = []
+    for raw_capture in captures:
+        if not isinstance(raw_capture, dict):
+            continue
+        capture = cast(dict[str, object], raw_capture)
+        if "dependency_extractor_version" in capture:
+            capture_mappings.append(capture)
+            continue
+        graph = parse_graph(capture.get("evidence"))
+        if not any(item_type in {"symbol", "test"} for item_type, _role, _locator in graph.items):
+            capture_mappings.append(capture)
+            continue
+        expansion = expand_static_graph(repository, graph)
+        expanded = dict(capture)
+        expanded["evidence"] = [
+            {
+                "type": resolved.type,
+                "role": resolved.role,
+                "locator": resolved.locator,
+                "fingerprint": resolved.fingerprint,
+            }
+            for item_type, role, locator in expansion.graph.items
+            for resolved in [resolve_item(repository, item_type, role, locator)]
+        ]
+        expanded["supported_by"] = list(expansion.graph.supported_by)
+        expanded["dependencies"] = [
+            {
+                "from": edge.source,
+                "to": edge.target,
+                "relationship": edge.relationship,
+                "origin": edge.origin,
+            }
+            for edge in expansion.graph.dependencies
+        ]
+        expanded["dependency_extractor_version"] = STATIC_EXTRACTOR_VERSION
+        expanded["dependency_expansion_complete"] = expansion.complete
+        capture_mappings.append(expanded)
     store.write_all(reconcile(memories, capture_mappings, evidence))
 
 

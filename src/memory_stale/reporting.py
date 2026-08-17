@@ -69,9 +69,23 @@ def _render(memories: list[Memory]) -> str:
             graph = "<br>".join(
                 [f"supported_by: {html.escape(', '.join(memory.supported_by))}"]
                 + [
-                    html.escape(f"depends_on: {edge.source} → {edge.target}")
+                    html.escape(
+                        f"depends_on: {edge.source} → {edge.target}"
+                        if edge.relationship == "depends_on" and edge.origin == "declared"
+                        else (f"{edge.relationship} ({edge.origin}): {edge.source} → {edge.target}")
+                    )
                     for edge in memory.dependencies
                 ]
+                + (
+                    [
+                        html.escape(
+                            f"{memory.dependency_extractor_version} · "
+                            f"{'complete' if memory.dependency_expansion_complete else 'bounded'}"
+                        )
+                    ]
+                    if memory.dependency_extractor_version is not None
+                    else []
+                )
             )
             reasons = "<br>".join(
                 f"{html.escape(ref)}: {html.escape(reason)}"

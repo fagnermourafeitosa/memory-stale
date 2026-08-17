@@ -5,10 +5,225 @@ import pytest
 from memory_stale.evidence import resolve_item
 from memory_stale.symbol_index import (
     InvalidSyntaxError,
+    StaticDependency,
     SymbolIndexer,
     SymbolNotFoundError,
     UnsupportedLanguageError,
 )
+
+
+@pytest.mark.parametrize(
+    ("filename", "source", "caller", "dependency"),
+    [
+        (
+            "service.py",
+            "def policy():\n    return True\n\n\ndef login():\n    return policy()\n",
+            "login",
+            "policy",
+        ),
+        (
+            "service.js",
+            "function policy(){return true;} function login(){return policy();}\n",
+            "login",
+            "policy",
+        ),
+        (
+            "service.ts",
+            "function policy(): boolean{return true;} "
+            "function login(): boolean{return policy();}\n",
+            "login",
+            "policy",
+        ),
+        (
+            "service.go",
+            "package service\nfunc policy() bool{return true}\n"
+            "func login() bool{return policy()}\n",
+            "login",
+            "policy",
+        ),
+        (
+            "Service.java",
+            "class Service { static boolean policy(){return true;} "
+            "static boolean login(){return policy();}}\n",
+            "Service.login",
+            "Service.policy",
+        ),
+        (
+            "service.kt",
+            "fun policy(): Boolean = true\nfun login(): Boolean = policy()\n",
+            "login",
+            "policy",
+        ),
+        (
+            "service.rs",
+            "fn policy() -> bool { true } fn login() -> bool { policy() }\n",
+            "login",
+            "policy",
+        ),
+    ],
+)
+def test_direct_call_dependencies_are_resolved_in_each_supported_grammar(
+    tmp_path: Path, filename: str, source: str, caller: str, dependency: str
+) -> None:
+    (tmp_path / filename).write_text(source, encoding="utf-8")
+
+    assert SymbolIndexer(tmp_path).static_dependencies(f"{filename}:{caller}") == (
+        StaticDependency("calls", f"{filename}:{dependency}"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("filename", "source", "reader", "declaration"),
+    [
+        ("limits.py", "LIMIT = 3\n\ndef retry():\n    return LIMIT\n", "retry", "LIMIT"),
+        (
+            "limits.js",
+            "const LIMIT=3; function retry(){return LIMIT;}\n",
+            "retry",
+            "LIMIT",
+        ),
+        (
+            "limits.ts",
+            "const LIMIT:number=3; function retry():number{return LIMIT;}\n",
+            "retry",
+            "LIMIT",
+        ),
+        (
+            "limits.go",
+            "package limits\nconst LIMIT=3\nfunc retry() int{return LIMIT}\n",
+            "retry",
+            "LIMIT",
+        ),
+        (
+            "Limits.java",
+            "class Limits { static final int LIMIT=3; static int retry(){return LIMIT;}}\n",
+            "Limits.retry",
+            "Limits.LIMIT",
+        ),
+        (
+            "limits.kt",
+            "const val LIMIT: Int = 3\nfun retry(): Int = LIMIT\n",
+            "retry",
+            "LIMIT",
+        ),
+        (
+            "limits.rs",
+            "const LIMIT:i32=3; fn retry()->i32{LIMIT}\n",
+            "retry",
+            "LIMIT",
+        ),
+    ],
+)
+def test_named_read_dependencies_are_resolved_in_each_supported_grammar(
+    tmp_path: Path, filename: str, source: str, reader: str, declaration: str
+) -> None:
+    (tmp_path / filename).write_text(source, encoding="utf-8")
+
+    assert SymbolIndexer(tmp_path).static_dependencies(f"{filename}:{reader}") == (
+        StaticDependency("reads", f"{filename}:{declaration}"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("caller_file", "dependency_file", "caller_source", "dependency_source"),
+    [
+        (
+            "app.js",
+            "policy.js",
+            'import { allow as permitted } from "./policy.js"; '
+            "export function login(){return permitted();}\n",
+            "export function allow(){return true;}\n",
+        ),
+        (
+            "app.ts",
+            "policy.ts",
+            'import { allow as permitted } from "./policy"; '
+            "export function login():boolean{return permitted();}\n",
+            "export function allow():boolean{return true;}\n",
+        ),
+    ],
+)
+def test_relative_named_import_calls_resolve_only_one_repository_symbol(
+    tmp_path: Path,
+    caller_file: str,
+    dependency_file: str,
+    caller_source: str,
+    dependency_source: str,
+) -> None:
+    (tmp_path / caller_file).write_text(caller_source, encoding="utf-8")
+    (tmp_path / dependency_file).write_text(dependency_source, encoding="utf-8")
+
+    assert SymbolIndexer(tmp_path).static_dependencies(f"{caller_file}:login") == (
+        StaticDependency("calls", f"{dependency_file}:allow"),
+    )
+
+
+def test_ambiguous_python_import_does_not_create_a_dependency(tmp_path: Path) -> None:
+    package = tmp_path / "package"
+    package.mkdir()
+    (tmp_path / "policy.py").write_text("def allow():\n    return True\n", encoding="utf-8")
+    (package / "policy.py").write_text("def allow():\n    return False\n", encoding="utf-8")
+    (package / "app.py").write_text(
+        "from policy import allow\n\ndef login():\n    return allow()\n",
+        encoding="utf-8",
+    )
+
+    assert SymbolIndexer(tmp_path).static_dependencies("package/app.py:login") == ()
+
+
+def test_dynamic_receiver_does_not_create_a_dependency(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text(
+        "def login(policy):\n    return policy.allow()\n",
+        encoding="utf-8",
+    )
+
+    assert SymbolIndexer(tmp_path).static_dependencies("app.py:login") == ()
+
+
+@pytest.mark.parametrize(
+    ("filename", "source", "locator"),
+    [
+        ("app.py", "def login(policy):\n    return policy.allow()\n", "login"),
+        ("app.js", "function login(policy){return policy.allow();}\n", "login"),
+        (
+            "app.ts",
+            "interface Policy { allow(): boolean } "
+            "function login(policy:Policy):boolean{return policy.allow();}\n",
+            "login",
+        ),
+        (
+            "app.go",
+            "package app\ntype Policy interface { Allow() bool }\n"
+            "func login(policy Policy) bool{return policy.Allow()}\n",
+            "login",
+        ),
+        (
+            "App.java",
+            "interface Policy { boolean allow(); } "
+            "class App { static boolean login(Policy policy){return policy.allow();}}\n",
+            "App.login",
+        ),
+        (
+            "app.kt",
+            "interface Policy { fun allow(): Boolean; }\n"
+            "fun login(policy: Policy): Boolean = policy.allow()\n",
+            "login",
+        ),
+        (
+            "app.rs",
+            "trait Policy { fn allow(&self)->bool; } "
+            "fn login<T:Policy>(policy:T)->bool{policy.allow()}\n",
+            "login",
+        ),
+    ],
+)
+def test_dynamic_receivers_are_omitted_in_each_supported_grammar(
+    tmp_path: Path, filename: str, source: str, locator: str
+) -> None:
+    (tmp_path / filename).write_text(source, encoding="utf-8")
+
+    assert SymbolIndexer(tmp_path).static_dependencies(f"{filename}:{locator}") == ()
+
 
 CASES = [
     (

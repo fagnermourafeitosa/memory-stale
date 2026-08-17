@@ -36,6 +36,8 @@ class Memory:
     legacy_id: str | None = None
     supported_by: tuple[str, ...] = ()
     dependencies: tuple[EvidenceEdge, ...] = ()
+    dependency_extractor_version: str | None = None
+    dependency_expansion_complete: bool | None = None
     retrieval_terms: tuple[str, ...] = ()
     okf_extras: dict[str, object] = field(default_factory=dict, compare=False)
 
@@ -71,7 +73,15 @@ def _revision_id(
     fingerprints = "\0".join(
         f"{item.type}\0{item.role}\0{item.locator}\0{item.fingerprint}" for item in evidence
     )
-    graph = "\0".join((*supported_by, *(f"{edge.source}\0{edge.target}" for edge in dependencies)))
+    graph = "\0".join(
+        (
+            *supported_by,
+            *(
+                f"{edge.source}\0{edge.target}\0{edge.relationship}\0{edge.origin}"
+                for edge in dependencies
+            ),
+        )
+    )
     terms = "\0".join(term.casefold() for term in retrieval_terms)
     return _identifier(f"{claim_id}\0{fingerprints}\0{graph}\0{terms}")
 
@@ -103,6 +113,8 @@ def _capture_memory(capture: Mapping[str, object]) -> Memory:
         or _optional_string(capture, "observed_at"),
         supported_by=supported_by,
         dependencies=dependencies,
+        dependency_extractor_version=_optional_string(capture, "dependency_extractor_version"),
+        dependency_expansion_complete=_optional_bool(capture, "dependency_expansion_complete"),
         retrieval_terms=retrieval_terms,
     )
 
@@ -187,9 +199,17 @@ def _stored_edges(value: object, evidence: Sequence[EvidenceItem]) -> tuple[Evid
         edge = cast(dict[str, object], raw)
         source = _evidence_string(edge, "from")
         target = _evidence_string(edge, "to")
-        if set(edge) != {"from", "to"} or source not in keys or target not in keys:
+        if not {"from", "to"} <= set(edge) <= {"from", "to", "relationship", "origin"}:
+            raise ValueError("capture dependency has unsupported fields")
+        relationship = str(edge.get("relationship", "depends_on"))
+        origin = str(edge.get("origin", "declared"))
+        if source not in keys or target not in keys:
             raise ValueError("capture dependency has an unknown node")
-        edges.append(EvidenceEdge(source, target))
+        if relationship not in {"depends_on", "calls", "reads"}:
+            raise ValueError("capture dependency has an invalid relationship")
+        if origin not in {"declared", "static"}:
+            raise ValueError("capture dependency has an invalid origin")
+        edges.append(EvidenceEdge(source, target, relationship, origin))
     canonical = tuple(sorted(set(edges)))
     if len(canonical) != len(edges):
         raise ValueError("capture dependencies must not contain duplicates")
@@ -199,6 +219,11 @@ def _stored_edges(value: object, evidence: Sequence[EvidenceItem]) -> tuple[Evid
 def _optional_string(capture: Mapping[str, object], name: str) -> str | None:
     value = capture.get(name)
     return value if isinstance(value, str) and value else None
+
+
+def _optional_bool(capture: Mapping[str, object], name: str) -> bool | None:
+    value = capture.get(name)
+    return value if isinstance(value, bool) else None
 
 
 def migrate_legacy_memory(
@@ -280,26 +305,27 @@ def reconcile(
     return result
 
 
-def _provenance_paths(memory: Memory) -> dict[str, tuple[str, ...]]:
-    adjacency: dict[str, list[str]] = {}
+def _provenance_paths(memory: Memory) -> dict[str, str]:
+    adjacency: dict[str, list[EvidenceEdge]] = {}
     for edge in memory.dependencies:
-        adjacency.setdefault(edge.source, []).append(edge.target)
-    paths: dict[str, tuple[str, ...]] = {}
-    queue: list[tuple[str, tuple[str, ...]]] = [
-        (root, (root,)) for root in sorted(memory.supported_by)
-    ]
+        adjacency.setdefault(edge.source, []).append(edge)
+    paths: dict[str, str] = {}
+    queue: list[tuple[str, str]] = [(root, root) for root in sorted(memory.supported_by)]
     while queue:
         node, path = queue.pop(0)
         if node in paths:
             continue
         paths[node] = path
-        queue.extend(
-            (target, (*path, target))
-            for target in sorted(adjacency.get(node, []))
-            if target not in paths
-        )
+        for edge in sorted(adjacency.get(node, [])):
+            if edge.target in paths:
+                continue
+            separator = (
+                " -> " if edge.relationship == "depends_on" else f" -[{edge.relationship}]-> "
+            )
+            queue.append((edge.target, f"{path}{separator}{edge.target}"))
     return paths
 
 
-def _with_path(reason: str, path: tuple[str, ...]) -> str:
-    return reason if len(path) == 1 else f"{reason} via {' -> '.join(path)}"
+def _with_path(reason: str, path: str | tuple[str, ...]) -> str:
+    rendered = " -> ".join(path) if isinstance(path, tuple) else path
+    return reason if "->" not in rendered else f"{reason} via {rendered}"

@@ -391,9 +391,9 @@ def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path
     assert result.attempted_count == 100
     assert result.sample_count == 100
     assert result.matrix == ConfusionMatrix(
-        true_stale=38,
+        true_stale=44,
         false_stale=8,
-        missed_change=12,
+        missed_change=6,
         true_active=42,
     )
     assert [
@@ -403,38 +403,38 @@ def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path
         ("conservative-false-stale", 12, ConfusionMatrix(0, 8, 0, 4), 1 / 3),
         ("direct-local", 28, ConfusionMatrix(28, 0, 0, 0), 1.0),
         ("evidence-graph", 10, ConfusionMatrix(6, 0, 0, 4), 1.0),
-        ("incomplete-provenance", 12, ConfusionMatrix(0, 0, 12, 0), 0.0),
+        ("incomplete-provenance", 12, ConfusionMatrix(6, 0, 6, 0), 0.5),
         ("preserving", 28, ConfusionMatrix(0, 0, 0, 28), 1.0),
         ("repository-shape", 10, ConfusionMatrix(4, 0, 0, 6), 1.0),
     ]
-    assert result.macro_family_accuracy == pytest.approx(13 / 18)
+    assert result.macro_family_accuracy == pytest.approx(29 / 36)
     assert result.retrieval_metrics.recall.count == 32
     assert result.retrieval_metrics.recall.denominator == 40
     assert result.retrieval_metrics.recall.rate == 0.8
-    assert result.retrieval_metrics.exclusion_rate.count == 44
+    assert result.retrieval_metrics.exclusion_rate.count == 49
     assert result.retrieval_metrics.exclusion_rate.denominator == 60
-    assert result.retrieval_metrics.exclusion_rate.rate == 44 / 60
+    assert result.retrieval_metrics.exclusion_rate.rate == 49 / 60
     assert result.retrieval_metrics.precision.count == 7
-    assert result.retrieval_metrics.precision.denominator == 35
-    assert result.retrieval_metrics.precision.rate == 7 / 35
-    assert result.retrieval_metrics.overall_accuracy.count == 76
+    assert result.retrieval_metrics.precision.denominator == 28
+    assert result.retrieval_metrics.precision.rate == 7 / 28
+    assert result.retrieval_metrics.overall_accuracy.count == 81
     assert result.retrieval_metrics.overall_accuracy.denominator == 100
-    assert result.retrieval_metrics.overall_accuracy.rate == 0.76
-    assert result.retrieval_metrics.without_terms_overall_accuracy.count == 76
+    assert result.retrieval_metrics.overall_accuracy.rate == 0.81
+    assert result.retrieval_metrics.without_terms_overall_accuracy.count == 81
     assert result.retrieval_metrics.without_terms_overall_accuracy.denominator == 100
-    assert result.retrieval_metrics.without_terms_overall_accuracy.rate == 0.76
+    assert result.retrieval_metrics.without_terms_overall_accuracy.rate == 0.81
     assert result.retrieval_metrics.term_baseline_recall.count == 7
     assert result.retrieval_metrics.term_baseline_recall.denominator == 10
     assert result.retrieval_metrics.term_assisted_recall.count == 7
     assert result.retrieval_metrics.term_assisted_recall.denominator == 10
-    assert result.retrieval_metrics.term_baseline_exclusion_rate.count == 1
+    assert result.retrieval_metrics.term_baseline_exclusion_rate.count == 3
     assert result.retrieval_metrics.term_baseline_exclusion_rate.denominator == 10
-    assert result.retrieval_metrics.term_assisted_exclusion_rate.count == 1
+    assert result.retrieval_metrics.term_assisted_exclusion_rate.count == 3
     assert result.retrieval_metrics.term_assisted_exclusion_rate.denominator == 10
     assert result.retrieval_metrics.term_baseline_precision.count == 7
-    assert result.retrieval_metrics.term_baseline_precision.denominator == 34
+    assert result.retrieval_metrics.term_baseline_precision.denominator == 27
     assert result.retrieval_metrics.term_assisted_precision.count == 7
-    assert result.retrieval_metrics.term_assisted_precision.denominator == 35
+    assert result.retrieval_metrics.term_assisted_precision.denominator == 28
     assert result.retrieval_metrics.term_net_gain == 0
     assert [
         (
@@ -448,10 +448,10 @@ def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path
         )
         for partition in result.retrieval_partitions
     ] == [
-        ("calibration", 10, 0.2, 0.2, 0.4, 0.0, 2 / 17),
-        ("holdout", 10, 0.6, 0.6, 1.0, 0.2, 5 / 18),
+        ("calibration", 10, 0.2, 0.2, 0.4, 0.0, 2 / 14),
+        ("holdout", 10, 0.8, 0.8, 1.0, 0.6, 5 / 14),
     ]
     assert_repository_baseline(
         result,
-        evaluator_root / "results" / "2026-08-17-repository-lifecycle-evaluation.yaml",
+        evaluator_root / "results" / "2026-08-17-post-static-provenance-graph.yaml",
     )
