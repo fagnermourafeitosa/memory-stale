@@ -15,11 +15,11 @@
   implementation contract. Resolve contradictions before coding.
 
 ## Spec-first is mandatory for code changes
-
+- Before create specs, use `grilling` skill to define scope. If the user agrees, then create specs.
 - Write repository instructions and every numbered spec in English.
 - Every change to executable code, including features, bug fixes, refactors,
   behavior adjustments, hooks, scripts, tests, and tooling, must have a numbered
-  spec created with the `to-spec` skill before implementation starts.
+  spec created with the `to-spec` skill before implementation starts. 
 - Documentation-only changes, including `README.md`, repository instructions,
   and prose-only workflow clarification, do not require a numbered spec.
 - Never implement code from a loose request. First synthesize the request and
