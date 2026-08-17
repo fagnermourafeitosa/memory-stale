@@ -302,3 +302,78 @@ def test_dependency_cycle_has_a_finite_deterministic_invalidation_path() -> None
 
     assert reconciled[0].status == "stale"
     assert reconciled[0].stale_reasons == {policy.key: f"changed via {login.key} -> {policy.key}"}
+
+
+def test_lifecycle_persists_and_loads_language_metadata(tmp_path: Path) -> None:
+    capture = {
+        "kind": "behavior",
+        "claim": "Autenticação valida senhas e MFA.",
+        "durability_reason": "Segurança exige validação consistente.",
+        "language": "pt",
+        "evidence": [
+            {
+                "type": "symbol",
+                "role": "primary",
+                "locator": "auth.py:login",
+                "fingerprint": "sig-pt",
+            }
+        ],
+    }
+    created = reconcile([], [capture], {"symbol:auth.py:login": RefEvidence("sig-pt")})
+    assert len(created) == 1
+    assert created[0].language == "pt"
+
+    store = MemoryStore(tmp_path)
+    store.write_all(created)
+    loaded = store.load_all()
+    assert len(loaded) == 1
+    assert loaded[0].language == "pt"
+
+    _opening, front_matter, _body = (
+        next(store.directory.glob("*.md")).read_text(encoding="utf-8").split("---", 2)
+    )
+    document = yaml.safe_load(front_matter)
+    assert document["memory_stale"]["language"] == "pt"
+
+
+def test_legacy_memory_without_language_defaults_to_english(tmp_path: Path) -> None:
+    store = MemoryStore(tmp_path)
+    store.directory.mkdir(parents=True, exist_ok=True)
+    memory_file = store.directory / "legacy-no-lang.md"
+    content = """---
+type: Memory Stale Claim
+title: Legacy memory claim body.
+description: Legacy reason
+sources:
+  - id: symbol:legacy.py:run
+    resource: legacy.py:run
+generated:
+  by: process:memory-stale
+  at: '2026-08-17T00:00:00+00:00'
+verified:
+  - by: process:memory-stale
+    at: '2026-08-17T00:00:00+00:00'
+status: stable
+memory_stale:
+  schema_version: 5
+  claim_id: claim-123
+  revision_id: legacy-no-lang
+  kind: behavior
+  status: active
+  durability_reason: Legacy reason
+  evidence:
+    - source_id: symbol:legacy.py:run
+      type: symbol
+      role: primary
+      fingerprint: sig-1
+  supported_by:
+    - symbol:legacy.py:run
+  dependencies: []
+---
+
+Legacy memory claim body.
+"""
+    memory_file.write_text(content, encoding="utf-8")
+    loaded = store.load_all()
+    assert len(loaded) == 1
+    assert loaded[0].language == "en"

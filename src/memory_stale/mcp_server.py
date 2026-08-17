@@ -121,6 +121,12 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         )
     if not primary_changed:
         raise ValueError("at least one primary evidence item must change in this turn")
+    language_value = arguments.get("language")
+    if language_value is not None and (
+        not isinstance(language_value, str) or not language_value.strip()
+    ):
+        raise ValueError("language must be a non-empty string")
+    language = language_value.strip() if isinstance(language_value, str) else "en"
     candidate = {
         "kind": kind,
         "claim": claim,
@@ -139,6 +145,7 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         "dependency_expansion_complete": expansion.complete,
         "durability_reason": durability_reason,
         "retrieval_terms": list(retrieval_terms),
+        "language": language,
         "schema_version": 5,
         "observed_commit": observed_commit,
         "observed_at": datetime.now(timezone.utc).isoformat(),
@@ -264,6 +271,7 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
                                 "maxItems": 8,
                                 "items": {"type": "string", "minLength": 1, "maxLength": 80},
                             },
+                            "language": {"type": "string"},
                         },
                         "additionalProperties": False,
                     },

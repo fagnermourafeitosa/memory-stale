@@ -1,11 +1,12 @@
-"""Deterministic lexical retrieval for active memories."""
+"""Deterministic lexical retrieval for active memories with bm25s and multilingual stemming."""
 
 from __future__ import annotations
 
-import math
 import re
-from collections import Counter
 from collections.abc import Sequence
+
+import bm25s  # type: ignore[import-untyped]
+import Stemmer  # type: ignore[import-not-found]
 
 from memory_stale.lifecycle import Memory
 from memory_stale.project_paths import evidence_path, is_ignored_project_path
@@ -23,9 +24,54 @@ EXACT_LOCATOR_WEIGHT = 100.0
 MINIMUM_LEXICAL_SCORE = 0.25
 MINIMUM_RELATIVE_SCORE = 0.5
 
+_STEMMERS: dict[str, Stemmer.Stemmer | None] = {}
 
-def _tokens(text: str) -> list[str]:
-    return [token.casefold() for token in TOKEN.findall(text)]
+
+def _get_stemmer(language: str) -> Stemmer.Stemmer | None:
+    lang = language.strip().casefold()
+    if lang in _STEMMERS:
+        return _STEMMERS[lang]
+    lang_map = {
+        "pt": "portuguese",
+        "por": "portuguese",
+        "portuguese": "portuguese",
+        "en": "english",
+        "eng": "english",
+        "english": "english",
+        "es": "spanish",
+        "spa": "spanish",
+        "spanish": "spanish",
+        "fr": "french",
+        "fra": "french",
+        "french": "french",
+        "de": "german",
+        "deu": "german",
+        "german": "german",
+        "it": "italian",
+        "ita": "italian",
+        "italian": "italian",
+        "nl": "dutch",
+        "nld": "dutch",
+        "dutch": "dutch",
+        "ru": "russian",
+        "rus": "russian",
+        "russian": "russian",
+    }
+    name = lang_map.get(lang, lang)
+    try:
+        stemmer = Stemmer.Stemmer(name)
+    except Exception:
+        stemmer = None
+    _STEMMERS[lang] = stemmer
+    return stemmer
+
+
+def _tokenize_natural(text: str, language: str = "en") -> list[str]:
+    if not text.strip():
+        return []
+    stemmer = _get_stemmer(language)
+    tokens = bm25s.tokenize([text], stemmer=stemmer, return_ids=False)[0]
+    return [str(t) for t in tokens]
 
 
 def _locator_tokens(locator: str) -> list[str]:
@@ -34,29 +80,23 @@ def _locator_tokens(locator: str) -> list[str]:
 
 
 def _bm25_scores(documents: Sequence[list[str]], query: Sequence[str]) -> list[float]:
-    average_length = sum(map(len, documents)) / len(documents)
-    document_frequency = Counter(token for token in set(query) for doc in documents if token in doc)
-    scores: list[float] = []
-    for document in documents:
-        frequencies = Counter(document)
-        score = 0.0
-        for token in set(query):
-            frequency = frequencies[token]
-            if not frequency:
-                continue
-            inverse = math.log(
-                1
-                + (len(documents) - document_frequency[token] + 0.5)
-                / (document_frequency[token] + 0.5)
-            )
-            score += (
-                inverse
-                * frequency
-                * (BM25_K1 + 1.0)
-                / (frequency + BM25_K1 * (1.0 - BM25_B + BM25_B * len(document) / average_length))
-            )
-        scores.append(score)
-    return scores
+    if not documents or not query:
+        return [0.0] * len(documents)
+    if not any(documents):
+        return [0.0] * len(documents)
+    all_tokens = {token for doc in documents for token in doc}
+    filtered_query = [token for token in set(query) if token in all_tokens]
+    if not filtered_query:
+        return [0.0] * len(documents)
+
+    retriever = bm25s.BM25(method="lucene", k1=BM25_K1, b=BM25_B)
+    retriever.index(list(documents))
+    docs, scores = retriever.retrieve([filtered_query], k=len(documents))
+    ordered_scores = [0.0] * len(documents)
+    scale = BM25_K1 + 1.0
+    for doc_idx, score in zip(docs[0], scores[0], strict=True):
+        ordered_scores[int(doc_idx)] = float(score) * scale
+    return ordered_scores
 
 
 def _is_exact_locator_match(locator: str, prompt_folded: str) -> bool:
@@ -83,20 +123,36 @@ def retrieve(memories: Sequence[Memory], prompt: str, budget: int = 1500, top_k:
             for item in memory.evidence
         )
     ]
-    query = _tokens(prompt)
-    if not active or not query or budget <= 0 or top_k <= 0:
+    if not active or not prompt.strip() or budget <= 0 or top_k <= 0:
         return ""
-    claim_documents = [_tokens(memory.claim) for memory in active]
-    durability_reason_documents = [_tokens(memory.durability_reason) for memory in active]
+
+    active_languages = {memory.language for memory in active} or {"en"}
+    natural_query_tokens: set[str] = set()
+    for lang in active_languages:
+        natural_query_tokens.update(_tokenize_natural(prompt, lang))
+
+    locator_query_tokens = _locator_tokens(prompt)
+
+    if not natural_query_tokens and not locator_query_tokens:
+        return ""
+
+    claim_documents = [_tokenize_natural(memory.claim, memory.language) for memory in active]
+    durability_reason_documents = [
+        _tokenize_natural(memory.durability_reason, memory.language) for memory in active
+    ]
     locator_documents = [
         [token for item in memory.evidence for token in _locator_tokens(item.locator)]
         for memory in active
     ]
-    retrieval_term_documents = [_tokens(" ".join(memory.retrieval_terms)) for memory in active]
-    claim_scores = _bm25_scores(claim_documents, query)
-    durability_reason_scores = _bm25_scores(durability_reason_documents, query)
-    locator_scores = _bm25_scores(locator_documents, query)
-    retrieval_term_scores = _bm25_scores(retrieval_term_documents, query)
+    retrieval_term_documents = [
+        _tokenize_natural(" ".join(memory.retrieval_terms), memory.language) for memory in active
+    ]
+
+    claim_scores = _bm25_scores(claim_documents, list(natural_query_tokens))
+    durability_reason_scores = _bm25_scores(durability_reason_documents, list(natural_query_tokens))
+    locator_scores = _bm25_scores(locator_documents, locator_query_tokens)
+    retrieval_term_scores = _bm25_scores(retrieval_term_documents, list(natural_query_tokens))
+
     scored: list[tuple[float, Memory, bool]] = []
     prompt_folded = prompt.casefold()
     for memory, claim_score, durability_reason_score, locator_score, retrieval_term_score in zip(

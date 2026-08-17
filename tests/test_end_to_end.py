@@ -65,6 +65,7 @@ def test_stop_persists_an_okf_memory_claim(tmp_path: Path) -> None:
         "stale_reasons": None,
         "observed_commit": None,
         "observed_at": generated["at"],
+        "language": "en",
         "legacy_id": None,
     }
     assert body == "\n\nAutomatic change record: changed symbol jobs.py:retry.\n"

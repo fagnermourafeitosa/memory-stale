@@ -121,11 +121,12 @@ modify the target project's `.venv` or install packages globally.
 On every task, the `UserPromptSubmit` hook considers only records whose evidence
 is still valid. It retrieves relevant active claims deterministically: exact
 paths or symbols receive a `100.0` boost, and remaining matches use
-field-weighted lexical BM25 ranking. Claims have weight `1.0`, durability reasons
+field-weighted BM25 ranking powered by `bm25s` with language-aware Snowball stemming
+for natural language fields. Claims have weight `1.0`, durability reasons
 have weight `0.5`, host-declared retrieval terms have weight `0.75`, and
 evidence locators have weight `2.0`. Locator paths and symbols are split into
 searchable structural components, including path segments, file extensions,
-snake case, kebab case, and camel case.
+snake case, kebab case, and camel case, isolated from linguistic stemmers.
 
 When a later task may add product vocabulary to a claim or code reference, the
 host may supply up to eight `retrieval_terms` during capture. For example, a
@@ -200,9 +201,9 @@ claim describing what the coherent change now does or guarantees. Memory Stale
 does not ask another LLM or generate that claim inside the local engine.
 
 The host writes the semantic claim, durability reason, and retrieval terms in
-the same natural language as the user's prompt. Memory Stale does not detect or
-translate the language. This keeps lexical BM25 retrieval aligned with the
-language that originated the memory; semantic retrieval across different
+the same natural language as the user's prompt, declaring the language code (e.g. `pt`, `en`)
+at capture time. The local runtime indexes the text using `bm25s` with the corresponding
+Snowball stemmer without requiring embeddings or external LLM calls. Semantic retrieval across different
 languages is not guaranteed, while exact paths and symbols remain
 language-independent.
 

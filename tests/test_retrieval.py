@@ -308,3 +308,35 @@ def test_retrieval_ranking_is_independent_of_evidence_order() -> None:
         assert context.index("Credentials update after authorization.") < context.index(
             "Session behavior remains available."
         )
+
+
+def test_retrieval_matches_portuguese_inflections_via_stemming() -> None:
+    memory = Memory(
+        "pt-auth",
+        "behavior",
+        "active",
+        "Validações garantem proteção contra falhas operacionais.",
+        "Segurança do sistema requer proteção contínua.",
+        (EvidenceItem("symbol", "primary", "src/core/checker.py:run", "sig-1"),),
+        language="pt",
+    )
+
+    context = retrieve([memory], "Garantir proteções", budget=1500)
+
+    assert "Validações garantem proteção contra falhas operacionais." in context
+
+
+def test_retrieval_matches_english_inflections_via_stemming() -> None:
+    memory = Memory(
+        "en-retry",
+        "behavior",
+        "active",
+        "Worker configured to retry execution.",
+        "Reliability requires bounded retries.",
+        (EvidenceItem("symbol", "primary", "src/core/checker.py:run", "sig-2"),),
+        language="en",
+    )
+
+    context = retrieve([memory], "Retried executions", budget=1500)
+
+    assert "Worker configured to retry execution." in context

@@ -39,6 +39,7 @@ class Memory:
     dependency_extractor_version: str | None = None
     dependency_expansion_complete: bool | None = None
     retrieval_terms: tuple[str, ...] = ()
+    language: str = "en"
     okf_extras: dict[str, object] = field(default_factory=dict, compare=False)
 
     def __post_init__(self) -> None:
@@ -97,6 +98,7 @@ def _capture_memory(capture: Mapping[str, object]) -> Memory:
     supported_by = _stored_supported_by(capture.get("supported_by"), evidence)
     dependencies = _stored_edges(capture.get("dependencies"), evidence)
     retrieval_terms = normalize_retrieval_terms(capture.get("retrieval_terms"))
+    language = _optional_string(capture, "language") or "en"
     claim_id = _claim_id(kind, claim, evidence)
     revision_id = _revision_id(claim_id, evidence, supported_by, dependencies, retrieval_terms)
     return Memory(
@@ -116,6 +118,7 @@ def _capture_memory(capture: Mapping[str, object]) -> Memory:
         dependency_extractor_version=_optional_string(capture, "dependency_extractor_version"),
         dependency_expansion_complete=_optional_bool(capture, "dependency_expansion_complete"),
         retrieval_terms=retrieval_terms,
+        language=language,
     )
 
 

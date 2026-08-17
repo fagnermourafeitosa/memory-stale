@@ -68,6 +68,7 @@ class MemoryStore:
             "stale_reasons": memory.stale_reasons,
             "observed_commit": memory.observed_commit,
             "observed_at": memory.observed_at or generated_at,
+            "language": memory.language,
             "legacy_id": memory.legacy_id,
         }
         if memory.dependency_extractor_version is not None:
@@ -151,6 +152,7 @@ def _load_v5(data: dict[str, object], claim: str, path: Path) -> Memory:
             extension, "dependency_expansion_complete", path
         ),
         retrieval_terms=_retrieval_terms(extension, path),
+        language=_optional_string(extension, "language", path) or "en",
         okf_extras=extras,
     )
 
