@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="Memory Stale logo" width="240">
+</p>
+
 # Memory Stale
 
 **Project memory for Codex and Claude Code that invalidates itself when its
