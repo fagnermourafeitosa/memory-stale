@@ -23,14 +23,17 @@
 
 ## User Directives
 
-1. **[2026-08-11] Use TDD for all production behavior**
+1. **[2026-08-17] Match semantic memory language to the originating prompt**
+   Do instead: author claims, durability reasons, and retrieval terms in the user's prompt language; keep the deterministic runtime language-agnostic.
+
+2. **[2026-08-11] Use TDD for all production behavior**
    Do instead: work in one red-green vertical slice at a time, test public behavior, and run full quality gates before completion.
 
-2. **[2026-08-11] Never commit without explicit authorization**
+3. **[2026-08-11] Never commit without explicit authorization**
    Do instead: prepare and validate changes, then wait for user approval before creating or amending any commit.
 
-3. **[2026-08-11] Use a dedicated branch for each unit of work**
+4. **[2026-08-11] Use a dedicated branch for each unit of work**
    Do instead: create a categorized branch for each spec, feature, fix, docs change, or chore before editing.
 
-4. **[2026-08-11] Optimize this project for portfolio quality**
+5. **[2026-08-11] Optimize this project for portfolio quality**
    Do instead: favor technically interesting, polished scope over an overly minimal pragmatic MVP.
