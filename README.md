@@ -32,6 +32,10 @@ Task 3  Agent works on authentication again.
         ✅ Memory Stale: Detects AST change in src/auth.py, marks memory STALE, and excludes it.
 ```
 
+<p align="center">
+  <img src="./assets/stale-memory-rot.png" alt="Stale Memory Rot vs AST Verification" width="800">
+</p>
+
 ---
 
 ## Why Deterministic over Vector DBs?
@@ -77,18 +81,9 @@ sh .agents/skills/memory-stale/scripts/install-project.sh . --harness codex
 
 Memory Stale runs transparently inside your agent's normal execution loop using lifecycle hooks:
 
-```mermaid
-flowchart TD
-    A["1. Agent starts task<br/>(Prompt Submit)"] --> B["PreInvocation / UserPromptSubmit Hook"]
-    B --> C["Verify AST fingerprints of all memories"]
-    C --> D{"Evidence unchanged?"}
-    D -->|Yes| E["Status: ACTIVE<br/>BM25S Retrieval by symbol/prompt"]
-    D -->|No| F["Status: STALE<br/>Excluded from context"]
-    E --> G["Inject active memories into context"]
-    G --> H["2. Agent codes & calls memory.capture"]
-    H --> I["3. Task ends (Stop Hook)"]
-    I --> J["Reconcile Tree-sitter provenance<br/>Write immutable OKF Markdown"]
-```
+<p align="center">
+  <img src="./assets/lifecycle-flow.png" alt="Memory Stale Lifecycle and AST Verification" width="800">
+</p>
 
 ### 1. Transparent Capture
 When your agent completes a coherent code change, it calls `memory.capture` via MCP:
@@ -112,6 +107,10 @@ claim
       → reads src/config.py:RETRY_LIMIT
 ```
 If `src/policy.py:max_retries` changes tomorrow, the claim is automatically invalidated.
+
+<p align="center">
+  <img src="./assets/static-provenance-graph.png" alt="Static Provenance Graph (Up to 3 Hops)" width="800">
+</p>
 
 ### 3. Multilingual BM25S Retrieval
 Active memories are ranked using field-weighted `bm25s` with Snowball stemming across natural language fields (`claim: 1.0`, `durability_reason: 0.5`, `retrieval_terms: 0.75`, `exact_locators: 2.0`). Exact symbols receive a `100.0` boost.
