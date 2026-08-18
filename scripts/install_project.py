@@ -1,4 +1,4 @@
-"""Install Memory Stale as a target repository's local Codex integration."""
+"""Install Memory Stale as a target repository's local integration."""
 
 from __future__ import annotations
 
@@ -111,6 +111,47 @@ CLAUDE_HOOK_COMMANDS: dict[str, list[dict[str, object]]] = {
     ],
 }
 
+ANTIGRAVITY_HOOK_COMMANDS: dict[str, list[dict[str, object]]] = {
+    "PreInvocation": [
+        {
+            "type": "command",
+            "command": (
+                'sh "${ANTIGRAVITY_PROJECT_DIR:-$PWD}/.agents/skills/memory-stale/'
+                'scripts/run-python.sh" "${ANTIGRAVITY_PROJECT_DIR:-$PWD}/.agents/'
+                'skills/memory-stale/hooks/antigravity_pre_invocation.py"'
+            ),
+            "timeout": 10,
+        }
+    ],
+    "PostToolUse": [
+        {
+            "matcher": "^(replace_file_content|multi_replace_file_content|write_to_file|run_command)$",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": (
+                        'sh "${ANTIGRAVITY_PROJECT_DIR:-$PWD}/.agents/skills/memory-stale/'
+                        'scripts/run-python.sh" "${ANTIGRAVITY_PROJECT_DIR:-$PWD}/.agents/'
+                        'skills/memory-stale/hooks/antigravity_post_tool_use.py"'
+                    ),
+                    "timeout": 10,
+                }
+            ],
+        }
+    ],
+    "Stop": [
+        {
+            "type": "command",
+            "command": (
+                'sh "${ANTIGRAVITY_PROJECT_DIR:-$PWD}/.agents/skills/memory-stale/'
+                'scripts/run-python.sh" "${ANTIGRAVITY_PROJECT_DIR:-$PWD}/.agents/'
+                'skills/memory-stale/hooks/antigravity_stop.py"'
+            ),
+            "timeout": 30,
+        }
+    ],
+}
+
 DEFAULT_MEMORY_CONFIG = """# Maximum number of tokens of active memory injected into task context.
 context_budget = 1500
 
@@ -121,7 +162,7 @@ top_k = 5
 auto_report = false
 
 # Repository-relative path used when an HTML report is requested.
-report_path = \"memory-report.html\"
+report_path = "memory-report.html"
 """
 
 
@@ -201,6 +242,26 @@ def _claude_configuration(repository: Path) -> dict[str, object]:
     return _merge_hooks(_read_json(settings_path, "hooks"), CLAUDE_HOOK_COMMANDS, settings_path)
 
 
+def _antigravity_configuration(repository: Path) -> dict[str, object]:
+    hooks_path = repository / ".agents" / "hooks.json"
+    raw_config = json.loads(hooks_path.read_text(encoding="utf-8")) if hooks_path.exists() else {}
+    if not isinstance(raw_config, dict):
+        raise InstallationError(f"{hooks_path} must contain a JSON object")
+    memory_stale_entry = raw_config.get("memory-stale", {})
+    if not isinstance(memory_stale_entry, dict):
+        raise InstallationError(f"{hooks_path} memory-stale entry must be a JSON object")
+    for event, additions in ANTIGRAVITY_HOOK_COMMANDS.items():
+        existing = memory_stale_entry.get(event, [])
+        if not isinstance(existing, list):
+            existing = []
+        memory_stale_entry[event] = [
+            *existing,
+            *(item for item in additions if item not in existing),
+        ]
+    raw_config["memory-stale"] = memory_stale_entry
+    return cast(dict[str, object], raw_config)
+
+
 def _mcp_configuration(repository: Path) -> dict[str, object]:
     configuration = _read_json(repository / ".mcp.json", "mcpServers")
     servers = cast(dict[str, object], configuration["mcpServers"])
@@ -212,6 +273,18 @@ def _mcp_configuration(repository: Path) -> dict[str, object]:
     elif existing != server:
         raise InstallationError(".mcp.json already registers an incompatible memory-stale server")
     return configuration
+
+
+def _antigravity_mcp_configuration(repository: Path) -> dict[str, object]:
+    bootstrap = repository / ".agents" / "skills" / "memory-stale" / "scripts" / "run-python.sh"
+    return {
+        "mcpServers": {
+            "memory-stale": {
+                "command": "sh",
+                "args": [str(bootstrap), "-m", "memory_stale.mcp_server"],
+            }
+        }
+    }
 
 
 def _copy_artifacts(source: Path, repository: Path) -> None:
@@ -266,54 +339,58 @@ def _register_mcp(repository: Path) -> None:
         raise InstallationError(f"could not register the memory-stale MCP server: {detail}")
 
 
-def install(source: Path, target: Path, hosts: frozenset[str]) -> Path:
+def install(source: Path, target: Path, harness: str) -> Path:
+    if harness not in {"codex", "claude", "antigravity"}:
+        raise InstallationError(f"unsupported harness: {harness!r}")
     repository = _target_repository(target)
     destination = repository / ".agents" / "skills" / "memory-stale"
     first_install = not destination.exists()
     if first_install:
         _copy_artifacts(source, repository)
         _write_default_memory_config(repository)
-    if "codex" in hosts:
+    if harness == "codex":
         _atomic_write_json(repository / ".codex" / "hooks.json", _codex_configuration(repository))
-    if "claude" in hosts:
+        if first_install:
+            _register_mcp(repository)
+    elif harness == "claude":
         _copy_claude_skill(source, repository)
         _atomic_write_json(
             repository / ".claude" / "settings.json", _claude_configuration(repository)
         )
         _atomic_write_json(repository / ".mcp.json", _mcp_configuration(repository))
-    if first_install and "codex" in hosts:
-        _register_mcp(repository)
+    elif harness == "antigravity":
+        _atomic_write_json(
+            repository / ".agents" / "hooks.json", _antigravity_configuration(repository)
+        )
+        _atomic_write_json(
+            repository / ".agents" / "plugins" / "memory-stale" / "plugin.json",
+            {"name": "memory-stale", "description": "Deterministic project memory for Antigravity"},
+        )
+        _atomic_write_json(
+            repository / ".agents" / "plugins" / "memory-stale" / "mcp_config.json",
+            _antigravity_mcp_configuration(repository),
+        )
     return repository
 
 
 def main(arguments: list[str]) -> int:
-    if len(arguments) == 2:
-        source_text, target_text = arguments
-        hosts = frozenset({"codex", "claude"})
-    elif (
+    if (
         len(arguments) == 4
-        and arguments[2] == "--host"
-        and arguments[3]
-        in {
-            "codex",
-            "claude",
-            "both",
-        }
+        and arguments[2] == "--harness"
+        and arguments[3] in {"codex", "claude", "antigravity"}
     ):
         source_text, target_text = arguments[:2]
-        hosts = (
-            frozenset({"codex", "claude"}) if arguments[3] == "both" else frozenset({arguments[3]})
-        )
+        harness = arguments[3]
     else:
         print(
-            "usage: install-project.sh <target-git-repository> [--host codex|claude|both]",
+            "usage: install-project.sh <target-git-repository> --harness codex|claude|antigravity",
             file=sys.stderr,
         )
         return 2
     source = Path(source_text).resolve()
     target = Path(target_text).resolve()
     try:
-        repository = install(source, target, hosts)
+        repository = install(source, target, harness)
     except InstallationError as error:
         print(f"Memory Stale installation failed: {error}", file=sys.stderr)
         return 1

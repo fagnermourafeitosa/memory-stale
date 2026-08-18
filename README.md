@@ -4,20 +4,21 @@
 
 # Memory Stale
 
-**Project memory for Codex and Claude Code that invalidates itself when its
+**Project memory for Codex, Claude Code, and Antigravity that invalidates itself when its
 recorded code evidence changes.**
 
-Memory Stale prevents Codex from silently reusing a stored project claim after
+Memory Stale prevents agent harnesses from silently reusing a stored project claim after
 the code recorded as its evidence has changed. Future tasks keep useful context
 across conversations, while every claim retains a deterministic freshness
 boundary and a reviewable source.
 
-It is installed per repository with host-specific hooks over one deterministic
-core. Codex and Claude Code both use the same local MCP server, memory store,
+It is installed per repository with harness-specific hooks over one deterministic
+core. Codex, Claude Code, and Antigravity all use the same local MCP server, memory store,
 evidence fingerprints, retrieval, and reconciliation. The Codex registration
 is global discovery metadata that points only to that project's installed
-runtime; Claude Code discovers the same runtime from the project `.mcp.json`.
-Memory Stale does not use Codex Plugins, another model, embeddings, a hosted
+runtime; Claude Code discovers the same runtime from the project `.mcp.json`;
+Antigravity discovers the runtime from `.agents/plugins/memory-stale/mcp_config.json` and `.agents/hooks.json`.
+Memory Stale does not use another model, embeddings, a hosted
 service, or a vector database.
 
 ## Why it matters
@@ -26,12 +27,12 @@ Persistent memory is valuable until the implementation moves and an old fact
 still looks authoritative. Consider three tasks in the same repository:
 
 ```text
-Task 1  Codex records: "AuthService.login validates a password."
+Task 1  Agent records: "AuthService.login validates a password."
         Evidence: src/auth.py:AuthService.login
 
 Task 2  Another change adds MFA to AuthService.login.
 
-Task 3  Codex works on authentication again.
+Task 3  Agent works on authentication again.
 ```
 
 Without a freshness check, Task 3 can receive the password-only claim as if it
@@ -48,7 +49,7 @@ excludes it from ordinary context.
 | Hosted dependency | System-dependent | None; storage and evaluation stay local |
 
 ```text
-unchanged evidence closure → active memory → available to Codex
+unchanged evidence closure → active memory → available to agent
 changed reachable evidence → stale memory  → excluded until revalidated
 ```
 
@@ -65,33 +66,31 @@ or no longer resolves; it is not proof the claim is false.
 
 ## Install in a project
 
-The installer defaults to both hosts:
+The installer requires selecting the harness explicitly with `--harness`:
 
 ```bash
 git clone https://github.com/fagnermourafeitosa/memory-stale.git /tmp/memory-stale
-sh /tmp/memory-stale/scripts/install-project.sh .
-```
 
-For a single host, select it explicitly:
+# Antigravity: workspace hooks, project skill, and plugin MCP discovery
+sh /tmp/memory-stale/scripts/install-project.sh . --harness antigravity
 
-```bash
 # Codex: hooks plus global MCP discovery that points to this project's runtime
-sh /tmp/memory-stale/scripts/install-project.sh . --host codex
+sh /tmp/memory-stale/scripts/install-project.sh . --harness codex
 
 # Claude Code: project hooks, project skill, and project MCP discovery
-sh /tmp/memory-stale/scripts/install-project.sh . --host claude
+sh /tmp/memory-stale/scripts/install-project.sh . --harness claude
 ```
 
-Codex users may alternatively ask: “Install Memory Stale in this project from
-https://github.com/fagnermourafeitosa/memory-stale”. Start a new Codex or
-Claude Code conversation after installation so it reloads hooks and MCP.
+Start a new conversation or reload the harness after installation so it reloads hooks and MCP.
 
 The installer adds only target-project artifacts and preserves unrelated hook,
-MCP, and Claude settings entries:
+MCP, and settings entries:
 
 ```text
 .agents/skills/memory-stale/  # skill, hooks, Python runtime, lockfile
-.codex/hooks.json             # lifecycle registrations
+.agents/hooks.json            # Antigravity PreInvocation, PostToolUse, Stop hooks
+.agents/plugins/memory-stale/ # Antigravity project plugin and MCP entry
+.codex/hooks.json             # Codex lifecycle registrations
 .claude/settings.json         # Claude UserPromptSubmit, PostToolUse, Stop hooks
 .claude/skills/memory-stale/  # Claude capture instructions
 .mcp.json                     # Claude project MCP entry for the same local runtime

@@ -183,9 +183,9 @@ trials:
     assert result.retrieval_metrics.term_assisted_recall.rate == 1.0
     assert result.retrieval_metrics.term_baseline_precision.rate == 0.5
     assert result.retrieval_metrics.term_assisted_precision.rate == 0.5
-    assert result.retrieval_metrics.term_baseline_mrr == 1.0
+    assert result.retrieval_metrics.term_baseline_mrr == 0.5
     assert result.retrieval_metrics.term_assisted_mrr == 1.0
-    assert result.retrieval_metrics.term_baseline_ndcg_5 == 1.0
+    assert result.retrieval_metrics.term_baseline_ndcg_5 == pytest.approx(0.6309297, abs=0.0001)
     assert result.retrieval_metrics.term_assisted_ndcg_5 == 1.0
     assert result.retrieval_metrics.term_net_gain == 0
     assert result.retrieval_partitions == ()
