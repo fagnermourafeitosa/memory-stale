@@ -73,7 +73,7 @@ git clone https://github.com/fagnermourafeitosa/memory-stale.git /tmp/memory-sta
 # Antigravity: workspace hooks, project skill, and plugin MCP discovery
 sh /tmp/memory-stale/scripts/install-project.sh . --harness antigravity
 
-# Codex: hooks plus global MCP discovery that points to this project's runtime
+# Codex: project hooks, project skill, and project MCP discovery
 sh /tmp/memory-stale/scripts/install-project.sh . --harness codex
 
 # Claude Code: project hooks, project skill, and project MCP discovery
@@ -128,7 +128,7 @@ snake case, kebab case, and camel case, isolated from linguistic stemmers.
 When a later task may add product vocabulary to a claim or code reference, the
 host may supply up to eight `retrieval_terms` during capture. For example, a
 claim about an extra login factor can declare `MFA` or `second-factor
-authentication`. Codex or Claude Code chooses these opaque terms while already
+authentication`. The agent (Codex, Claude Code, or Antigravity) chooses these opaque terms while already
 authoring the claim; the local runtime only trims, bounds, stores, and matches
 them lexically. It does not extract entities, expand synonyms, use embeddings,
 or call another model. Terms are not evidence and never affect whether a memory
@@ -241,16 +241,16 @@ the missing coverage.
 
 ## Daily use
 
-Memory maintenance is automatic in both Codex and Claude Code:
+Memory maintenance is automatic across Codex, Claude Code, and Antigravity:
 
-1. `UserPromptSubmit` retrieves relevant active memory.
+1. `UserPromptSubmit` / `PreInvocation` retrieves relevant active memory.
 2. `PostToolUse` records work performed during the task.
 3. The host calls `memory.capture` before its final response once per coherent
    supported-code change.
 4. `Stop` captures automatic provenance, persists both record types, reports
    semantic coverage gaps, and marks affected existing records stale.
 
-Ask Codex or Claude Code to work normally; the installed skill and hooks handle
+Ask Codex, Claude Code, or Antigravity to work normally; the installed skill and hooks handle
 this protocol without requiring a memory command. For explicit maintenance,
 use:
 
@@ -258,7 +258,7 @@ use:
 /memory-stale dream
 ```
 
-Ask Codex for the Memory Stale health report to generate the local HTML view of
+Ask the agent for the Memory Stale health report to generate the local HTML view of
 active/stale memories, evidence, and invalidation reasons.
 
 ## What is stored
@@ -360,14 +360,14 @@ have no fallback.
 
 ## Design boundaries
 
-- **Codex or Claude Code supplies meaning.** The host decides whether a fact
+- **Codex, Claude Code, or Antigravity supplies meaning.** The host decides whether a fact
   is durable, states the claim, and may declare a few retrieval terms.
 - **The local core supplies proof of recorded freshness.** It resolves declared
   evidence, adds only unambiguous static dependencies, fingerprints the bounded
   closure, retrieves active records, matches declared terms literally, and
   manages lifecycle state.
-- **Hooks and MCP are adapters.** Codex and Claude payload adapters normalize
-  into one deterministic Python lifecycle and share one MCP server.
+- **Hooks and MCP are adapters.** Codex, Claude, and Antigravity payload adapters normalize
+  into one deterministic Python lifecycle and share the MCP server.
 - **Failures do not block coding.** Hook failures return actionable, non-blocking
   messages; writes are atomic.
 
