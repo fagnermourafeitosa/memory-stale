@@ -377,3 +377,26 @@ Legacy memory claim body.
     loaded = store.load_all()
     assert len(loaded) == 1
     assert loaded[0].language == "en"
+
+
+def test_lifecycle_memory_target_signature_and_reverse_index_integration() -> None:
+    from memory_stale.lifecycle import build_reverse_index
+
+    item1 = EvidenceItem("symbol", "primary", "auth.py:login", "sig-1")
+    item2 = EvidenceItem("symbol", "supporting", "jwt.py:verify", "sig-2")
+    memory = Memory(
+        id="mem-target-test",
+        kind="behavior",
+        status="active",
+        claim="Target signature test.",
+        durability_reason="Durability",
+        evidence=(item1, item2),
+    )
+
+    sig = memory.target_signature
+    assert isinstance(sig, str) and len(sig) == 64
+
+    index = build_reverse_index([memory])
+    assert index.target_signature(memory) == sig
+    assert index.coeffects_for(memory.id) == (item1, item2)
+    assert index.affected_memories(["jwt.py:verify"]) == {memory.id}

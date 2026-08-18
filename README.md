@@ -118,6 +118,27 @@ If `src/policy.py:max_retries` changes tomorrow, the claim is automatically inva
 ### 3. Multilingual BM25S Retrieval
 Active memories are ranked using field-weighted `bm25s` with Snowball stemming across natural language fields (`claim: 1.0`, `durability_reason: 0.5`, `retrieval_terms: 0.75`, `exact_locators: 2.0`). Exact symbols receive a `100.0` boost.
 
+### 4. Reactive Coeffects & In-Memory Reverse Dependency Index
+Memory Stale models evidence as **active reactive coeffects** rather than passive metadata (formalized in *Spatiotemporal Composability* — [Cordis Paper](https://github.com/cordiverse/paper/blob/main/paper.pdf)). Code entities act as *providers* and memories as *consumers* declaring environmental dependencies (`depends_on`).
+
+Instead of naively scanning the entire memory corpus against all files ($O(N \times M)$), an in-memory `ReverseDependencyIndex` maps canonical symbol locators directly to dependent memory IDs. When Git changes occur, affected memories are resolved in $O(\Delta\text{symbols})$ time, maintaining near-zero hook latency without disk-based index files.
+
+<p align="center">
+  <img src="./assets/reactive-coeffects-reverse-index.png" alt="Spatial Composability and Reverse Dependency Index" width="800">
+</p>
+
+### 5. HMR Staleness Propagation & Granular Lifecycle
+Inspired by Hot Module Replacement (HMR) dependency graphs, Memory Stale tracks transitive downstream shifts. When a callee function (`jwt.py:verify_token`) changes, any active memory whose dependency closure intersects the modified set ($\text{Closure}(C(M)) \cap \Delta \neq \emptyset$) is automatically transitioned to `STALE`, citing the exact downstream propagation path (e.g., `changed via auth.py:login`).
+
+The `EvidenceTarget` model decouples logical symbol identity from AST fingerprints to establish deterministic lifecycle states:
+* `STALE`: Symbol identity exists in the AST, but the semantic fingerprint diverged.
+* `UNBOUND`: Symbol locator missing from the source file (renamed or deleted).
+* `ORPHAN`: Target source file deleted from the Git repository.
+
+<p align="center">
+  <img src="./assets/hmr-staleness-propagation.png" alt="HMR Staleness Propagation and Target Reconciliation" width="800">
+</p>
+
 ---
 
 ## What is Stored (Zero Lock-in)
@@ -208,4 +229,4 @@ uv run pytest -m repository_evaluation
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE.txt) file for details.
+[MIT](LICENSE.txt)

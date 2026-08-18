@@ -299,15 +299,23 @@ def _run_lifecycle(
         resolve_item,
         resolve_stored_item,
     )
-    from memory_stale.lifecycle import RefEvidence, reconcile
+    from memory_stale.lifecycle import RefEvidence, build_reverse_index, reconcile
     from memory_stale.memory_store import MemoryStore
 
     store = MemoryStore(repository)
     memories = store.load_all()
+    reverse_index = build_reverse_index(memories)
     changed_paths = {change["path"] for change in changes}
+    affected_memory_ids = reverse_index.affected_memories(changed_paths)
     evidence: dict[str, RefEvidence] = {}
     for memory in memories:
         if memory.status != "active":
+            continue
+        if memory.id not in affected_memory_ids and not any(
+            evidence_path(item.type, item.locator) in changed_paths for item in memory.evidence
+        ):
+            for item in memory.evidence:
+                evidence[item.key] = RefEvidence(item.fingerprint)
             continue
         for item in memory.evidence:
             path_text = evidence_path(item.type, item.locator)

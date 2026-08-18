@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -127,6 +128,11 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
     ):
         raise ValueError("language must be a non-empty string")
     language = language_value.strip() if isinstance(language_value, str) else "en"
+    target_items = "\0".join(
+        f"{item['type']}\0{item['locator']}\0{item['fingerprint']}"
+        for item in sorted(evidence, key=lambda x: (str(x["type"]), str(x["locator"])))
+    )
+    target_signature = hashlib.sha256(target_items.encode("utf-8")).hexdigest()
     candidate = {
         "kind": kind,
         "claim": claim,
@@ -149,6 +155,7 @@ def _capture(arguments: dict[str, object], cwd: Path) -> dict[str, object]:
         "schema_version": 5,
         "observed_commit": observed_commit,
         "observed_at": datetime.now(timezone.utc).isoformat(),
+        "target_signature": target_signature,
     }
     captures = cast(list[object], task.setdefault("captures", []))
     key = (

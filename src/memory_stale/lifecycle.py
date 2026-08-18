@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import cast
 
@@ -11,6 +11,47 @@ from memory_stale.evidence import EvidenceEdge, EvidenceItem
 
 MAX_RETRIEVAL_TERMS = 8
 MAX_RETRIEVAL_TERM_LENGTH = 80
+
+
+@dataclass(frozen=True)
+class ReverseDependencyIndex:
+    """In-memory reverse dependency index mapping code entities to dependent memories."""
+
+    _symbol_to_memories: dict[str, set[str]]
+    _memory_coeffects: dict[str, tuple[EvidenceItem, ...]]
+
+    def affected_memories(self, changed_symbols: Sequence[str] | set[str]) -> set[str]:
+        affected: set[str] = set()
+        for symbol in changed_symbols:
+            normalized = (
+                symbol
+                if ":" in symbol
+                and symbol.split(":", 1)[0] in {"symbol", "source", "config", "schema", "test"}
+                else f"symbol:{symbol}"
+            )
+            for candidate in (symbol, normalized):
+                if candidate in self._symbol_to_memories:
+                    affected.update(self._symbol_to_memories[candidate])
+        return affected
+
+    def coeffects_for(self, memory_id: str) -> tuple[EvidenceItem, ...]:
+        return self._memory_coeffects.get(memory_id, ())
+
+    def target_signature(self, memory: Memory) -> str:
+        return memory.target_signature
+
+
+def build_reverse_index(memories: Sequence[Memory] | Iterable[Memory]) -> ReverseDependencyIndex:
+    symbol_to_memories: dict[str, set[str]] = {}
+    memory_coeffects: dict[str, tuple[EvidenceItem, ...]] = {}
+    for memory in memories:
+        if memory.status != "active":
+            continue
+        memory_coeffects[memory.id] = memory.evidence
+        for item in memory.evidence:
+            symbol_to_memories.setdefault(item.key, set()).add(memory.id)
+            symbol_to_memories.setdefault(item.locator, set()).add(memory.id)
+    return ReverseDependencyIndex(symbol_to_memories, memory_coeffects)
 
 
 @dataclass(frozen=True)
@@ -50,6 +91,14 @@ class Memory:
     def signatures(self) -> dict[str, str]:
         """Compatibility view for consumers that display evidence fingerprints."""
         return {item.key: item.fingerprint for item in self.evidence}
+
+    @property
+    def target_signature(self) -> str:
+        """Canonical combined hash of all supporting evidence targets."""
+        items = "\0".join(
+            f"{item.type}\0{item.locator}\0{item.fingerprint}" for item in sorted(self.evidence)
+        )
+        return hashlib.sha256(items.encode("utf-8")).hexdigest()
 
 
 def _identifier(value: str) -> str:

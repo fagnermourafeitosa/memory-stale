@@ -39,6 +39,15 @@ class EvidenceItem:
 
 
 @dataclass(frozen=True, order=True)
+class EvidenceTarget:
+    """A canonical target reference combining identity, fingerprint, and evidence kind."""
+
+    identity: str
+    fingerprint: str
+    kind: str = "symbol"
+
+
+@dataclass(frozen=True, order=True)
 class EvidenceEdge:
     """One directed ``depends_on`` relationship between evidence nodes."""
 

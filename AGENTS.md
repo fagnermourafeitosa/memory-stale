@@ -53,7 +53,11 @@
 
 ## TDD is mandatory
 
-All feature work and bug fixes must use test-driven development.
+All feature work and bug fixes must use test-driven development. Each TDD slice
+must have exactly one isolated `test -> fail -> code -> pass` cycle. Never
+implement multiple slices or batch edits across multiple production files at once.
+Never modify files in `src/` without first running the focused test and observing
+it fail for the expected reason.
 
 1. Identify the public seam named by the relevant spec. If the seam is missing
    or ambiguous, stop and agree on it before writing tests.

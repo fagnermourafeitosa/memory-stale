@@ -1232,3 +1232,64 @@ def test_recapturing_a_stale_claim_preserves_history_and_restores_active_context
     assert context is not None
     additional_context = cast(dict[str, object], context["hookSpecificOutput"])["additionalContext"]
     assert str(additional_context).count("Compute has an established result.") == 1
+
+
+def test_reactive_coeffects_and_hmr_staleness_end_to_end(tmp_path: Path) -> None:
+    harness = LocalHarness(tmp_path / "repo", RUNTIME_ROOT)
+    jwt_file = harness.root / "jwt.py"
+    jwt_file.write_text(
+        "def verify_token(token: str) -> bool:\n    return token == 'valid'\n",
+        encoding="utf-8",
+    )
+    auth_file = harness.root / "auth.py"
+    auth_file.write_text(
+        "from jwt import verify_token\n\ndef login(token: str) -> bool:\n    return verify_token(token)\n",
+        encoding="utf-8",
+    )
+    harness.git("add", "jwt.py", "auth.py")
+    harness.git("commit", "--quiet", "-m", "initial auth service")
+
+    # Turn 1: Capture memory about login
+    harness.hook("UserPromptSubmit", "turn-1", prompt="Capture auth contract")
+    auth_file.write_text(
+        "from jwt import verify_token\n\ndef login(token: str) -> bool:\n    # updated\n    return verify_token(token)\n",
+        encoding="utf-8",
+    )
+    response = harness.capture(
+        kind="behavior",
+        claim="Auth login verifies token using JWT.",
+        durability_reason="Authentication contract required by API.",
+        evidence=[{"type": "symbol", "role": "primary", "locator": "auth.py:login"}],
+    )
+    assert cast(dict[str, object], response["result"])["isError"] is False
+    harness.hook("Stop", "turn-1")
+
+    # Verify memory is active and has static dependency to jwt.py:verify_token
+    store = MemoryStore(harness.root)
+    memories = store.load_all()
+    assert len(memories) == 1
+    assert memories[0].status == "active"
+    assert any("jwt.py:verify_token" in item.locator for item in memories[0].evidence)
+
+    # Turn 2: Modify ONLY downstream jwt.py:verify_token (auth.py is untouched)
+    harness.hook("UserPromptSubmit", "turn-2", prompt="Update token validation")
+    jwt_file.write_text(
+        "def verify_token(token: str) -> bool:\n    return token.startswith('bearer-valid')\n",
+        encoding="utf-8",
+    )
+    harness.hook("Stop", "turn-2")
+
+    # Verify HMR staleness via reverse index invalidated the memory
+    updated_memories = [
+        m for m in store.load_all() if m.claim == "Auth login verifies token using JWT."
+    ]
+    assert len(updated_memories) == 1
+    assert updated_memories[0].status == "stale"
+    assert updated_memories[0].stale_reasons is not None
+    assert any("jwt.py:verify_token" in key for key in updated_memories[0].stale_reasons)
+
+    # Turn 3: UserPromptSubmit excludes stale memory
+    context = harness.hook("UserPromptSubmit", "turn-3", prompt="login")
+    assert context is not None
+    additional_context = cast(dict[str, object], context["hookSpecificOutput"])["additionalContext"]
+    assert "Auth login verifies token using JWT." not in str(additional_context)

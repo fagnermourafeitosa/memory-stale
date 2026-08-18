@@ -634,3 +634,56 @@ def test_capture_with_language_stages_candidate(tmp_path: Path) -> None:
     task_data = json.loads(task_file.read_text(encoding="utf-8"))
     assert len(task_data["captures"]) == 1
     assert task_data["captures"][0]["language"] == "pt"
+
+
+def test_capture_records_target_signature_for_inertial_reconciliation(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    _start_turn(repository)
+    (repository / "auth.py").write_text(
+        "def login():\n    return validate_mfa()\n", encoding="utf-8"
+    )
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(RUNTIME_ROOT / "src")
+    server = subprocess.Popen(
+        [sys.executable, "-m", "memory_stale.mcp_server"],
+        cwd=repository,
+        env=environment,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        response = _rpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "memory.capture",
+                    "arguments": {
+                        "kind": "behavior",
+                        "claim": "Auth login returns boolean success.",
+                        "evidence": [
+                            {"type": "symbol", "role": "primary", "locator": "auth.py:login"}
+                        ],
+                        "durability_reason": "Contract",
+                    },
+                },
+            },
+        )
+    finally:
+        assert server.stdin is not None
+        server.stdin.close()
+        server.wait(timeout=5)
+
+    result = cast(dict[str, object], response["result"])
+    assert result["isError"] is False
+    task_file = next((repository / ".git" / "memory-stale" / "tasks").glob("*.json"))
+    task_data = json.loads(task_file.read_text(encoding="utf-8"))
+    assert len(task_data["captures"]) == 1
+    capture = task_data["captures"][0]
+    assert "target_signature" in capture
+    assert isinstance(capture["target_signature"], str)
+    assert len(capture["target_signature"]) == 64
