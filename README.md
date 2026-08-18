@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="./logo.png" alt="Memory Stale logo" width="240">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/logo-dark.png">
+    <img src="./assets/logo-light.png" alt="Memory Stale logo" width="240">
+  </picture>
 </p>
 
 **Deterministic, evidence-bound project memory for coding agents.**  
