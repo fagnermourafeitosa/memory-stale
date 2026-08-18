@@ -312,33 +312,6 @@ def _copy_claude_skill(source: Path, repository: Path) -> None:
     )
 
 
-def _register_mcp(repository: Path) -> None:
-    bootstrap = repository / ".agents" / "skills" / "memory-stale" / "scripts" / "run-python.sh"
-    try:
-        result = subprocess.run(
-            [
-                "codex",
-                "mcp",
-                "add",
-                "memory-stale",
-                "--",
-                "sh",
-                str(bootstrap),
-                "-m",
-                "memory_stale.mcp_server",
-            ],
-            capture_output=True,
-            text=True,
-        )
-    except FileNotFoundError as error:
-        raise InstallationError(
-            "Codex CLI is required to register the memory-stale MCP server"
-        ) from error
-    if result.returncode != 0:
-        detail = result.stderr.strip() or result.stdout.strip() or "unknown Codex CLI failure"
-        raise InstallationError(f"could not register the memory-stale MCP server: {detail}")
-
-
 def install(source: Path, target: Path, harness: str) -> Path:
     if harness not in {"codex", "claude", "antigravity"}:
         raise InstallationError(f"unsupported harness: {harness!r}")
@@ -350,8 +323,7 @@ def install(source: Path, target: Path, harness: str) -> Path:
         _write_default_memory_config(repository)
     if harness == "codex":
         _atomic_write_json(repository / ".codex" / "hooks.json", _codex_configuration(repository))
-        if first_install:
-            _register_mcp(repository)
+        _atomic_write_json(repository / ".mcp.json", _mcp_configuration(repository))
     elif harness == "claude":
         _copy_claude_skill(source, repository)
         _atomic_write_json(

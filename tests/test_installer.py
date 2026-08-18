@@ -62,3 +62,27 @@ def test_installer_configures_antigravity_artifacts(tmp_path: Path) -> None:
     mcp_data = json.loads(mcp_config.read_text(encoding="utf-8"))
     assert "mcpServers" in mcp_data
     assert "memory-stale" in mcp_data["mcpServers"]
+
+
+def test_installer_configures_codex_artifacts_locally(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path)
+    source = Path(__file__).parents[1]
+
+    install(source, repository, "codex")
+
+    # Verify skill, hooks, and local .mcp.json
+    skill_file = repository / ".agents" / "skills" / "memory-stale" / "SKILL.md"
+    assert skill_file.exists()
+    assert (repository / ".agents" / "skills" / ".agent-memory" / "config.toml").exists()
+
+    hooks_file = repository / ".codex" / "hooks.json"
+    assert hooks_file.exists()
+    hooks_config = json.loads(hooks_file.read_text(encoding="utf-8"))
+    assert "hooks" in hooks_config
+    assert "UserPromptSubmit" in hooks_config["hooks"]
+
+    mcp_file = repository / ".mcp.json"
+    assert mcp_file.exists()
+    mcp_data = json.loads(mcp_file.read_text(encoding="utf-8"))
+    assert "mcpServers" in mcp_data
+    assert "memory-stale" in mcp_data["mcpServers"]

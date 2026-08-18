@@ -14,10 +14,9 @@ boundary and a reviewable source.
 
 It is installed per repository with harness-specific hooks over one deterministic
 core. Codex, Claude Code, and Antigravity all use the same local MCP server, memory store,
-evidence fingerprints, retrieval, and reconciliation. The Codex registration
-is global discovery metadata that points only to that project's installed
-runtime; Claude Code discovers the same runtime from the project `.mcp.json`;
-Antigravity discovers the runtime from `.agents/plugins/memory-stale/mcp_config.json` and `.agents/hooks.json`.
+evidence fingerprints, retrieval, and reconciliation. Codex and Claude Code
+discover the runtime from the project `.mcp.json`; Antigravity discovers the runtime
+from `.agents/plugins/memory-stale/mcp_config.json` and `.agents/hooks.json`.
 Memory Stale does not use another model, embeddings, a hosted
 service, or a vector database.
 
@@ -93,19 +92,18 @@ MCP, and settings entries:
 .codex/hooks.json             # Codex lifecycle registrations
 .claude/settings.json         # Claude UserPromptSubmit, PostToolUse, Stop hooks
 .claude/skills/memory-stale/  # Claude capture instructions
-.mcp.json                     # Claude project MCP entry for the same local runtime
+.mcp.json                     # Codex and Claude project MCP entry for the local runtime
 .git/memory-stale/runtime/    # local uv and grammar caches
 ```
 
-For Codex, the installer registers `memory-stale` with `codex mcp add` using
-the installed runtime's absolute path. It does not install Python packages
-globally or point to the source checkout. Claude's `.mcp.json` server command
-uses that exact same bootstrap. Incompatible `memory-stale` registrations stop
+The installer registers `memory-stale` locally via `.mcp.json` (for Codex and Claude Code)
+and `.agents/plugins/memory-stale/mcp_config.json` (for Antigravity) using
+the installed runtime's bootstrap. It does not install Python packages
+globally or point to the source checkout. Incompatible `memory-stale` registrations stop
 installation rather than being replaced. Repeating installation does not
 duplicate hooks or MCP configuration.
 
-Requirements: Git, `uv`, and Python 3.10+. Codex installation additionally
-requires the Codex CLI with MCP support. Claude lifecycle turns require a
+Requirements: Git, `uv`, and Python 3.10+. Claude lifecycle turns require a
 `prompt_id` to create isolated task state; when a payload omits it, Memory
 Stale silently skips that lifecycle turn.
 
