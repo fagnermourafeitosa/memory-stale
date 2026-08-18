@@ -57,7 +57,7 @@ AI coding assistants require different memory paradigms depending on the problem
 
 #### 1. Invalidation Mechanics: Cosine Proximity vs. AST-Normalized HMR
 * **Vector DBs (Semantic Distance)**: Vector embeddings compute geometric proximity in a high-dimensional latent space. If an agent records *"AuthService.login only requires password"*, and you subsequently rewrite `login()` to enforce MFA, the embedding vector of the claim does not change. When the agent later queries *"How does authentication work?"*, the cosine similarity remains high ($\ge 0.90$). The vector database confidently injects obsolete information as current truth.
-* **Codebase Knowledge Graphs (File-Level Hash)**: Tools like [Graphify](https://github.com/Graphify-Labs/graphify) re-parse files when the file's SHA-256 changes. While this refreshes the structural topology, it re-indexes on non-semantic edits (e.g., formatting, comments) and is designed to answer *"what code exists right now?"* rather than *"are historical agent decisions still valid?"*.
+* **Codebase Knowledge Graphs (File-Level Hash)**: Tools like [Graphify](https://github.com/Graphify-Labs/graphify) re-parse files when the file's SHA-256 changes. While this refreshes the structural topology, it re-indexes on non-semantic edits (e.g., formatting, comments) and is designed to answer "what code exists right now?" rather than "are historical agent decisions still valid?".
 * **Memory Stale (Tree-sitter HMR Invalidation)**: Normalizes code symbols into comment-free, formatting-invariant Tree-sitter AST hashes. When a Git diff touches a referenced symbol or any downstream callee within its dependency closure, the claim is instantaneously transitioned to `STALE` and excluded from the prompt injection window.
 
 #### 2. Downstream Propagation: Isolated Chunks vs. Reactive Coeffects
@@ -147,7 +147,7 @@ If `src/policy.py:max_retries` changes tomorrow, the claim is automatically inva
 Active memories are ranked using field-weighted `bm25s` with Snowball stemming across natural language fields (`claim: 1.0`, `durability_reason: 0.5`, `retrieval_terms: 0.75`, `exact_locators: 2.0`). Exact symbols receive a `100.0` boost.
 
 ### 4. Reactive Coeffects & In-Memory Reverse Dependency Index
-Memory Stale models evidence as **active reactive coeffects** rather than passive metadata (formalized in *Spatiotemporal Composability* — [Cordis Paper](https://github.com/cordiverse/paper/blob/main/paper.pdf)). Code entities act as *providers* and memories as *consumers* declaring environmental dependencies (`depends_on`).
+Memory Stale models evidence as **active reactive coeffects** rather than passive metadata (formalized in *Spatiotemporal Composability* — [Cordis Paper](https://github.com/cordiverse/paper/blob/main/A Programming Paradigm for Spatiotemporal Composability.pdf)). Code entities act as *providers* and memories as *consumers* declaring environmental dependencies (`depends_on`).
 
 Instead of naively scanning the entire memory corpus against all files ($O(N \times M)$), an in-memory `ReverseDependencyIndex` maps canonical symbol locators directly to dependent memory IDs. When Git changes occur, affected memories are resolved in $O(\Delta\text{symbols})$ time, maintaining near-zero hook latency without disk-based index files.
 
@@ -229,14 +229,17 @@ Automatic symbol extraction, structural normalization, and static call graph exp
 
 Memory Stale is continuously benchmarked against a versioned, human-labeled corpus of **100 end-to-end repository lifecycle cases** (50 semantic changes, 50 behavior-preserving edits):
 
-| Metric | Result | 95% Confidence Interval |
-| :--- | :---: | :---: |
-| **Overall Accuracy** | **86.0%** (86/100) | 77.9% – 91.5% |
-| **Stale Precision** | **84.6%** (44/52) | 72.5% – 92.0% |
-| **Stale Recall** | **88.0%** (44/50) | 76.2% – 94.4% |
-| **Mean Reciprocal Rank (MRR)** | **0.450** | Position-aware ranking quality |
-| **NDCG@5 Ranking Quality** | **0.540** | High-relevance context promotion |
-| **Operational Failures** | **0 / 100** | 100% deterministic test stability |
+| Metric | Result | 95% Confidence Interval | Description |
+| :--- | :---: | :---: | :--- |
+| **Overall Accuracy** | **86.0%** (86/100) | 77.9% – 91.5% | Balanced trial classification accuracy |
+| **Stale Precision** | **84.6%** (44/52) | 72.5% – 92.0% | Correctly identified invalidations |
+| **Stale Recall** | **88.0%** (44/50) | 76.2% – 94.4% | True staleness detection rate |
+| **Specificity (True Active)** | **84.0%** (42/50) | 71.5% – 91.7% | Behavior-preserving edit retention |
+| **Retrieval Recall** | **80.0%** (32/40) | 65.2% – 89.5% | Relevant active memory context hits |
+| **Stale Exclusion Rate** | **83.3%** (50/60) | 72.0% – 90.7% | Stale records suppressed from prompt context |
+| **Mean Reciprocal Rank (MRR)** | **0.450** | — | Position-aware ranking (+9.1% via BM25S) |
+| **NDCG@5 Ranking Quality** | **0.540** | — | Top-5 relevance promotion (+5.4% via BM25S) |
+| **Operational Failures** | **0 / 100** | — | 100% deterministic test stability |
 
 ### Reproduce Benchmark Locally
 Run the 100-case evaluation suite anytime:
@@ -252,6 +255,22 @@ uv run pytest -m repository_evaluation
 * **Lexical & Structural**: Memories are retrieved by exact code references, BM25S terms, and declared aliases. Pure conceptual queries with no vocabulary overlap are not retrieved.
 * **Static Graph Bounds**: Provenance follows direct named declarations up to 3 hops (64 nodes max). Dynamic reflection, monkey patching, and external runtime configuration are omitted rather than guessed.
 * **Exclusion over Mutation**: Stale memories are excluded from prompt injection, never silently rewritten without verification.
+
+---
+
+## Theoretical Foundation & Scope Boundaries
+
+Memory Stale draws foundational concepts from *A Programming Paradigm for Spatiotemporal Composability* ([Cordis Paper](https://github.com/cordiverse/paper/blob/main/paper.pdf)), adapting its calculus of coeffects and propagation to the domain of LLM agent memory:
+
+### What Memory Stale Implements
+* **Reactive Coeffects ($\Gamma_{\text{coeffect}} \vdash t : T$):** Memories act as consumers declaring environmental requirements on code entities (providers). An in-memory `ReverseDependencyIndex` resolves invalidations reactively in $O(\Delta\text{symbols})$ time when the environment changes.
+* **HMR-Style Staleness Propagation:** Applies the topological invalidation model of Hot Module Replacement to static provenance trees. When a downstream dependency changes, invalidation propagates upward, tagging claims as `STALE` with exact failure paths (e.g., `changed via auth.py:login -> jwt.py:verify_token`).
+* **Deterministic Granular Lifecycle:** Formalizes explicit lifecycle states (`active`, `stale`, `superseded`) and failure modes (`STALE`, `UNBOUND`, `ORPHAN`) without heuristics.
+
+### What is Intentionally Out of Scope (Runtime vs. Memory Engine)
+* **No Process-Level HMR / Code Swapping:** Memory Stale does not hot-swap modules in running processes or mutate application runtime state.
+* **No Reversible Side Effects / Physical State Rollback:** Memory Stale does not execute user code, manage runtime effect accumulators ($\partial\Gamma$), or generate rollback closures ($g: \Gamma \to \Gamma$).
+* **No Multi-Tenant Realms or Service Brokers:** Isolation realms ($\Sigma^{iso}$), access-control interception ($\Sigma^{inter}$), and distributed RPC brokers from Cordis are omitted; Memory Stale operates strictly as a project-local, deterministic memory engine.
 
 ---
 

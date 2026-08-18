@@ -71,7 +71,7 @@ def test_corpus_schema_errors_name_the_invalid_scenario(tmp_path: Path) -> None:
 
 
 def test_versioned_baseline_corpus_covers_each_supported_grammar(tmp_path: Path) -> None:
-    corpus = Path(__file__).parents[1] / "evaluation-corpus.yaml"
+    corpus = Path(__file__).parents[1] / "evaluator" / "evaluation-corpus.yaml"
 
     result = evaluate_corpus(corpus, tmp_path / "fixtures")
 
