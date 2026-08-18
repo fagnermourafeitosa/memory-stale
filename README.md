@@ -150,13 +150,13 @@ cause lower-ranked candidates outside the selected prefix to be injected.
 
 ```mermaid
 flowchart TD
-    A[Codex or Claude Code starts a task] --> B[UserPromptSubmit hook]
+    A["Agent starts a task<br/>(Codex, Claude Code, or Antigravity)"] --> B["Task-start hook<br/>(UserPromptSubmit / PreInvocation)"]
     B --> C[Load project memories]
     C --> D{"All recorded evidence and<br/>static dependencies still match?"}
     D -->|Yes| E[Classify as active]
     D -->|No| F["Classify as stale<br/>and retain for audit"]
     E --> G{"Relevant to this task?<br/>Exact code ref or lexical match"}
-    G -->|Yes| H["Inject active memory<br/>into Codex context"]
+    G -->|Yes| H["Inject active memory<br/>into agent context"]
     G -->|No| I[Keep stored; do not inject]
     F --> J[Exclude from ordinary context]
 ```
@@ -208,9 +208,9 @@ language-independent.
 
 ```mermaid
 flowchart TD
-    A[UserPromptSubmit snapshots source and injects capture requirement] --> B[Host changes code]
-    B --> C["Host calls memory.capture<br/>once per coherent change"]
-    B --> D["Stop fingerprints<br/>final source and symbols"]
+    A["Task-start hook snapshots source<br/>and injects capture requirement"] --> B[Agent changes code]
+    B --> C["Agent calls memory.capture<br/>once per coherent change"]
+    B --> D["Stop hook fingerprints<br/>final source and symbols"]
     C --> E[Stage semantic claim with evidence]
     D --> F[Stage automatic provenance records]
     E --> I[Expand safe static dependencies]
@@ -226,7 +226,7 @@ Automatic change record: changed symbol src/jobs.py:retry.
 Automatic change record: changed symbol tests/test_jobs.py:test_retry_limit.
 ```
 
-Alongside them, Codex submits the memory content used for conceptual retrieval:
+Alongside them, the agent submits the memory content used for conceptual retrieval:
 
 ```text
 Failed jobs retry at most three times before surfacing the final failure.
