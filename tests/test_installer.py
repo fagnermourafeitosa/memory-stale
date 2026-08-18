@@ -86,3 +86,20 @@ def test_installer_configures_codex_artifacts_locally(tmp_path: Path) -> None:
     mcp_data = json.loads(mcp_file.read_text(encoding="utf-8"))
     assert "mcpServers" in mcp_data
     assert "memory-stale" in mcp_data["mcpServers"]
+
+
+def test_installer_when_cloned_directly_into_agents_skills(tmp_path: Path) -> None:
+    import shutil
+
+    repository = _create_repository(tmp_path)
+    source = Path(__file__).parents[1]
+    skill_dir = repository / ".agents" / "skills" / "memory-stale"
+    shutil.copytree(
+        source, skill_dir, ignore=shutil.ignore_patterns(".git", ".venv", "__pycache__")
+    )
+
+    install(skill_dir, repository, "antigravity")
+
+    assert (repository / ".agents" / "hooks.json").exists()
+    assert (repository / ".agents" / "plugins" / "memory-stale" / "mcp_config.json").exists()
+    assert (repository / ".agents" / "skills" / ".agent-memory" / "config.toml").exists()

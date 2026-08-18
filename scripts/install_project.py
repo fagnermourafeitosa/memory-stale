@@ -201,10 +201,12 @@ def _atomic_write_text(path: Path, text: str) -> None:
 
 
 def _write_default_memory_config(repository: Path) -> None:
-    _atomic_write_text(
-        repository / ".agents" / "skills" / ".agent-memory" / "config.toml",
-        DEFAULT_MEMORY_CONFIG,
-    )
+    config_path = repository / ".agents" / "skills" / ".agent-memory" / "config.toml"
+    if not config_path.exists():
+        _atomic_write_text(
+            config_path,
+            DEFAULT_MEMORY_CONFIG,
+        )
 
 
 def _target_repository(target: Path) -> Path:
@@ -317,10 +319,9 @@ def install(source: Path, target: Path, harness: str) -> Path:
         raise InstallationError(f"unsupported harness: {harness!r}")
     repository = _target_repository(target)
     destination = repository / ".agents" / "skills" / "memory-stale"
-    first_install = not destination.exists()
-    if first_install:
+    if not destination.exists():
         _copy_artifacts(source, repository)
-        _write_default_memory_config(repository)
+    _write_default_memory_config(repository)
     if harness == "codex":
         _atomic_write_json(repository / ".codex" / "hooks.json", _codex_configuration(repository))
         _atomic_write_json(repository / ".mcp.json", _mcp_configuration(repository))
