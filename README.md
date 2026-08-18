@@ -2,8 +2,6 @@
   <img src="./logo.png" alt="Memory Stale logo" width="240">
 </p>
 
-# Memory Stale
-
 **Deterministic, evidence-bound project memory for coding agents.**  
 *When the code moves, outdated memory dies. Automatically.*
 
@@ -209,5 +207,3 @@ uv run pytest -m repository_evaluation
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE.txt) file for details.
-
-Copyright (c) 2026 Fagner Moura Feitosa
