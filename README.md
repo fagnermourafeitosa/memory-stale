@@ -10,7 +10,7 @@
 
 [![Local First](https://img.shields.io/badge/Local--first-100%25-blue.svg)](#design-boundaries)
 [![AST Verification](https://img.shields.io/badge/Verification-Tree--sitter%20AST-green.svg)](#how-it-works-in-practice)
-[![No Vector DB](https://img.shields.io/badge/Embeddings%20%2F%20Vector%20DB-None-orange.svg)](#why-deterministic-over-vector-dbs)
+[![No Vector DB](https://img.shields.io/badge/Embeddings%20%2F%20Vector%20DB-None-orange.svg)](#architectural-comparison--in-depth-analysis)
 [![Format](https://img.shields.io/badge/Storage-OKF%20v0.2%20Markdown-purple.svg)](#what-is-stored)
 [![Tested](https://img.shields.io/badge/Evaluation-100--trial%20Corpus%20(86.0%25)-brightgreen.svg)](#measured-evaluation)
 
@@ -41,17 +41,45 @@ Task 3  Agent works on authentication again.
 
 ---
 
-## Why Deterministic over Vector DBs?
+## Architectural Comparison & In-Depth Analysis
 
-Traditional agent memory uses vector databases or raw text files. Here is why that fails in real-world codebases:
+AI coding assistants require different memory paradigms depending on the problem domain. Here is a deep architectural breakdown between **Semantic Vector Memory**, **Codebase Knowledge Graphs**, and **Memory Stale**:
 
-| Feature | Vector DBs & LLM Memory | Plain Files (AGENTS.md / napkin) | Memory Stale |
+| Capability | Vector DBs & LLM Memory *(e.g., Mem0, pgvector)* | Codebase Knowledge Graphs *(e.g., [Graphify](https://github.com/Graphify-Labs/graphify))* | Memory Stale |
 | :--- | :--- | :--- | :--- |
-| **Freshness Check** | ❌ None (Semantic similarity only) | ❌ Manual editing required | ✅ **Deterministic AST fingerprint comparison** |
-| **Code Dependency Graph** | ❌ Blind to function call changes | ❌ None | ✅ **Static provenance graph (up to 3 hops)** |
-| **Formatting / Comment edits** | ⚠️ Often alters embedding distance | ⚠️ Unversioned | ✅ **Immune (AST-level normalization)** |
-| **Cost & Latency** | 💸 Extra LLM calls & embedding API | ⚡ Fast but brittle | ⚡ **100% Local, zero API calls, <10ms lookup** |
-| **Audit Trail** | 🔒 Black-box vector space | 📝 Plain text | 📝 **Git-reviewable OKF v0.2 Markdown** |
+| **Core Focus** | Unstructured semantic search across chat & docs | Full repository navigation & symbol relationships | Durable decisions & contracts tied to code |
+| **When Code Changes** | Stale memories persist active (hallucination risk) | File-level incremental re-parsing (file SHA-256) | Symbol-level [HMR invalidation](#5-hmr-staleness-propagation--granular-lifecycle) via [AST fingerprints](#supported-languages-tree-sitter-ast) |
+| **Downstream Awareness** | Blind to function caller/callee changes | Global call & type hierarchy | [Reactive coeffects](#4-reactive-coeffects--in-memory-reverse-dependency-index) (invalidates if callees change) |
+| **Hook Latency & Speed** | 100–500ms (external embedding APIs) | Batch generation / graph traversals | <10ms local hook execution (`O(Δ symbols)`) |
+| **Storage & Versioning** | External binary vector databases | Graph databases or generated artifacts | 100% Local Git Markdown ([OKF v0.2 format](#stored-format-open-knowledge-format-okf-v02)) |
+
+### Deep Dive: Why Architectural Mismatches Cause Stale Hallucinations
+
+#### 1. Invalidation Mechanics: Cosine Proximity vs. AST-Normalized HMR
+* **Vector DBs (Semantic Distance)**: Vector embeddings compute geometric proximity in a high-dimensional latent space. If an agent records *"AuthService.login only requires password"*, and you subsequently rewrite `login()` to enforce MFA, the embedding vector of the claim does not change. When the agent later queries *"How does authentication work?"*, the cosine similarity remains high ($\ge 0.90$). The vector database confidently injects obsolete information as current truth.
+* **Codebase Knowledge Graphs (File-Level Hash)**: Tools like [Graphify](https://github.com/Graphify-Labs/graphify) re-parse files when the file's SHA-256 changes. While this refreshes the structural topology, it re-indexes on non-semantic edits (e.g., formatting, comments) and is designed to answer *"what code exists right now?"* rather than *"are historical agent decisions still valid?"*.
+* **Memory Stale (Tree-sitter HMR Invalidation)**: Normalizes code symbols into comment-free, formatting-invariant Tree-sitter AST hashes. When a Git diff touches a referenced symbol or any downstream callee within its dependency closure, the claim is instantaneously transitioned to `STALE` and excluded from the prompt injection window.
+
+#### 2. Downstream Propagation: Isolated Chunks vs. Reactive Coeffects
+* **Vector DBs**: Text chunks are stored as isolated units. If function `A()` relies on helper `B()`, modifying `B()` leaves the memory of `A()` untouched, causing subtle logic regressions.
+* **Codebase Knowledge Graphs**: Map the entire repository into a global directed graph, providing deep topological navigation for architectural exploration.
+* **Memory Stale**: Formulates memory evidence as **reactive coeffects** (what a claim requires from its environment). Changes to downstream functions propagate staleness upward to invalidate dependent memories with explicit causation (e.g., `invalidated via auth.py:verify_token`).
+
+#### 3. Execution Latency in Agent Loops: Cloud APIs vs. In-Memory Reverse Index
+* **Vector DBs**: Generating embeddings on prompt submission or Git hooks introduces network round-trips (100–500ms per call) and token costs, making synchronous hook-driven validation prohibitive.
+* **Codebase Knowledge Graphs**: Rebuilding or traversing large code graphs is computationally heavy, typically suited for on-demand exploration rather than real-time hook blocking.
+* **Memory Stale**: Maintains an in-memory `ReverseDependencyIndex` (`SymbolLocator -> Set[MemoryId]`). On `UserPromptSubmit` or Git lifecycle hooks, staleness resolution is `O(Δ symbols)`—proportional only to the modified lines in `git diff`, executing in under 10ms with zero network requests.
+
+#### 4. Auditability and Concurrency: Black Boxes vs. Git-Native OKF v0.2
+* **Vector DBs**: Embeddings reside in external, binary vector stores (e.g., Qdrant, Pinecone, pgvector) that cannot be reviewed in pull requests or synchronized deterministically across branches.
+* **Memory Stale**: Every memory is an immutable, human-readable Open Knowledge Format (OKF v0.2) Markdown file in `.agents/skills/.agent-memory/memories/`. It uses **Inertial Target Reconciliation** to reject stale writes if the codebase was modified concurrently during the agent's turn.
+
+---
+
+> 💡 **Architectural Summary**:
+> * **Vector DBs** excel at fuzzy semantic search across free-form conversation logs and unstructured documentation.
+> * **Knowledge Graphs ([Graphify](https://github.com/Graphify-Labs/graphify))** excel at full-codebase structural discovery and global relationship navigation.
+> * **Memory Stale** is purpose-built for durable architectural decisions, contracts, and business logic, providing **deterministic certainty that outdated memories are purged the instant the code moves**.
 
 ---
 
