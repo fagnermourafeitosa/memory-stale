@@ -8,11 +8,25 @@ import shutil
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from math import sqrt
+from math import log2, sqrt
 from pathlib import Path, PurePosixPath
 from typing import cast
 
 import yaml
+
+
+def reciprocal_rank(target_rank: int | None) -> float:
+    """Calculate reciprocal rank (1/rank) for 1-based target rank or 0.0 if not found."""
+    if target_rank is not None and target_rank > 0:
+        return 1.0 / target_rank
+    return 0.0
+
+
+def ndcg_at_k(target_rank: int | None, k: int = 5) -> float:
+    """Calculate binary NDCG@K for 1-based target rank or 0.0 if not found or > k."""
+    if target_rank is not None and 1 <= target_rank <= k:
+        return 1.0 / log2(target_rank + 1)
+    return 0.0
 
 
 class RepositoryCorpusError(ValueError):
@@ -62,9 +76,11 @@ class TrialOutcome:
     retrieval_partition: str | None
     expected_retrieval: bool
     target_retrieved: bool
+    target_rank: int | None
     context_returned: bool
     returned_claim_count: int
     term_baseline_target_retrieved: bool | None
+    term_baseline_target_rank: int | None
     term_baseline_context_returned: bool | None
     term_baseline_returned_claim_count: int | None
 
@@ -103,19 +119,27 @@ class EvaluationMetrics:
 
 @dataclass(frozen=True)
 class RetrievalEvaluationMetrics:
-    """Availability rates, kept separate from lifecycle freshness rates."""
+    """Availability rates and ranking metrics, kept separate from lifecycle freshness rates."""
 
     recall: RateMetric
     exclusion_rate: RateMetric
     precision: RateMetric
+    mrr: float | None
+    ndcg_5: float | None
     overall_accuracy: RateMetric
     without_terms_overall_accuracy: RateMetric
+    without_terms_mrr: float | None
+    without_terms_ndcg_5: float | None
     term_baseline_recall: RateMetric
     term_assisted_recall: RateMetric
     term_baseline_exclusion_rate: RateMetric
     term_assisted_exclusion_rate: RateMetric
     term_baseline_precision: RateMetric
     term_assisted_precision: RateMetric
+    term_baseline_mrr: float | None
+    term_assisted_mrr: float | None
+    term_baseline_ndcg_5: float | None
+    term_assisted_ndcg_5: float | None
     term_net_gain: int
 
 
@@ -275,6 +299,7 @@ def evaluate_repository_corpus(
                     outcome = replace(
                         outcome,
                         term_baseline_target_retrieved=baseline.target_retrieved,
+                        term_baseline_target_rank=baseline.target_rank,
                         term_baseline_context_returned=baseline.context_returned,
                         term_baseline_returned_claim_count=baseline.returned_claim_count,
                     )
@@ -357,24 +382,7 @@ def assert_repository_baseline(result: RepositoryEvaluationResult, baseline_path
     if baseline.get("operational_outcomes") != expected_operational:
         raise RepositoryCorpusError("repository baseline operational_outcomes differs")
     if baseline_version == 3:
-        expected_trials = [
-            {
-                "id": item.identifier,
-                "family": item.family,
-                "label": item.label,
-                "lifecycle_status": item.lifecycle_status,
-                "retrieval_case": item.retrieval_case,
-                "retrieval_partition": item.retrieval_partition,
-                "expected_retrieval": item.expected_retrieval,
-                "target_retrieved": item.target_retrieved,
-                "context_returned": item.context_returned,
-                "returned_claim_count": item.returned_claim_count,
-                "term_baseline_target_retrieved": item.term_baseline_target_retrieved,
-                "term_baseline_context_returned": item.term_baseline_context_returned,
-                "term_baseline_returned_claim_count": item.term_baseline_returned_claim_count,
-            }
-            for item in result.trials
-        ]
+        expected_trials = [_trial_mapping_v3(item) for item in result.trials]
     else:
         expected_trials = [
             {
@@ -431,9 +439,11 @@ def _trial_mapping_v3(item: TrialOutcome) -> dict[str, object]:
         "retrieval_partition": item.retrieval_partition,
         "expected_retrieval": item.expected_retrieval,
         "target_retrieved": item.target_retrieved,
+        "target_rank": item.target_rank,
         "context_returned": item.context_returned,
         "returned_claim_count": item.returned_claim_count,
         "term_baseline_target_retrieved": item.term_baseline_target_retrieved,
+        "term_baseline_target_rank": item.term_baseline_target_rank,
         "term_baseline_context_returned": item.term_baseline_context_returned,
         "term_baseline_returned_claim_count": item.term_baseline_returned_claim_count,
     }
@@ -539,6 +549,7 @@ def _run_trial(
     context = _additional_context(retrieval)
     claim = str(trial.capture["claim"])
     returned_claims = _returned_claims(context)
+    target_rank = returned_claims.index(claim) + 1 if claim in returned_claims else None
     return (
         TrialOutcome(
             identifier=trial.identifier,
@@ -549,9 +560,11 @@ def _run_trial(
             retrieval_partition=trial.retrieval_partition,
             expected_retrieval=trial.expected_retrieval,
             target_retrieved=claim in returned_claims,
+            target_rank=target_rank,
             context_returned=bool(returned_claims),
             returned_claim_count=len(returned_claims),
             term_baseline_target_retrieved=None,
+            term_baseline_target_rank=None,
             term_baseline_context_returned=None,
             term_baseline_returned_claim_count=None,
         ),
@@ -640,6 +653,65 @@ def _retrieval_metrics(
     )
     assisted_correct = sum(_retrieval_success(outcome) for outcome in outcomes)
     baseline_correct = sum(_counterfactual_success(outcome) for outcome in outcomes)
+    mrr = (
+        sum(reciprocal_rank(outcome.target_rank) for outcome in expected) / len(expected)
+        if expected
+        else None
+    )
+    ndcg_5 = (
+        sum(ndcg_at_k(outcome.target_rank, 5) for outcome in expected) / len(expected)
+        if expected
+        else None
+    )
+    without_terms_mrr = (
+        sum(
+            reciprocal_rank(
+                outcome.term_baseline_target_rank
+                if outcome.term_baseline_target_rank is not None
+                else outcome.target_rank
+            )
+            for outcome in expected
+        )
+        / len(expected)
+        if expected
+        else None
+    )
+    without_terms_ndcg_5 = (
+        sum(
+            ndcg_at_k(
+                outcome.term_baseline_target_rank
+                if outcome.term_baseline_target_rank is not None
+                else outcome.target_rank,
+                5,
+            )
+            for outcome in expected
+        )
+        / len(expected)
+        if expected
+        else None
+    )
+    term_assisted_mrr = (
+        sum(reciprocal_rank(outcome.target_rank) for outcome in term_assisted) / len(term_assisted)
+        if term_assisted
+        else None
+    )
+    term_baseline_mrr = (
+        sum(reciprocal_rank(outcome.term_baseline_target_rank) for outcome in term_assisted)
+        / len(term_assisted)
+        if term_assisted
+        else None
+    )
+    term_assisted_ndcg_5 = (
+        sum(ndcg_at_k(outcome.target_rank, 5) for outcome in term_assisted) / len(term_assisted)
+        if term_assisted
+        else None
+    )
+    term_baseline_ndcg_5 = (
+        sum(ndcg_at_k(outcome.term_baseline_target_rank, 5) for outcome in term_assisted)
+        / len(term_assisted)
+        if term_assisted
+        else None
+    )
     return RetrievalEvaluationMetrics(
         recall=_rate(sum(outcome.target_retrieved for outcome in expected), len(expected)),
         exclusion_rate=_rate(
@@ -649,8 +721,12 @@ def _retrieval_metrics(
             sum(outcome.target_retrieved for outcome in term_assisted),
             returned_claim_count,
         ),
+        mrr=mrr,
+        ndcg_5=ndcg_5,
         overall_accuracy=_rate(assisted_correct, len(outcomes)),
         without_terms_overall_accuracy=_rate(baseline_correct, len(outcomes)),
+        without_terms_mrr=without_terms_mrr,
+        without_terms_ndcg_5=without_terms_ndcg_5,
         term_baseline_recall=_rate(baseline_hits, len(term_assisted)),
         term_assisted_recall=_rate(assisted_hits, len(term_assisted)),
         term_baseline_exclusion_rate=_rate(
@@ -663,6 +739,10 @@ def _retrieval_metrics(
         ),
         term_baseline_precision=_rate(baseline_hits, baseline_returned_claim_count),
         term_assisted_precision=_rate(assisted_hits, returned_claim_count),
+        term_baseline_mrr=term_baseline_mrr,
+        term_assisted_mrr=term_assisted_mrr,
+        term_baseline_ndcg_5=term_baseline_ndcg_5,
+        term_assisted_ndcg_5=term_assisted_ndcg_5,
         term_net_gain=assisted_correct - baseline_correct,
     )
 
@@ -760,14 +840,22 @@ def _retrieval_metric_mapping(
         "recall": _metric_value(metrics.recall),
         "exclusion_rate": _metric_value(metrics.exclusion_rate),
         "precision": _metric_value(metrics.precision),
+        "mrr": metrics.mrr,
+        "ndcg_5": metrics.ndcg_5,
         "overall_accuracy": _metric_value(metrics.overall_accuracy),
         "without_terms_overall_accuracy": _metric_value(metrics.without_terms_overall_accuracy),
+        "without_terms_mrr": metrics.without_terms_mrr,
+        "without_terms_ndcg_5": metrics.without_terms_ndcg_5,
         "term_baseline_recall": _metric_value(metrics.term_baseline_recall),
         "term_assisted_recall": _metric_value(metrics.term_assisted_recall),
         "term_baseline_exclusion_rate": _metric_value(metrics.term_baseline_exclusion_rate),
         "term_assisted_exclusion_rate": _metric_value(metrics.term_assisted_exclusion_rate),
         "term_baseline_precision": _metric_value(metrics.term_baseline_precision),
         "term_assisted_precision": _metric_value(metrics.term_assisted_precision),
+        "term_baseline_mrr": metrics.term_baseline_mrr,
+        "term_assisted_mrr": metrics.term_assisted_mrr,
+        "term_baseline_ndcg_5": metrics.term_baseline_ndcg_5,
+        "term_assisted_ndcg_5": metrics.term_assisted_ndcg_5,
         "term_net_gain": metrics.term_net_gain,
     }
 

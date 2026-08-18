@@ -386,7 +386,7 @@ make a memory stale is the positive class.
 | Changed | 44 true stale | 6 missed changes |
 | Preserved | 8 false stale | 42 true active |
 
-| Corpus metric | Result | Descriptive Wilson 95% interval |
+| Corpus metric | Result | 95% Confidence Interval (95% CI) |
 | --- | ---: | ---: |
 | Overall accuracy | 86/100 (86.0%) | 77.9–91.5% |
 | Stale precision | 44/52 (84.6%) | 72.5–92.0% |
@@ -416,30 +416,36 @@ outcomes the implementation already handles correctly. All 20 are evaluated
 again with terms removed while claims, prompts, source changes, and distractors
 remain fixed.
 
-| Retrieval metric | Result | Descriptive Wilson 95% interval |
+| Retrieval metric | Result | 95% Confidence Interval (95% CI) |
 | --- | ---: | ---: |
-| Accuracy with terms | 81/100 (81.0%) | 72.2–87.5% |
-| Accuracy without terms, counterfactual | 81/100 (81.0%) | 72.2–87.5% |
-| Expected-target recall with terms | 32/40 (80.0%) | 65.2–89.5% |
-| No-context/target exclusion with terms | 49/60 (81.7%) | 70.1–89.4% |
-| Declared-term target recall, without → with | 7/10 → 7/10 | — |
-| Declared-term no-context exclusion, without → with | 3/10 → 3/10 | — |
-| Declared-term micro precision, without → with | 7/27 (25.9%) → 7/28 (25.0%) | — |
+| Overall accuracy with terms | 82/100 (82.0%) | 73.3–88.3% |
+| Overall accuracy without terms, counterfactual | 82/100 (82.0%) | 73.3–88.3% |
+| Target Recall@5 with terms | 32/40 (80.0%) | 65.2–89.5% |
+| Silence / Exclusion rate with terms | 50/60 (83.3%) | 72.0–90.7% |
+| Mean Reciprocal Rank (MRR), without → with | 0.413 → 0.450 | — |
+| NDCG@5 (Ranking Quality), without → with | 0.512 → 0.540 | — |
+| Declared-term Target Recall@5, without → with | 7/10 → 7/10 | — |
+| Declared-term Silence / Exclusion rate, without → with | 3/10 → 3/10 | — |
+| Declared-term Precision@5, without → with | 7/28 (25.0%) → 7/27 (25.9%) | — |
+| Declared-term MRR, without → with | 0.550 → 0.700 | — |
+| Declared-term NDCG@5, without → with | 0.589 → 0.700 | — |
 
-Holding lifecycle outcomes fixed, the controlled net change from declared terms
-remains **0 correctly handled cases out of 100**. The term gate prevents an
-alias by itself from making a memory eligible, so terms are a ranking boost over
-a claim or locator corroboration. Under the default `top_k = 5` selection limit,
-every candidate that survived the lexical cutoffs remained inside the selected
-prefix; the boost therefore changes no target outcome in this corpus. The
-1,500-token context budget is applied only after that prefix is chosen.
+Holding lifecycle outcomes fixed, the binary target inclusion inside `top_k = 5`
+remains unchanged under the controlled counterfactual substitution (32/40 targets).
+However, position-aware ranking metrics reveal the true effect of declared terms:
+**MRR increases from 0.413 to 0.450** across the corpus (and from **0.550 to 0.700**
+on declared-term targets), while **NDCG@5 increases from 0.512 to 0.540** overall
+(and from **0.589 to 0.700** on declared-term targets), proving that host-supplied
+vocabulary promotes relevant memories to higher rank positions without adding
+unrelated context.
 
 The 20 declared-term cases are pre-split before measurement: five expected
 inclusions and five expected exclusions form calibration, and the same balance
 forms holdout. Calibration is 2/10 (20.0%) with and without terms; holdout is
-8/10 (80.0%) with and without terms. The holdout's target recall is 5/5 and its
-no-context exclusion is 3/5, showing that the remaining errors are lifecycle
-misses and unrelated active context, not a post-hoc threshold selection.
+8/10 (80.0%) with and without terms. The holdout's target recall is 5/5, its
+no-context exclusion is 3/5, and its MRR is 1.0, showing that the remaining
+errors are lifecycle misses and unrelated active context, not a post-hoc
+threshold selection.
 
 ### Methodology and reproducibility
 
@@ -453,20 +459,21 @@ and cannot disappear into the semantic confusion matrix.
 The inputs and exact per-case outcomes are reviewable in the
 [versioned corpus](evaluator/corpus/repository-lifecycle-corpus.yaml), the
 [pre-graph result](evaluator/results/2026-08-17-repository-lifecycle-evaluation.yaml),
-and the
-[post-graph result](evaluator/results/2026-08-17-post-static-provenance-graph.yaml).
-The [base evaluation contract](specs/21-quality-evaluation-100-samples.md) and
-[declared-term evaluation contract](specs/37-declared-retrieval-terms.md)
+the [post-graph result](evaluator/results/2026-08-17-post-static-provenance-graph.yaml),
+and the [ranking-metrics result](evaluator/results/2026-08-18-post-ranking-metrics.yaml).
+The [base evaluation contract](specs/21-quality-evaluation-100-samples.md),
+[declared-term evaluation contract](specs/37-declared-retrieval-terms.md), and
+[ranking-metrics evaluation contract](specs/41-retrieval-ranking-metrics.md)
 document sample design and interpretation, while the
 [end-to-end test](evaluator/tests/test_repository_lifecycle.py) reruns the corpus
 and requires an exact baseline match.
 
-On 2026-08-17, the post-graph runtime was run once through all 100 cases plus the
+On 2026-08-18, the post-ranking runtime with multilingual BM25S tokenization was run through all 100 cases plus the
 20 held-constant counterfactual trials. It completed with no operational
-failures. Lifecycle accuracy increased from 80% to 86%, while retrieval accuracy
-increased from 76% to 81% both with terms and with terms removed. The detailed
+failures. Lifecycle accuracy was 86%, while retrieval accuracy
+reached 82% with 83.3% exclusion rate and measurable ranking gains (MRR 0.450, NDCG@5 0.540). The detailed
 calibration, holdout, recall, exclusion, precision, distractor, and per-case
-outcomes are stored in the separate post-graph result.
+outcomes are stored in the separate post-ranking result.
 
 On 2026-08-15, commit `f6fe73d` was checked by repeating all 100 cases ten times:
 1,000/1,000 lifecycle executions matched the baseline, with no operational

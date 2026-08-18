@@ -8,8 +8,24 @@ from evaluator.repository_lifecycle import (
     assert_repository_baseline,
     evaluate_repository_corpus,
     load_repository_corpus,
+    ndcg_at_k,
+    reciprocal_rank,
     repository_baseline_document,
 )
+
+
+def test_reciprocal_rank_and_ndcg_ranking_calculations() -> None:
+    assert reciprocal_rank(1) == 1.0
+    assert reciprocal_rank(2) == 0.5
+    assert reciprocal_rank(5) == 0.2
+    assert reciprocal_rank(None) == 0.0
+    assert reciprocal_rank(0) == 0.0
+
+    assert ndcg_at_k(1, 5) == 1.0
+    assert ndcg_at_k(2, 5) == pytest.approx(1.0 / 1.5849625, abs=0.0001)
+    assert ndcg_at_k(5, 5) == pytest.approx(1.0 / 2.5849625, abs=0.0001)
+    assert ndcg_at_k(6, 5) == 0.0
+    assert ndcg_at_k(None, 5) == 0.0
 
 
 def test_repository_trials_observe_real_lifecycle_availability(tmp_path: Path) -> None:
@@ -161,10 +177,16 @@ trials:
     assert result.retrieval_metrics.overall_accuracy.rate == 1.0
     assert result.retrieval_metrics.without_terms_overall_accuracy.rate == 1.0
     assert result.retrieval_metrics.precision.rate == 0.5
+    assert result.retrieval_metrics.mrr == 1.0
+    assert result.retrieval_metrics.ndcg_5 == 1.0
     assert result.retrieval_metrics.term_baseline_recall.rate == 1.0
     assert result.retrieval_metrics.term_assisted_recall.rate == 1.0
     assert result.retrieval_metrics.term_baseline_precision.rate == 0.5
     assert result.retrieval_metrics.term_assisted_precision.rate == 0.5
+    assert result.retrieval_metrics.term_baseline_mrr == 1.0
+    assert result.retrieval_metrics.term_assisted_mrr == 1.0
+    assert result.retrieval_metrics.term_baseline_ndcg_5 == 1.0
+    assert result.retrieval_metrics.term_assisted_ndcg_5 == 1.0
     assert result.retrieval_metrics.term_net_gain == 0
     assert result.retrieval_partitions == ()
     document = repository_baseline_document(result)
@@ -411,18 +433,22 @@ def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path
     assert result.retrieval_metrics.recall.count == 32
     assert result.retrieval_metrics.recall.denominator == 40
     assert result.retrieval_metrics.recall.rate == 0.8
-    assert result.retrieval_metrics.exclusion_rate.count == 49
+    assert result.retrieval_metrics.exclusion_rate.count == 50
     assert result.retrieval_metrics.exclusion_rate.denominator == 60
-    assert result.retrieval_metrics.exclusion_rate.rate == 49 / 60
+    assert result.retrieval_metrics.exclusion_rate.rate == 50 / 60
     assert result.retrieval_metrics.precision.count == 7
-    assert result.retrieval_metrics.precision.denominator == 28
-    assert result.retrieval_metrics.precision.rate == 7 / 28
-    assert result.retrieval_metrics.overall_accuracy.count == 81
+    assert result.retrieval_metrics.precision.denominator == 27
+    assert result.retrieval_metrics.precision.rate == 7 / 27
+    assert result.retrieval_metrics.mrr == pytest.approx(0.45)
+    assert result.retrieval_metrics.ndcg_5 == pytest.approx(0.5398719, abs=0.0001)
+    assert result.retrieval_metrics.overall_accuracy.count == 82
     assert result.retrieval_metrics.overall_accuracy.denominator == 100
-    assert result.retrieval_metrics.overall_accuracy.rate == 0.81
-    assert result.retrieval_metrics.without_terms_overall_accuracy.count == 81
+    assert result.retrieval_metrics.overall_accuracy.rate == 0.82
+    assert result.retrieval_metrics.without_terms_overall_accuracy.count == 82
     assert result.retrieval_metrics.without_terms_overall_accuracy.denominator == 100
-    assert result.retrieval_metrics.without_terms_overall_accuracy.rate == 0.81
+    assert result.retrieval_metrics.without_terms_overall_accuracy.rate == 0.82
+    assert result.retrieval_metrics.without_terms_mrr == pytest.approx(0.4125)
+    assert result.retrieval_metrics.without_terms_ndcg_5 == pytest.approx(0.5121916, abs=0.0001)
     assert result.retrieval_metrics.term_baseline_recall.count == 7
     assert result.retrieval_metrics.term_baseline_recall.denominator == 10
     assert result.retrieval_metrics.term_assisted_recall.count == 7
@@ -432,9 +458,13 @@ def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path
     assert result.retrieval_metrics.term_assisted_exclusion_rate.count == 3
     assert result.retrieval_metrics.term_assisted_exclusion_rate.denominator == 10
     assert result.retrieval_metrics.term_baseline_precision.count == 7
-    assert result.retrieval_metrics.term_baseline_precision.denominator == 27
+    assert result.retrieval_metrics.term_baseline_precision.denominator == 28
     assert result.retrieval_metrics.term_assisted_precision.count == 7
-    assert result.retrieval_metrics.term_assisted_precision.denominator == 28
+    assert result.retrieval_metrics.term_assisted_precision.denominator == 27
+    assert result.retrieval_metrics.term_baseline_mrr == 0.55
+    assert result.retrieval_metrics.term_assisted_mrr == 0.70
+    assert result.retrieval_metrics.term_baseline_ndcg_5 == pytest.approx(0.5892789, abs=0.0001)
+    assert result.retrieval_metrics.term_assisted_ndcg_5 == 0.70
     assert result.retrieval_metrics.term_net_gain == 0
     assert [
         (
@@ -445,13 +475,15 @@ def test_checked_in_repository_corpus_has_a_reproducible_baseline(tmp_path: Path
             partition.metrics.recall.rate,
             partition.metrics.exclusion_rate.rate,
             partition.metrics.precision.rate,
+            partition.metrics.mrr,
+            partition.metrics.ndcg_5,
         )
         for partition in result.retrieval_partitions
     ] == [
-        ("calibration", 10, 0.2, 0.2, 0.4, 0.0, 2 / 14),
-        ("holdout", 10, 0.8, 0.8, 1.0, 0.6, 5 / 14),
+        ("calibration", 10, 0.2, 0.2, 0.4, 0.0, 2 / 14, 0.4, 0.4),
+        ("holdout", 10, 0.8, 0.8, 1.0, 0.6, 5 / 13, 1.0, 1.0),
     ]
     assert_repository_baseline(
         result,
-        evaluator_root / "results" / "2026-08-17-post-static-provenance-graph.yaml",
+        evaluator_root / "results" / "2026-08-18-post-ranking-metrics.yaml",
     )
