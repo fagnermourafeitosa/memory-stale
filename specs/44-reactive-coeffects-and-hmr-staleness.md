@@ -2,6 +2,8 @@
 
 **Status: Done (2026-08-18)**
 
+> Superseded in part by [spec 45](45-hook-latency-and-reverse-index.md): its `O(Δ symbols)` hook-latency claim is replaced, and the reverse index is now keyed by evidence file path and is the only selection path.
+
 ## Problem Statement
 
 Memory Stale currently models evidence as stored provenance metadata attached to

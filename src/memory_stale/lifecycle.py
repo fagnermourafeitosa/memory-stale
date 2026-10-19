@@ -8,6 +8,7 @@ from dataclasses import dataclass, field, replace
 from typing import cast
 
 from memory_stale.evidence import EvidenceEdge, EvidenceItem
+from memory_stale.project_paths import evidence_path
 
 MAX_RETRIEVAL_TERMS = 8
 MAX_RETRIEVAL_TERM_LENGTH = 80
@@ -51,6 +52,9 @@ def build_reverse_index(memories: Sequence[Memory] | Iterable[Memory]) -> Revers
         for item in memory.evidence:
             symbol_to_memories.setdefault(item.key, set()).add(memory.id)
             symbol_to_memories.setdefault(item.locator, set()).add(memory.id)
+            symbol_to_memories.setdefault(evidence_path(item.type, item.locator), set()).add(
+                memory.id
+            )
     return ReverseDependencyIndex(symbol_to_memories, memory_coeffects)
 
 

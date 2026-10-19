@@ -120,15 +120,33 @@ class SymbolIndexer:
     def source_signature(self, path_text: str) -> str:
         """Return a comment- and format-insensitive signature for one source file."""
         tree, source = self._source_tree(path_text)
-        canonical = " ".join(self._structural_tokens(tree.root_node, source))
-        return f"source-v1:{self._digest(canonical)}"
+        return self._source_signature_for(tree, source)
 
     def source_symbols(self, path_text: str) -> dict[str, str]:
         """Return unambiguous named symbols in one supported source file."""
         return self._symbols(path_text, include_named_declarations=False)
 
+    def source_view(self, path_text: str) -> tuple[str, dict[str, str]]:
+        """Return the source signature and symbol map of one file from a single parse."""
+        tree, source = self._source_tree(path_text)
+        return (
+            self._source_signature_for(tree, source),
+            self._symbols_in(tree, source, path_text, include_named_declarations=False),
+        )
+
+    def _source_signature_for(self, tree: Tree, source: bytes) -> str:
+        canonical = " ".join(self._structural_tokens(tree.root_node, source))
+        return f"source-v1:{self._digest(canonical)}"
+
     def _symbols(self, path_text: str, *, include_named_declarations: bool) -> dict[str, str]:
         tree, source = self._source_tree(path_text)
+        return self._symbols_in(
+            tree, source, path_text, include_named_declarations=include_named_declarations
+        )
+
+    def _symbols_in(
+        self, tree: Tree, source: bytes, path_text: str, *, include_named_declarations: bool
+    ) -> dict[str, str]:
         candidates: dict[str, list[Node]] = {}
 
         def visit(node: Node, scope: tuple[str, ...]) -> None:

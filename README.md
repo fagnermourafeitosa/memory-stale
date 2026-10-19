@@ -50,7 +50,7 @@ AI coding assistants require different memory paradigms depending on the problem
 | **Core Focus** | Unstructured semantic search across chat & docs | Full repository navigation & symbol relationships | Durable decisions & contracts tied to code |
 | **When Code Changes** | Stale memories persist active (hallucination risk) | File-level incremental re-parsing (file SHA-256) | Symbol-level [HMR invalidation](#5-hmr-staleness-propagation--granular-lifecycle) via [AST fingerprints](#supported-languages-tree-sitter-ast) |
 | **Downstream Awareness** | Blind to function caller/callee changes | Global call & type hierarchy | [Reactive coeffects](#4-reactive-coeffects--in-memory-reverse-dependency-index) (invalidates if callees change) |
-| **Hook Latency & Speed** | 100–500ms (external embedding APIs) | Batch generation / graph traversals | <10ms local hook execution (`O(Δ symbols)`) |
+| **Hook Latency & Speed** | 100–500ms (external embedding APIs) | Batch generation / graph traversals | Fixed Git subprocess count per hook; one parse per supported file ([measured](#3-execution-latency-in-agent-loops-cloud-apis-vs-in-memory-reverse-index)) |
 | **Storage & Versioning** | External binary vector databases | Graph databases or generated artifacts | 100% Local Git Markdown ([OKF v0.2 format](#stored-format-open-knowledge-format-okf-v02)) |
 
 ### Deep Dive: Why Architectural Mismatches Cause Stale Hallucinations
@@ -68,7 +68,8 @@ AI coding assistants require different memory paradigms depending on the problem
 #### 3. Execution Latency in Agent Loops: Cloud APIs vs. In-Memory Reverse Index
 * **Vector DBs**: Generating embeddings on prompt submission or Git hooks introduces network round-trips (100–500ms per call) and token costs, making synchronous hook-driven validation prohibitive.
 * **Codebase Knowledge Graphs**: Rebuilding or traversing large code graphs is computationally heavy, typically suited for on-demand exploration rather than real-time hook blocking.
-* **Memory Stale**: Maintains an in-memory `ReverseDependencyIndex` (`SymbolLocator -> Set[MemoryId]`). On `UserPromptSubmit` or Git lifecycle hooks, staleness resolution is `O(Δ symbols)`—proportional only to the modified lines in `git diff`, executing in under 10ms with zero network requests.
+* **Memory Stale**: Runs locally with zero network requests. Each hook makes at most 5 Git subprocess calls regardless of repository size, parses each supported source file at most once, and the stop hook re-parses only files whose content changed during the task. An in-memory `ReverseDependencyIndex` (evidence file, locator or key `-> Set[MemoryId]`) selects only the memories whose evidence lives in changed files, so lookup cost follows the number of changed files rather than the size of the memory corpus.
+  *Measured on a 149-file clone of this repository (Apple Silicon laptop, warm cache): `UserPromptSubmit` ≈ 1.1s and `Stop` ≈ 75ms, down from ≈ 6.9s and ≈ 7.1s. The prompt hook still parses every supported file once to take its baseline.*
 
 #### 4. Auditability and Concurrency: Black Boxes vs. Git-Native OKF v0.2
 * **Vector DBs**: Embeddings reside in external, binary vector stores (e.g., Qdrant, Pinecone, pgvector) that cannot be reviewed in pull requests or synchronized deterministically across branches.
@@ -149,7 +150,7 @@ Active memories are ranked using field-weighted `bm25s` with Snowball stemming a
 ### 4. Reactive Coeffects & In-Memory Reverse Dependency Index
 Memory Stale models evidence as **active reactive coeffects** rather than passive metadata (formalized in *Spatiotemporal Composability* — [Cordis Paper](https://github.com/cordiverse/paper/blob/main/A Programming Paradigm for Spatiotemporal Composability.pdf)). Code entities act as *providers* and memories as *consumers* declaring environmental dependencies (`depends_on`).
 
-Instead of naively scanning the entire memory corpus against all files ($O(N \times M)$), an in-memory `ReverseDependencyIndex` maps canonical symbol locators directly to dependent memory IDs. When Git changes occur, affected memories are resolved in $O(\Delta\text{symbols})$ time, maintaining near-zero hook latency without disk-based index files.
+Instead of naively scanning the entire memory corpus against all files ($O(N \times M)$), an in-memory `ReverseDependencyIndex` maps each evidence file, locator and key directly to dependent memory IDs. When Git changes occur, only memories with evidence in a changed file are resolved again; every other memory carries its stored fingerprints forward, without disk-based index files.
 
 <p align="center">
   <img src="./assets/reactive-coeffects-reverse-index.png" alt="Spatial Composability and Reverse Dependency Index" width="800">
@@ -263,7 +264,7 @@ uv run pytest -m repository_evaluation
 Memory Stale draws foundational concepts from *A Programming Paradigm for Spatiotemporal Composability* ([Cordis Paper](https://github.com/cordiverse/paper/blob/main/paper.pdf)), adapting its calculus of coeffects and propagation to the domain of LLM agent memory:
 
 ### What Memory Stale Implements
-* **Reactive Coeffects ($\Gamma_{\text{coeffect}} \vdash t : T$):** Memories act as consumers declaring environmental requirements on code entities (providers). An in-memory `ReverseDependencyIndex` resolves invalidations reactively in $O(\Delta\text{symbols})$ time when the environment changes.
+* **Reactive Coeffects ($\Gamma_{\text{coeffect}} \vdash t : T$):** Memories act as consumers declaring environmental requirements on code entities (providers). An in-memory `ReverseDependencyIndex` selects affected memories from the changed files alone when the environment changes.
 * **HMR-Style Staleness Propagation:** Applies the topological invalidation model of Hot Module Replacement to static provenance trees. When a downstream dependency changes, invalidation propagates upward, tagging claims as `STALE` with exact failure paths (e.g., `changed via auth.py:login -> jwt.py:verify_token`).
 * **Deterministic Granular Lifecycle:** Formalizes explicit lifecycle states (`active`, `stale`, `superseded`) and failure modes (`STALE`, `UNBOUND`, `ORPHAN`) without heuristics.
 

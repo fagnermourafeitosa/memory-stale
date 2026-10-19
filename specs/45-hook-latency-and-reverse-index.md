@@ -1,6 +1,6 @@
 # 45 — Bounded hook latency and a live reverse dependency index
 
-**Status: Draft (2026-10-19)**
+**Status: Done (2026-10-19)**
 
 ## Problem Statement
 

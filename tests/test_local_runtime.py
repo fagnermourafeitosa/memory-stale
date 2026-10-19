@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from typing import cast
@@ -50,11 +51,15 @@ def _hook_command(event: str) -> list[str]:
 
 
 def _run_hook(
-    event: str, repository: Path, payload: dict[str, object]
+    event: str,
+    repository: Path,
+    payload: dict[str, object],
+    environment_overrides: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["MEMORY_STALE_SKIP_SYNC"] = "1"
     environment["MEMORY_STALE_PROJECT_ENVIRONMENT"] = str(RUNTIME_ROOT / ".venv")
+    environment.update(environment_overrides or {})
     return subprocess.run(
         _hook_command(event),
         cwd=repository,
@@ -558,3 +563,145 @@ def test_prompt_hook_injects_memory_found_through_locator_vocabulary(tmp_path: P
         "Credentials renew after successful authorization."
         in output["hookSpecificOutput"]["additionalContext"]
     )
+
+
+def _git_logging_environment(tmp_path: Path) -> tuple[dict[str, str], Path]:
+    real_git = shutil.which("git")
+    assert real_git is not None
+    shim_directory = tmp_path / "git-shim"
+    shim_directory.mkdir()
+    log = tmp_path / "git-invocations.log"
+    log.touch()
+    shim = shim_directory / "git"
+    shim.write_text(
+        f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{log}"\nexec "{real_git}" "$@"\n',
+        encoding="utf-8",
+    )
+    shim.chmod(0o755)
+    return {"PATH": f"{shim_directory}{os.pathsep}{os.environ['PATH']}"}, log
+
+
+def _create_repository_with_modules(tmp_path: Path, module_count: int) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    repository = _create_repository(tmp_path)
+    for index in range(module_count):
+        (repository / f"module_{index}.py").write_text(
+            f"def compute_{index}():\n    return {index}\n", encoding="utf-8"
+        )
+    _run_git(repository, "add", ".")
+    _run_git(repository, "commit", "--quiet", "-m", "add modules")
+    return repository
+
+
+def _prompt_hook_git_invocations(tmp_path: Path, module_count: int) -> int:
+    repository = _create_repository_with_modules(tmp_path, module_count)
+    environment, log = _git_logging_environment(tmp_path)
+
+    result = _run_hook(
+        "UserPromptSubmit",
+        repository,
+        {"turn_id": "turn-latency", "cwd": str(repository), "prompt": "compute"},
+        environment,
+    )
+
+    assert result.returncode == 0, result.stderr
+    return len(log.read_text(encoding="utf-8").splitlines())
+
+
+def test_prompt_hook_git_invocations_do_not_grow_with_repository_size(tmp_path: Path) -> None:
+    small = _prompt_hook_git_invocations(tmp_path / "small", 3)
+    large = _prompt_hook_git_invocations(tmp_path / "large", 30)
+
+    assert small == large
+    assert large <= 5
+
+
+def _stop_hook_git_invocations(tmp_path: Path, module_count: int) -> int:
+    repository = _create_repository_with_modules(tmp_path, module_count)
+    prompt = _run_hook(
+        "UserPromptSubmit",
+        repository,
+        {"turn_id": "turn-latency", "cwd": str(repository), "prompt": "compute"},
+    )
+    assert prompt.returncode == 0, prompt.stderr
+    (repository / "module_0.py").write_text("def compute_0():\n    return 100\n", encoding="utf-8")
+    environment, log = _git_logging_environment(tmp_path)
+
+    result = _run_hook(
+        "Stop", repository, {"turn_id": "turn-latency", "cwd": str(repository)}, environment
+    )
+
+    assert result.returncode == 0, result.stderr
+    return len(log.read_text(encoding="utf-8").splitlines())
+
+
+def test_stop_hook_git_invocations_do_not_grow_with_repository_size(tmp_path: Path) -> None:
+    small = _stop_hook_git_invocations(tmp_path / "small", 3)
+    large = _stop_hook_git_invocations(tmp_path / "large", 30)
+
+    assert small == large
+    assert large <= 5
+
+
+def test_stop_reresolves_only_memories_whose_evidence_files_changed(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path)
+    (repository / "service.py").write_text("def compute():\n    return 1\n", encoding="utf-8")
+    (repository / "billing.py").write_text("def charge():\n    return 5\n", encoding="utf-8")
+    _run_git(repository, "add", "service.py", "billing.py")
+    _run_git(repository, "commit", "--quiet", "-m", "add modules")
+    compute_signature = SymbolIndexer(repository).signature("service.py:compute")
+    store = MemoryStore(repository)
+    store.write_all(
+        [
+            Memory(
+                "memory-compute",
+                "behavior",
+                "active",
+                "Compute returns one.",
+                "Callers rely on it.",
+                (EvidenceItem("symbol", "primary", "service.py:compute", compute_signature),),
+            ),
+            Memory(
+                "memory-charge",
+                "behavior",
+                "active",
+                "Charge returns five.",
+                "Billing relies on it.",
+                (EvidenceItem("symbol", "primary", "billing.py:charge", "stored-fingerprint"),),
+            ),
+        ]
+    )
+    _run_hook("UserPromptSubmit", repository, {"turn_id": "turn-1", "cwd": str(repository)})
+    (repository / "service.py").write_text("def compute():\n    return 2\n", encoding="utf-8")
+
+    result = _run_hook("Stop", repository, {"turn_id": "turn-1", "cwd": str(repository)})
+
+    assert result.returncode == 0, result.stderr
+    memories = {memory.id: memory for memory in store.load_all()}
+    assert memories["memory-compute"].status == "stale"
+    assert memories["memory-compute"].stale_reasons == {"symbol:service.py:compute": "changed"}
+    assert memories["memory-charge"].status == "active"
+    assert memories["memory-charge"].evidence[0].fingerprint == "stored-fingerprint"
+
+
+def test_prompt_hook_attributes_a_staged_rename_to_its_destination(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path)
+    # Read as a status entry, this source path would claim the status of tracked.txt.
+    (repository / "zz tracked.txt").write_text("keep\n", encoding="utf-8")
+    _run_git(repository, "add", "zz tracked.txt")
+    _run_git(repository, "commit", "--quiet", "-m", "add notes")
+    _run_git(repository, "mv", "zz tracked.txt", "zzz.txt")
+
+    result = _run_hook(
+        "UserPromptSubmit", repository, {"turn_id": "turn-1", "cwd": str(repository)}
+    )
+
+    assert result.returncode == 0, result.stderr
+    baseline = _only_task(repository)["baseline"]
+    assert isinstance(baseline, dict)
+    assert "zz tracked.txt" not in baseline
+    assert baseline["zzz.txt"] == {
+        "status": "R ",
+        "sha256": "f660a7996deacfbc7560e4240054a8ad82eb02fe25a95064257e07084bcacb85",
+    }
+    assert baseline["tracked.txt"]["status"] == " M"

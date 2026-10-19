@@ -255,3 +255,24 @@ def test_target_signature_permutation_invariance() -> None:
     )
 
     assert mem_1.target_signature == mem_2.target_signature
+
+
+def test_reverse_index_finds_memories_by_changed_file_path() -> None:
+    def memory(memory_id: str, item: EvidenceItem) -> Memory:
+        return Memory(memory_id, "behavior", "active", f"Claim {memory_id}.", "Contract", (item,))
+
+    index = build_reverse_index(
+        [
+            memory("mem-symbol", EvidenceItem("symbol", "primary", "src/auth.py:login", "s1")),
+            memory("mem-test", EvidenceItem("test", "primary", "tests/test_auth.py:test_x", "s2")),
+            memory("mem-config", EvidenceItem("config", "primary", "app.toml#auth.mode", "s3")),
+            memory("mem-schema", EvidenceItem("schema", "primary", "api.json#/user", "s4")),
+            memory("mem-source", EvidenceItem("source", "primary", "src/billing.py", "s5")),
+        ]
+    )
+
+    assert index.affected_memories({"src/auth.py"}) == {"mem-symbol"}
+    assert index.affected_memories({"tests/test_auth.py"}) == {"mem-test"}
+    assert index.affected_memories({"app.toml", "api.json"}) == {"mem-config", "mem-schema"}
+    assert index.affected_memories({"src/billing.py"}) == {"mem-source"}
+    assert index.affected_memories({"src/unrelated.py"}) == set()

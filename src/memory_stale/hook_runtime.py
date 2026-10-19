@@ -78,16 +78,22 @@ def _task_directory(repository: Path) -> Path:
     return git_directory / "memory-stale" / "tasks"
 
 
-def _file_status(repository: Path, relative_path: str) -> str:
-    status = _git(
-        repository,
-        "status",
-        "--porcelain=v1",
-        "--untracked-files=all",
-        "--",
-        relative_path,
-    )
-    return status[:2] if status else "  "
+def _workspace_statuses(repository: Path) -> dict[str, str]:
+    """Read every path's two-character status from one porcelain listing."""
+    fields = _git(repository, "status", "--porcelain=v1", "-z", "--untracked-files=all").split("\0")
+    statuses: dict[str, str] = {}
+    index = 0
+    while index < len(fields):
+        entry = fields[index]
+        index += 1
+        if not entry:
+            continue
+        status, path = entry[:2], entry[3:]
+        statuses[path] = status
+        if status[0] in {"R", "C"}:
+            # Rename and copy entries carry their source path as the next field.
+            index += 1
+    return statuses
 
 
 def _snapshot(repository: Path) -> dict[str, FileSnapshot]:
@@ -99,6 +105,7 @@ def _snapshot(repository: Path) -> dict[str, FileSnapshot]:
         "--others",
         "--exclude-standard",
     ).split("\0")
+    statuses = _workspace_statuses(repository)
     snapshot: dict[str, FileSnapshot] = {}
     for relative_path in paths:
         if not relative_path or is_ignored_project_path(relative_path):
@@ -106,7 +113,7 @@ def _snapshot(repository: Path) -> dict[str, FileSnapshot]:
         path = repository / relative_path
         digest = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
         snapshot[relative_path] = {
-            "status": _file_status(repository, relative_path),
+            "status": statuses.get(relative_path, "  "),
             "sha256": digest,
         }
     return snapshot
@@ -148,38 +155,38 @@ def _changes_since(
     return changes
 
 
-def _source_snapshot(repository: Path) -> dict[str, str]:
+class _SourceViews(TypedDict):
+    snapshot: Mapping[str, FileSnapshot]
+    sources: dict[str, str]
+    symbols: dict[str, dict[str, str]]
+
+
+def _source_views(
+    repository: Path,
+    snapshot: Mapping[str, FileSnapshot],
+    baseline: _SourceViews | None = None,
+) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+    """Parse each supported file once, reusing baseline views for unchanged content."""
     index = SymbolIndexer(repository)
     sources: dict[str, str] = {}
-    for path in _snapshot(repository):
-        signature = _source_signature(index, path)
-        if signature is not None:
-            sources[path] = signature
-    return sources
-
-
-def _source_signature(index: SymbolIndexer, path: str) -> str | None:
-    try:
-        return index.source_signature(path)
-    except SymbolIndexError:
-        return None
-
-
-def _symbol_snapshot(repository: Path) -> dict[str, dict[str, str]]:
-    index = SymbolIndexer(repository)
     symbols: dict[str, dict[str, str]] = {}
-    for path in _snapshot(repository):
-        resolved = _source_symbols(index, path)
-        if resolved is not None:
-            symbols[path] = resolved
-    return symbols
-
-
-def _source_symbols(index: SymbolIndexer, path: str) -> dict[str, str] | None:
-    try:
-        return index.source_symbols(path)
-    except SymbolIndexError:
-        return None
+    for path, record in snapshot.items():
+        previous = baseline["snapshot"].get(path) if baseline is not None else None
+        if (
+            baseline is not None
+            and previous is not None
+            and previous["sha256"] == record["sha256"]
+            and path in baseline["sources"]
+            and path in baseline["symbols"]
+        ):
+            sources[path] = baseline["sources"][path]
+            symbols[path] = baseline["symbols"][path]
+            continue
+        try:
+            sources[path], symbols[path] = index.source_view(path)
+        except SymbolIndexError:
+            continue
+    return sources, symbols
 
 
 def _automatic_captures(
@@ -311,9 +318,7 @@ def _run_lifecycle(
     for memory in memories:
         if memory.status != "active":
             continue
-        if memory.id not in affected_memory_ids and not any(
-            evidence_path(item.type, item.locator) in changed_paths for item in memory.evidence
-        ):
+        if memory.id not in affected_memory_ids:
             for item in memory.evidence:
                 evidence[item.key] = RefEvidence(item.fingerprint)
             continue
@@ -378,12 +383,14 @@ def _evidence_error_reason(error: EvidenceError) -> str:
 def start_task(cwd: Path, turn_id: str, prompt: str) -> str:
     """Persist a task baseline and return active memory context for any host."""
     repository = _repository_root(cwd)
+    baseline = _snapshot(repository)
+    sources, symbols = _source_views(repository, baseline)
     state: TaskState = {
         "turn_id": turn_id,
         "repository": str(repository),
-        "baseline": _snapshot(repository),
-        "sources": _source_snapshot(repository),
-        "symbols": _symbol_snapshot(repository),
+        "baseline": baseline,
+        "sources": sources,
+        "symbols": symbols,
         "ledger": [],
         "captures": [],
     }
@@ -421,7 +428,8 @@ def finish_task(cwd: Path, turn_id: str) -> list[str] | None:
     if not task_path.is_file():
         return None
     state = _read_task(task_path)
-    changes = _changes_since(state["baseline"], _snapshot(repository))
+    current = _snapshot(repository)
+    changes = _changes_since(state["baseline"], current)
     previous_symbols = state.get("symbols")
     symbol_baseline = (
         previous_symbols
@@ -429,11 +437,15 @@ def finish_task(cwd: Path, turn_id: str) -> list[str] | None:
         and all(isinstance(value, dict) for value in previous_symbols.values())
         else None
     )
+    current_sources, current_symbols = _source_views(
+        repository,
+        current,
+        {"snapshot": state["baseline"], "sources": state["sources"], "symbols": symbol_baseline}
+        if symbol_baseline is not None
+        else None,
+    )
     automatic_captures = _automatic_captures(
-        state["sources"],
-        _source_snapshot(repository),
-        symbol_baseline,
-        _symbol_snapshot(repository),
+        state["sources"], current_sources, symbol_baseline, current_symbols
     )
     uncovered = _uncovered_automatic_locations(automatic_captures, state["captures"])
     _run_lifecycle(repository, changes, state["ledger"], [*state["captures"], *automatic_captures])
