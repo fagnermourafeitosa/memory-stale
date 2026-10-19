@@ -126,14 +126,12 @@ Stale also follows direct calls and named reads, up to 3 hops. If a helper your
 claim relies on changes, the claim goes stale too, and the stale reason shows
 the path:
 
-```text
-claim
-  → supported_by src/jobs.py:retry
-      → calls src/policy.py:max_retries      ← changed
-```
+<p align="center">
+  <img src="./assets/static-provenance-graph.png" alt="Multi-hop invalidation through the static provenance graph" width="800">
+</p>
 
 ```text
-stale reason: changed via symbol:src/jobs.py:retry -[calls]-> symbol:src/policy.py:max_retries
+stale reason: changed via symbol:src/jobs.py:retry -[calls]-> symbol:src/policy.py:max_retries -[reads]-> symbol:src/config.py:RETRY_LIMIT
 ```
 
 Retrieval is lexical and deterministic. It uses field-weighted BM25 with
