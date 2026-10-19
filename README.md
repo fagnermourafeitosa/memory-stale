@@ -5,276 +5,389 @@
   </picture>
 </p>
 
-**Deterministic, evidence-bound project memory for coding agents.**  
-*When the code moves, outdated memory dies. Automatically.*
+<h3 align="center">Project memory for coding agents that expires when the code changes.</h3>
 
-[![Local First](https://img.shields.io/badge/Local--first-100%25-blue.svg)](#design-boundaries)
-[![AST Verification](https://img.shields.io/badge/Verification-Tree--sitter%20AST-green.svg)](#how-it-works-in-practice)
-[![No Vector DB](https://img.shields.io/badge/Embeddings%20%2F%20Vector%20DB-None-orange.svg)](#architectural-comparison--in-depth-analysis)
-[![Format](https://img.shields.io/badge/Storage-OKF%20v0.2%20Markdown-purple.svg)](#what-is-stored)
-[![Tested](https://img.shields.io/badge/Evaluation-100--trial%20Corpus%20(86.0%25)-brightgreen.svg)](#measured-evaluation)
-
-Memory Stale gives **Codex**, **Claude Code**, and **Antigravity** persistent project memory anchored directly to the code AST. The moment referenced code or its static dependencies change, the claim is automatically invalidated and excluded from your agent's context.
-
-No embeddings. No extra LLM calls. No cloud dependencies. Just deterministic AST fingerprinting and local Git hooks.
+<p align="center">
+  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/Harnesses-Claude%20Code%20%7C%20Codex%20%7C%20Antigravity-6f42c1.svg" alt="Supported harnesses">
+  <a href="#evaluation"><img src="https://img.shields.io/badge/Evaluation-100%20cases%20%C2%B7%2086%25%20accuracy-brightgreen.svg" alt="Evaluation"></a>
+</p>
 
 ---
 
-## The Problem: Stale Memory Rot
+Memory Stale gives **Claude Code**, **Codex**, and **Antigravity** a persistent,
+project-local memory where every fact is tied to the code that proves it. When
+that code changes in a way that matters, the memory is marked **stale** and
+stops being injected into your agent's context. Reformatting and comment edits
+don't count as changes.
 
-AI coding agents remember facts across tasks, but code changes constantly. Without continuous code-level verification, persistent memory quickly turns into **authoritative hallucinations**:
+- **No stale "facts" in your prompts.** Evidence is fingerprinted from the
+  Tree-sitter syntax tree, not from raw text.
+- **Nothing leaves your machine.** No embeddings, no vector database, no extra
+  LLM calls, no cloud service.
+- **Reviewable like code.** Memories are plain Markdown files in your
+  repository, so you can diff them, review them in pull requests, and branch
+  them.
+- **Zero new workflow.** It runs inside your agent's normal lifecycle hooks.
 
 ```text
-Task 1  Agent records: "AuthService.login validates only password."
+Task 1  Agent records: "AuthService.login validates only the password."
         Evidence: src/auth.py:AuthService.login
 
-Task 2  You add Multi-Factor Authentication (MFA) to AuthService.login.
+Task 2  You add multi-factor authentication to AuthService.login.
 
 Task 3  Agent works on authentication again.
-        ❌ Plain Memory / Vector DB: Injects the password-only claim as current truth.
-        ✅ Memory Stale: Detects AST change in src/auth.py, marks memory STALE, and excludes it.
+        Plain memory:  injects the password-only claim as current truth.
+        Memory Stale:  detects the semantic change, marks the memory stale,
+                       and keeps it out of the prompt.
 ```
 
 <p align="center">
-  <img src="./assets/stale-memory-rot.png" alt="Stale Memory Rot vs AST Verification" width="800">
+  <img src="./assets/stale-memory-rot.png" alt="Stale memory versus evidence-bound memory" width="800">
 </p>
 
----
+## Contents
 
-## Architectural Comparison & In-Depth Analysis
+- [Quickstart](#quickstart)
+- [How it works](#how-it-works)
+- [Everyday use](#everyday-use)
+- [Evidence types](#evidence-types)
+- [Configuration](#configuration)
+- [What gets stored](#what-gets-stored)
+- [Supported languages](#supported-languages)
+- [Guarantees and limitations](#guarantees-and-limitations)
+- [Evaluation](#evaluation)
+- [Comparison with other approaches](#comparison-with-other-approaches)
+- [Contributing](#contributing)
+- [License](#license)
 
-AI coding assistants require different memory paradigms depending on the problem domain. Here is a deep architectural breakdown between **Semantic Vector Memory**, **Codebase Knowledge Graphs**, and **Memory Stale**:
+## Quickstart
 
-| Capability | Vector DBs & LLM Memory *(e.g., Mem0, pgvector)* | Codebase Knowledge Graphs *(e.g., [Graphify](https://github.com/Graphify-Labs/graphify))* | Memory Stale |
-| :--- | :--- | :--- | :--- |
-| **Core Focus** | Unstructured semantic search across chat & docs | Full repository navigation & symbol relationships | Durable decisions & contracts tied to code |
-| **When Code Changes** | Stale memories persist active (hallucination risk) | File-level incremental re-parsing (file SHA-256) | Symbol-level [HMR invalidation](#5-hmr-staleness-propagation--granular-lifecycle) via [AST fingerprints](#supported-languages-tree-sitter-ast) |
-| **Downstream Awareness** | Blind to function caller/callee changes | Global call & type hierarchy | [Reactive coeffects](#4-reactive-coeffects--in-memory-reverse-dependency-index) (invalidates if callees change) |
-| **Hook Latency & Speed** | 100–500ms (external embedding APIs) | Batch generation / graph traversals | Fixed Git subprocess count per hook; one parse per supported file ([measured](#3-execution-latency-in-agent-loops-cloud-apis-vs-in-memory-reverse-index)) |
-| **Storage & Versioning** | External binary vector databases | Graph databases or generated artifacts | 100% Local Git Markdown ([OKF v0.2 format](#stored-format-open-knowledge-format-okf-v02)) |
+**Requirements:** a Git repository, [`uv`](https://docs.astral.sh/uv/), and
+Python 3.10 or newer on your `PATH`.
 
-### Deep Dive: Why Architectural Mismatches Cause Stale Hallucinations
+1. Clone Memory Stale anywhere outside your project:
 
-#### 1. Invalidation Mechanics: Cosine Proximity vs. AST-Normalized HMR
-* **Vector DBs (Semantic Distance)**: Vector embeddings compute geometric proximity in a high-dimensional latent space. If an agent records *"AuthService.login only requires password"*, and you subsequently rewrite `login()` to enforce MFA, the embedding vector of the claim does not change. When the agent later queries *"How does authentication work?"*, the cosine similarity remains high ($\ge 0.90$). The vector database confidently injects obsolete information as current truth.
-* **Codebase Knowledge Graphs (File-Level Hash)**: Tools like [Graphify](https://github.com/Graphify-Labs/graphify) re-parse files when the file's SHA-256 changes. While this refreshes the structural topology, it re-indexes on non-semantic edits (e.g., formatting, comments) and is designed to answer "what code exists right now?" rather than "are historical agent decisions still valid?".
-* **Memory Stale (Tree-sitter HMR Invalidation)**: Normalizes code symbols into comment-free, formatting-invariant Tree-sitter AST hashes. When a Git diff touches a referenced symbol or any downstream callee within its dependency closure, the claim is instantaneously transitioned to `STALE` and excluded from the prompt injection window.
+   ```bash
+   git clone https://github.com/fagnermourafeitosa/memory-stale.git ~/memory-stale
+   ```
 
-#### 2. Downstream Propagation: Isolated Chunks vs. Reactive Coeffects
-* **Vector DBs**: Text chunks are stored as isolated units. If function `A()` relies on helper `B()`, modifying `B()` leaves the memory of `A()` untouched, causing subtle logic regressions.
-* **Codebase Knowledge Graphs**: Map the entire repository into a global directed graph, providing deep topological navigation for architectural exploration.
-* **Memory Stale**: Formulates memory evidence as **reactive coeffects** (what a claim requires from its environment). Changes to downstream functions propagate staleness upward to invalidate dependent memories with explicit causation (e.g., `invalidated via auth.py:verify_token`).
+2. Install it into your project for the harness you use:
 
-#### 3. Execution Latency in Agent Loops: Cloud APIs vs. In-Memory Reverse Index
-* **Vector DBs**: Generating embeddings on prompt submission or Git hooks introduces network round-trips (100–500ms per call) and token costs, making synchronous hook-driven validation prohibitive.
-* **Codebase Knowledge Graphs**: Rebuilding or traversing large code graphs is computationally heavy, typically suited for on-demand exploration rather than real-time hook blocking.
-* **Memory Stale**: Runs locally with zero network requests. Each hook makes at most 5 Git subprocess calls regardless of repository size, parses each supported source file at most once, and the stop hook re-parses only files whose content changed during the task. An in-memory `ReverseDependencyIndex` (evidence file, locator or key `-> Set[MemoryId]`) selects only the memories whose evidence lives in changed files, so lookup cost follows the number of changed files rather than the size of the memory corpus.
-  *Measured on a 149-file clone of this repository (Apple Silicon laptop, warm cache): `UserPromptSubmit` ≈ 1.1s and `Stop` ≈ 75ms, down from ≈ 6.9s and ≈ 7.1s. The prompt hook still parses every supported file once to take its baseline.*
+   ```bash
+   sh ~/memory-stale/scripts/install-project.sh /path/to/your/project --harness claude
+   ```
 
-#### 4. Auditability and Concurrency: Black Boxes vs. Git-Native OKF v0.2
-* **Vector DBs**: Embeddings reside in external, binary vector stores (e.g., Qdrant, Pinecone, pgvector) that cannot be reviewed in pull requests or synchronized deterministically across branches.
-* **Memory Stale**: Every memory is an immutable, human-readable Open Knowledge Format (OKF v0.2) Markdown file in `.agents/skills/.agent-memory/memories/`. It uses **Inertial Target Reconciliation** to reject stale writes if the codebase was modified concurrently during the agent's turn.
+   Use `--harness codex` or `--harness antigravity` for the other agents.
 
----
+3. Restart your agent, or open a new session, so it loads the hooks and the
+   local MCP server.
 
-> 💡 **Architectural Summary**:
-> * **Vector DBs** excel at fuzzy semantic search across free-form conversation logs and unstructured documentation.
-> * **Knowledge Graphs ([Graphify](https://github.com/Graphify-Labs/graphify))** excel at full-codebase structural discovery and global relationship navigation.
-> * **Memory Stale** is purpose-built for durable architectural decisions, contracts, and business logic, providing **deterministic certainty that outdated memories are purged the instant the code moves**.
+That's it. The first prompt prepares the runtime environment automatically with
+`uv`.
 
----
+<details>
+<summary>What the installer writes</summary>
 
-## 60-Second Quickstart
+| Harness | Files |
+| :--- | :--- |
+| All | `.agents/skills/memory-stale/` (runtime), `.agents/skills/.agent-memory/config.toml` (defaults, written only if missing) |
+| Claude Code | `.claude/settings.json` (hooks), `.claude/skills/memory-stale/SKILL.md`, `.mcp.json` |
+| Codex | `.codex/hooks.json`, `.mcp.json` |
+| Antigravity | `.agents/hooks.json`, `.agents/plugins/memory-stale/` |
 
-Clone Memory Stale directly into your project's `.agents/skills/` directory and configure your harness:
+The installer merges into existing configuration and refuses to overwrite an
+incompatible `memory-stale` MCP entry. To upgrade, delete
+`.agents/skills/memory-stale/` and run the installer again. Your memories and
+configuration are kept.
 
-```bash
-# 1. Clone into your project's skills directory
-git clone https://github.com/fagnermourafeitosa/memory-stale.git .agents/skills/memory-stale
+</details>
 
-# 2. Configure hooks and MCP for your harness:
-
-# For Antigravity (workspace hooks + plugin MCP)
-sh .agents/skills/memory-stale/scripts/install-project.sh . --harness antigravity
-
-# For Claude Code (project hooks + project .mcp.json)
-sh .agents/skills/memory-stale/scripts/install-project.sh . --harness claude
-
-# For Codex (project hooks + project .mcp.json)
-sh .agents/skills/memory-stale/scripts/install-project.sh . --harness codex
-```
-
-> **Requirements**: Git, `uv`, and Python 3.10+.  
-> Restart or open a new agent session after installation to load hooks and the local MCP server.
-
----
-
-## How It Works in Practice
-
-Memory Stale runs transparently inside your agent's normal execution loop using lifecycle hooks:
+## How it works
 
 <p align="center">
-  <img src="./assets/lifecycle-flow.png" alt="Memory Stale Lifecycle and AST Verification" width="800">
+  <img src="./assets/lifecycle-flow.png" alt="Memory Stale lifecycle" width="800">
 </p>
 
-### 1. Transparent Capture
-When your agent completes a coherent code change, it calls `memory.capture` via MCP:
+1. **Prompt submitted.** Memory Stale records a baseline of your working tree
+   and injects the most relevant **active** memories into the agent's context.
+2. **Agent works.** When it completes a meaningful change, the agent calls the
+   `memory.capture` MCP tool with a claim and the evidence that supports it. The
+   bundled skill teaches it when and how to do this.
+3. **Turn ends.** Memory Stale compares the working tree with the baseline:
+   - It stores the captured memories.
+   - It records automatic provenance for changed symbols.
+   - It re-checks every memory whose evidence lives in a changed file. Each one
+     is either kept active or marked stale with a reason.
 
-```json
-{
-  "claim": "Failed jobs retry up to 3 times before surfacing error.",
-  "durability_reason": "Background queue contract required by worker services.",
-  "evidence": ["src/jobs.py:retry", "tests/test_jobs.py:test_retry_limit"],
-  "retrieval_terms": ["retry limit", "background job retries"]
-}
-```
-
-### 2. Static Provenance Graph Expansion
-For symbol evidence, Memory Stale doesn't just watch one line — it builds a local static dependency graph up to 3 hops (direct calls and named reads):
+Memories don't depend only on the lines you name. For symbol evidence, Memory
+Stale also follows direct calls and named reads, up to 3 hops. If a helper your
+claim relies on changes, the claim goes stale too, and the stale reason shows
+the path:
 
 ```text
 claim
   → supported_by src/jobs.py:retry
-      → calls src/policy.py:max_retries
-      → reads src/config.py:RETRY_LIMIT
+      → calls src/policy.py:max_retries      ← changed
 ```
-If `src/policy.py:max_retries` changes tomorrow, the claim is automatically invalidated.
 
-<p align="center">
-  <img src="./assets/static-provenance-graph.png" alt="Static Provenance Graph (Up to 3 Hops)" width="800">
-</p>
+```text
+stale reason: changed via symbol:src/jobs.py:retry -[calls]-> symbol:src/policy.py:max_retries
+```
 
-### 3. Multilingual BM25S Retrieval
-Active memories are ranked using field-weighted `bm25s` with Snowball stemming across natural language fields (`claim: 1.0`, `durability_reason: 0.5`, `retrieval_terms: 0.75`, `exact_locators: 2.0`). Exact symbols receive a `100.0` boost.
+Retrieval is lexical and deterministic. It uses field-weighted BM25 with
+stemming over the claim, the durability reason, optional retrieval terms, and
+exact code locators. Only the top-ranked active memories that fit your token
+budget are injected.
 
-### 4. Reactive Coeffects & In-Memory Reverse Dependency Index
-Memory Stale models evidence as **active reactive coeffects** rather than passive metadata (formalized in *Spatiotemporal Composability* — [Cordis Paper](https://github.com/cordiverse/paper/blob/main/A Programming Paradigm for Spatiotemporal Composability.pdf)). Code entities act as *providers* and memories as *consumers* declaring environmental dependencies (`depends_on`).
+## Everyday use
 
-Instead of naively scanning the entire memory corpus against all files ($O(N \times M)$), an in-memory `ReverseDependencyIndex` maps each evidence file, locator and key directly to dependent memory IDs. When Git changes occur, only memories with evidence in a changed file are resolved again; every other memory carries its stored fingerprints forward, without disk-based index files.
+You keep working as usual. Memory Stale adds three things your agent can do on
+request:
 
-<p align="center">
-  <img src="./assets/reactive-coeffects-reverse-index.png" alt="Spatial Composability and Reverse Dependency Index" width="800">
-</p>
+| Ask your agent for… | What happens |
+| :--- | :--- |
+| Nothing (automatic) | Relevant active memories are injected on every prompt. New knowledge is captured as the agent completes changes. |
+| `/memory-stale dream` | An audit of every active memory against the current code. The agent reviews what went stale or broke and re-captures facts that still hold. |
+| "the Memory Stale health report" | A standalone `memory-report.html` listing every memory, its evidence, its status, and why it is stale. |
 
-### 5. HMR Staleness Propagation & Granular Lifecycle
-Inspired by Hot Module Replacement (HMR) dependency graphs, Memory Stale tracks transitive downstream shifts. When a callee function (`jwt.py:verify_token`) changes, any active memory whose dependency closure intersects the modified set ($\text{Closure}(C(M)) \cap \Delta \neq \emptyset$) is automatically transitioned to `STALE`, citing the exact downstream propagation path (e.g., `changed via auth.py:login`).
+**Statuses:**
 
-The `EvidenceTarget` model decouples logical symbol identity from AST fingerprints to establish deterministic lifecycle states:
-* `STALE`: Symbol identity exists in the AST, but the semantic fingerprint diverged.
-* `UNBOUND`: Symbol locator missing from the source file (renamed or deleted).
-* `ORPHAN`: Target source file deleted from the Git repository.
+- `active`: every piece of recorded evidence still matches.
+- `stale`: some evidence changed semantically, disappeared, or can no longer be
+  resolved. The stale reason says which.
+- `superseded`: the claim was captured again with newer evidence.
 
-<p align="center">
-  <img src="./assets/hmr-staleness-propagation.png" alt="HMR Staleness Propagation and Target Reconciliation" width="800">
-</p>
+An `active` memory is not proof that the claim is true, and a `stale` memory is
+not proof that it is false. Status only says whether the evidence still
+matches.
 
----
+A capture request looks like this:
 
-## What is Stored (Zero Lock-in)
+```json
+{
+  "kind": "behavior",
+  "claim": "Failed jobs retry up to 3 times before surfacing an error.",
+  "durability_reason": "Worker services depend on this retry contract.",
+  "evidence": [
+    { "type": "symbol", "role": "primary", "locator": "src/jobs.py:retry" },
+    { "type": "test", "role": "supporting", "locator": "tests/test_jobs.py:test_retry_limit" }
+  ],
+  "retrieval_terms": ["retry limit", "background job retries"]
+}
+```
 
-All memories and configurations live directly inside your project in Git-reviewable Markdown:
+`kind` is one of `behavior`, `contract`, `constraint`, `architecture`, or
+`operation`. At least one `primary` evidence item must have changed during the
+current turn. This keeps memories anchored to work the agent actually did.
+
+## Evidence types
+
+| Type | Locator | Becomes stale when… |
+| :--- | :--- | :--- |
+| `symbol` | `path:Symbol` or `path:Class.method` | the symbol's normalized syntax tree changes, or one of its static dependencies changes |
+| `test` | `path:test_name` | the test's normalized syntax tree changes, or one of its static dependencies changes |
+| `config` | `path#/json/pointer` in JSON, YAML, or TOML | the value at that exact node changes |
+| `schema` | `path#/json/pointer` in a JSON Schema or OpenAPI document (JSON or YAML) | the value at that exact node changes |
+
+None of these go stale on reformatting, comments, key reordering, or edits to
+sibling nodes. Locators must stay inside the repository and resolve exactly;
+there is no fuzzy matching.
+
+When a stored item can no longer be resolved, the stale reason says why:
+
+| Reason | Meaning |
+| :--- | :--- |
+| `changed` | The evidence still exists but means something different. |
+| `locator_missing` | The file exists, but the symbol or document node is gone. |
+| `file_missing` | The evidence file was deleted. |
+| `unresolvable` | The evidence can no longer be parsed or resolved. |
+
+## Configuration
+
+Settings live in `.agents/skills/.agent-memory/config.toml`:
+
+```toml
+# Maximum number of tokens of active memory injected into task context.
+context_budget = 1500
+
+# Maximum number of highest-ranked active memories injected per task.
+top_k = 5
+
+# Repository-relative path used when an HTML report is requested.
+report_path = "memory-report.html"
+```
+
+An invalid value is reported to the agent as a non-blocking hook message.
+
+## What gets stored
+
+Everything lives in your repository, in a format you can read without Memory
+Stale:
 
 ```text
 .agents/skills/.agent-memory/
-├── config.toml           # Budget, top_k, and auto-report settings
+├── config.toml
 └── memories/
-    └── 2026-08-18-auth-password-contract.md
+    └── 4d269f796c036c55e80f.md     # one file per memory revision
 ```
 
-### Stored Format: Open Knowledge Format (OKF v0.2)
-Every memory file is an immutable OKF document:
+Each memory is an [Open Knowledge Format (OKF) v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+Markdown document. Memory Stale's own data lives under a `memory_stale`
+extension:
 
 ```markdown
 ---
 type: Memory Stale Claim
-title: Auth password validation contract
+title: Failed jobs retry up to 3 times before surfacing an error.
+description: Worker services depend on this retry contract.
+sources:
+  - id: symbol:src/jobs.py:retry
+    resource: src/jobs.py:retry
+generated:
+  by: process:memory-stale
+  at: '2026-08-17T01:16:59+00:00'
+verified:
+  - by: process:memory-stale
+    at: '2026-08-17T01:16:59+00:00'
 status: stable
 memory_stale:
-  schema_version: 1
-  id: mem_9f82a1
+  schema_version: 5
+  claim_id: a21a51563b6b770cacdc
+  revision_id: 4d269f796c036c55e80f
+  kind: behavior
   status: active
-  fingerprints:
-    "src/auth.py:AuthService.login": "sha256:d8a92f..."
+  evidence:
+    - source_id: symbol:src/jobs.py:retry
+      type: symbol
+      role: primary
+      fingerprint: v2:30e84aa1ccaf5b5cd4059e08ad7412d4862d8be623dc93b3d6833f97045748b5
+  supported_by:
+    - symbol:src/jobs.py:retry
+  dependencies: []
+  stale_reasons: null
 ---
 
-AuthService.login validates password against Argon2 hash with rate-limiting.
+Failed jobs retry up to 3 times before surfacing an error.
 ```
 
----
+Commit the `memories/` directory to share knowledge with your team. Per-turn
+working state stays inside `.git/` and is never committed. A complete example is
+in [`examples/memory-stale-claim.md`](examples/memory-stale-claim.md).
 
-## Daily Workflow & Maintenance
+Older memory files (schema versions 3 and 4, and the original unversioned
+format) are read as-is and rewritten in the current format the next time
+Memory Stale writes the store.
 
-You don't need to learn new CLI commands. Work normally with your harness:
+## Supported languages
 
-* **Context Injection**: Automatic on every prompt submit.
-* **Audit Stale Records**: Run `/memory-stale dream` in chat to review stale claims.
-* **Visual Health Report**: Ask your agent for the "Memory Stale health report" to generate a standalone `memory-report.html` showing active vs. stale evidence.
+Symbol and test evidence, automatic capture, and static dependency expansion
+are available for:
 
----
+**Python** · **TypeScript / TSX** · **JavaScript** · **Go** · **Rust** · **Java** · **Kotlin**
 
-## Supported Languages (Tree-sitter AST)
+Other languages have no fallback. Edits to unsupported files produce no
+automatic records, and symbol evidence pointing at them is rejected. Memory
+Stale never claims more certainty than it has. You can still anchor memories to
+configuration and schema files of any project.
 
-Automatic symbol extraction, structural normalization, and static call graph expansion are natively supported for:
+## Guarantees and limitations
 
-* **Python**
-* **TypeScript & JavaScript**
-* **Go**
-* **Rust**
-* **Java & Kotlin**
+**What Memory Stale guarantees:**
 
-*Unsupported languages intentionally have no speculative fallback — evidence remains file-level to prevent false confidence.*
+- **Hooks never block your agent.** Outside a Git repository, Memory Stale goes
+  inactive. Malformed hook input or an internal error produces one short
+  message, and your agent keeps working.
+- **One broken memory file doesn't take the others down.** A memory file that
+  can't be parsed is skipped and left untouched. It is reported at prompt time,
+  in `dream`, and in the health report.
+- **A file it can't read doesn't invalidate anything.** `dream` reports the
+  read error and keeps the memory's status.
+- **Hook cost stays predictable.** Each hook makes at most 5 Git calls, whatever
+  the repository size, and parses each supported file at most once. The
+  turn-end hook re-checks only memories whose evidence lives in changed files.
+  On a 149-file repository (Apple Silicon, warm cache), the prompt hook took
+  ≈ 1.1 s and the turn-end hook ≈ 75 ms.
 
----
+**What it doesn't do:**
 
-## Measured Evaluation & Benchmark
+- **Retrieval is lexical.** A question that shares no vocabulary with the
+  claim, its retrieval terms, or its code locators won't retrieve it.
+- **Static analysis is bounded.** Dependencies are followed up to 3 hops and
+  64 nodes, through direct calls and named reads only. Reflection, monkey
+  patching, and runtime configuration are left out rather than guessed.
+- **Stale memories are excluded, never rewritten.** Revalidating a stale claim
+  means the agent captures it again with fresh evidence.
+- **Memory Stale's own files are not evidence.** Anything under `.agents/` is ignored for capture and staleness.
+- **Hand-edited internal state is not supported.** Don't edit the per-turn
+  state under `.git/memory-stale/`.
 
-Memory Stale is continuously benchmarked against a versioned, human-labeled corpus of **100 end-to-end repository lifecycle cases** (50 semantic changes, 50 behavior-preserving edits):
+## Evaluation
 
-| Metric | Result | 95% Confidence Interval | Description |
-| :--- | :---: | :---: | :--- |
-| **Overall Accuracy** | **86.0%** (86/100) | 77.9% – 91.5% | Balanced trial classification accuracy |
-| **Stale Precision** | **84.6%** (44/52) | 72.5% – 92.0% | Correctly identified invalidations |
-| **Stale Recall** | **88.0%** (44/50) | 76.2% – 94.4% | True staleness detection rate |
-| **Specificity (True Active)** | **84.0%** (42/50) | 71.5% – 91.7% | Behavior-preserving edit retention |
-| **Retrieval Recall** | **80.0%** (32/40) | 65.2% – 89.5% | Relevant active memory context hits |
-| **Stale Exclusion Rate** | **83.3%** (50/60) | 72.0% – 90.7% | Stale records suppressed from prompt context |
-| **Mean Reciprocal Rank (MRR)** | **0.450** | — | Position-aware ranking (+9.1% via BM25S) |
-| **NDCG@5 Ranking Quality** | **0.540** | — | Top-5 relevance promotion (+5.4% via BM25S) |
-| **Operational Failures** | **0 / 100** | — | 100% deterministic test stability |
+Memory Stale is measured against a versioned corpus of **100 human-labeled,
+end-to-end repository cases**: 50 semantic changes and 50 behavior-preserving
+edits.
 
-### Reproduce Benchmark Locally
-Run the 100-case evaluation suite anytime:
+| Metric | Result | 95% CI |
+| :--- | :---: | :---: |
+| Overall accuracy | **86.0%** (86/100) | 77.9% – 91.5% |
+| Stale precision | **84.6%** (44/52) | 72.5% – 92.0% |
+| Stale recall | **88.0%** (44/50) | 76.2% – 94.4% |
+| Specificity (correctly kept active) | **84.0%** (42/50) | 71.5% – 91.7% |
+| Retrieval recall | **80.0%** (32/40) | 65.2% – 89.5% |
+| Stale exclusion from context | **83.3%** (50/60) | 72.0% – 90.7% |
+| Mean reciprocal rank | **0.450** | — |
+| NDCG@5 | **0.540** | — |
+| Operational failures | **0 / 100** | — |
+
+Reproduce it from a clone:
 
 ```bash
 uv run pytest -m repository_evaluation
 ```
 
----
+## Comparison with other approaches
 
-## Current Boundaries & Limitations
+| | Vector / LLM memory | Code knowledge graphs | Memory Stale |
+| :--- | :--- | :--- | :--- |
+| **Best at** | Fuzzy search over chats and docs | Navigating a whole codebase | Durable decisions and contracts tied to code |
+| **When code changes** | Old memories stay active | Files are re-indexed on any byte change | Only semantic changes invalidate, at symbol or node level |
+| **Downstream changes** | Not tracked | Tracked for navigation | Invalidate dependent memories, with the propagation path |
+| **Runtime** | Embedding calls on every prompt | Batch indexing | Local, deterministic hooks |
+| **Storage** | External database | Generated artifacts | Markdown in your Git repository |
 
-* **Lexical & Structural**: Memories are retrieved by exact code references, BM25S terms, and declared aliases. Pure conceptual queries with no vocabulary overlap are not retrieved.
-* **Static Graph Bounds**: Provenance follows direct named declarations up to 3 hops (64 nodes max). Dynamic reflection, monkey patching, and external runtime configuration are omitted rather than guessed.
-* **Exclusion over Mutation**: Stale memories are excluded from prompt injection, never silently rewritten without verification.
+They complement each other. Use semantic search for open-ended recall, a code
+graph for exploration, and Memory Stale for the facts your agent must never get
+wrong about the current code.
 
----
+Memory Stale's invalidation model borrows the idea of coeffects and change
+propagation from
+[*A Programming Paradigm for Spatiotemporal Composability*](https://github.com/cordiverse/paper/blob/main/paper.pdf).
+It applies only to static provenance; Memory Stale never executes or hot-swaps
+your code.
 
-## Theoretical Foundation & Scope Boundaries
+## Contributing
 
-Memory Stale draws foundational concepts from *A Programming Paradigm for Spatiotemporal Composability* ([Cordis Paper](https://github.com/cordiverse/paper/blob/main/paper.pdf)), adapting its calculus of coeffects and propagation to the domain of LLM agent memory:
+Contributions are welcome. Read [`AGENTS.md`](AGENTS.md) first. Every
+code change starts with a numbered spec in [`specs/`](specs/), and all
+behavior changes are test-driven.
 
-### What Memory Stale Implements
-* **Reactive Coeffects ($\Gamma_{\text{coeffect}} \vdash t : T$):** Memories act as consumers declaring environmental requirements on code entities (providers). An in-memory `ReverseDependencyIndex` selects affected memories from the changed files alone when the environment changes.
-* **HMR-Style Staleness Propagation:** Applies the topological invalidation model of Hot Module Replacement to static provenance trees. When a downstream dependency changes, invalidation propagates upward, tagging claims as `STALE` with exact failure paths (e.g., `changed via auth.py:login -> jwt.py:verify_token`).
-* **Deterministic Granular Lifecycle:** Formalizes explicit lifecycle states (`active`, `stale`, `superseded`) and failure modes (`STALE`, `UNBOUND`, `ORPHAN`) without heuristics.
+```bash
+git clone https://github.com/fagnermourafeitosa/memory-stale.git
+cd memory-stale
+uv sync
 
-### What is Intentionally Out of Scope (Runtime vs. Memory Engine)
-* **No Process-Level HMR / Code Swapping:** Memory Stale does not hot-swap modules in running processes or mutate application runtime state.
-* **No Reversible Side Effects / Physical State Rollback:** Memory Stale does not execute user code, manage runtime effect accumulators ($\partial\Gamma$), or generate rollback closures ($g: \Gamma \to \Gamma$).
-* **No Multi-Tenant Realms or Service Brokers:** Isolation realms ($\Sigma^{iso}$), access-control interception ($\Sigma^{inter}$), and distributed RPC brokers from Cordis are omitted; Memory Stale operates strictly as a project-local, deterministic memory engine.
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy src tests
+uv run pytest
+```
 
----
+Please open an issue before starting large changes, so the scope can be agreed
+in a spec.
 
 ## License
 
-[MIT](LICENSE.txt)
+Memory Stale is released under the [MIT License](LICENSE.txt).
+Copyright © 2026 Fagner Moura Feitosa.
