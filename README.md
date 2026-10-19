@@ -361,12 +361,6 @@ They complement each other. Use semantic search for open-ended recall, a code
 graph for exploration, and Memory Stale for the facts your agent must never get
 wrong about the current code.
 
-Memory Stale's invalidation model borrows the idea of coeffects and change
-propagation from
-[*A Programming Paradigm for Spatiotemporal Composability*](https://github.com/cordiverse/paper/blob/main/paper.pdf).
-It applies only to static provenance; Memory Stale never executes or hot-swaps
-your code.
-
 ## Contributing
 
 Contributions are welcome. Read [`AGENTS.md`](AGENTS.md) first. Every

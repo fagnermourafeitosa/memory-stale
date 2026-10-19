@@ -14,10 +14,7 @@ iterative verification across the memory corpus. Furthermore, if an entity's
 underlying implementation changes, memory validity is checked node-by-node
 without a unified formal model of **reactive dependency tracking**.
 
-As formalized in the research on *Spatiotemporal Composability*
-([Cordis Paper](https://github.com/cordiverse/paper/blob/main/paper.pdf),
-[Cordis Framework](https://github.com/cordiverse/cordis)), dynamic systems
-require two complementary dimensions:
+The design rests on two complementary ideas:
 1. **Spatial Composability (Reactive Coeffects)**: Managing what a component
    requires from its environment. In Memory Stale, **code entities are
    providers** and **memories are consumers** declaring coeffects (`depends_on`).
@@ -134,7 +131,6 @@ exact repository state at the moment of capture.
 
 ## Out of Scope
 
-- Importing the Cordis TypeScript library or creating a Python port of Cordis runtime.
 - Revertible side-effect handlers (`ctx.effect` LIFO rollback).
 - Global unbounded call-graph traversal ($depth > 1$).
 - Secondary SQLite or persistent binary index caches.
@@ -143,8 +139,7 @@ exact repository state at the moment of capture.
 ## Further Notes
 
 - Conceptual foundations:
-  - *Spatiotemporal Composability* (Cordis Paper: https://github.com/cordiverse/paper/blob/main/paper.pdf)
   - *Coeffects: Unified Static Analysis of Context-Dependence* (Petricek, Orchard, Mycroft, 2013)
-  - *Hot Module Replacement & Graph Intersection* (Cordis & Vite ESM Graph Models)
+  - *Hot Module Replacement & Graph Intersection* (Vite ESM Graph Models)
 - Documentation and public `README.md` updates will reflect these concepts under
   the "Reactive Knowledge Dependency Engine" section once implemented.
