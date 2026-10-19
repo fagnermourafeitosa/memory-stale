@@ -51,6 +51,8 @@ def dream(repository: Path) -> DreamSummary:
                 evidence[item.key] = RefEvidence(None, _evidence_error_reason(error))
                 affected.add(memory.id)
             except Exception as error:
+                # A read failure is not evidence of change; keep the recorded fingerprint.
+                evidence[item.key] = RefEvidence(item.fingerprint)
                 errors.append(f"{memory.id}:{item.key}: {type(error).__name__}: {error}")
     reconciled = reconcile(memories, [], evidence)
     previously_active = {memory.id for memory in memories if memory.status == "active"}

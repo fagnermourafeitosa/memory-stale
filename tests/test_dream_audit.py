@@ -61,7 +61,7 @@ def test_dream_records_why_each_piece_of_evidence_broke(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
-def test_dream_isolates_an_unreadable_source_from_other_audits(tmp_path: Path) -> None:
+def test_dream_keeps_memories_active_when_their_source_is_unreadable(tmp_path: Path) -> None:
     _seed(tmp_path)
     (tmp_path / "settings.json").write_text('{"retries": 5}\n', encoding="utf-8")
     source = tmp_path / "jobs.py"
@@ -75,5 +75,9 @@ def test_dream_isolates_an_unreadable_source_from_other_audits(tmp_path: Path) -
         ["backoff:symbol:jobs.py:backoff", "PermissionError"],
         ["retry:symbol:jobs.py:retry", "PermissionError"],
     ]
-    assert "settings" in summary.marked_stale
+    assert summary.marked_stale == ["settings"]
+    assert summary.audited == ["settings"]
+    reasons = _reasons(tmp_path)
+    assert reasons["retry"] is None
+    assert reasons["backoff"] is None
     assert _reasons(tmp_path)["settings"] == {"config:settings.json#/retries": "changed"}
