@@ -131,34 +131,6 @@ def expand_static_graph(repository: Path, graph: EvidenceGraph) -> StaticExpansi
     )
 
 
-def parse_items(value: object) -> tuple[tuple[str, str, str], ...]:
-    """Validate MCP evidence input before resolving any item."""
-    if not isinstance(value, list) or not value:
-        raise EvidenceError("evidence is required")
-    parsed: list[tuple[str, str, str]] = []
-    keys: set[tuple[str, str]] = set()
-    for raw in value:
-        if not isinstance(raw, dict):
-            raise EvidenceError("evidence items must be objects")
-        if set(raw) != {"type", "role", "locator"}:
-            raise EvidenceError("evidence items require only type, role, and locator")
-        item_type = _required(raw, "type")
-        role = _required(raw, "role")
-        locator = _required(raw, "locator")
-        if item_type not in EVIDENCE_TYPES:
-            raise EvidenceError(f"unsupported evidence type: {item_type}")
-        if role not in EVIDENCE_ROLES:
-            raise EvidenceError(f"unsupported evidence role: {role}")
-        key = (item_type, locator)
-        if key in keys:
-            raise EvidenceError(f"duplicate evidence item: {item_type}:{locator}")
-        keys.add(key)
-        parsed.append((item_type, role, locator))
-    if not any(role == "primary" for _item_type, role, _locator in parsed):
-        raise EvidenceError("evidence requires at least one primary item")
-    return tuple(parsed)
-
-
 def parse_graph(value: object) -> EvidenceGraph:
     """Parse nested dependency declarations into canonical nodes and edges."""
     if not isinstance(value, list) or not value:

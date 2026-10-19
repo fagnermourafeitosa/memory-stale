@@ -1,6 +1,6 @@
 # 46 — Behavioral coverage recovery
 
-**Status: Draft (2026-10-19)**
+**Status: Done (2026-10-19)**
 
 ## Problem Statement
 
@@ -254,8 +254,30 @@ that as a consequence.
 
 ## Findings
 
-_Filled in during implementation: bugs, unreachable branches, and any residual
-coverage gap, each with its follow-up._
+Result: `uv run pytest --cov` passes at 92.19% (313 tests), up from 84.28%.
+This spec did not change any production behavior.
+
+- **Removed:** `evidence.parse_items` had no caller. Every capture path uses
+  `parse_graph`.
+- **Kept, because they are reachable:**
+  - The `dream` per-item `except Exception` branch. An unreadable source file
+    raises `PermissionError`, which lands in `errors`.
+  - The lifecycle capture-shape validations. A corrupt staged capture in the
+    task state reaches them at stop time. They are now covered by a rejection
+    table that asserts no memory is written.
+- **Bug candidate (follow-up `fix/`):** when `dream` cannot read a source file,
+  each memory backed by it is listed in `errors` but is still marked `stale`.
+  `audited` also omits it. A transient read failure should not invalidate
+  evidence.
+- **Bug candidate (follow-up `fix/`):** a corrupt staged capture makes the stop
+  hook fail as a whole. The task state is left behind, and the turn's other
+  captures are lost. This is the same containment problem spec 47 solved for
+  memory files.
+- **Pinned as-is:** the Claude and Codex prompt hooks report
+  `Memory Stale is inactive: cwd is not inside a Git repository.` outside Git.
+  Every other event, and every Antigravity event, stays silent.
+- **Residual gaps** remain in `symbol_index` (88%) and `evaluation` (87%). Both
+  are out of scope, as decided above.
 
 ## Further Notes
 
