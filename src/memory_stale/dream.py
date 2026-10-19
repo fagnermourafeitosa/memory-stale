@@ -20,7 +20,8 @@ class DreamSummary:
 
 def dream(repository: Path) -> DreamSummary:
     store = MemoryStore(repository)
-    memories = store.load_all()
+    loaded = store.load()
+    memories = loaded.memories
     evidence: dict[str, RefEvidence] = {}
     ignored = {
         memory.id
@@ -33,7 +34,7 @@ def dream(repository: Path) -> DreamSummary:
     affected: set[str] = {
         memory.id for memory in memories if memory.status == "stale" and memory.id not in ignored
     }
-    errors: list[str] = []
+    errors = [f"{skipped.path}: {skipped.reason}" for skipped in loaded.skipped]
     for memory in memories:
         if memory.status != "active":
             continue

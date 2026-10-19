@@ -400,10 +400,19 @@ def start_task(cwd: Path, turn_id: str, prompt: str) -> str:
     from memory_stale.retrieval import retrieve
 
     config = load_config(repository)
-    context = retrieve(
-        MemoryStore(repository).load_all(), prompt, config.context_budget, config.top_k
-    )
-    return f"{SEMANTIC_CAPTURE_PROTOCOL}\n\n{context}" if context else SEMANTIC_CAPTURE_PROTOCOL
+    loaded = MemoryStore(repository).load()
+    context = retrieve(loaded.memories, prompt, config.context_budget, config.top_k)
+    sections = [SEMANTIC_CAPTURE_PROTOCOL]
+    if loaded.skipped:
+        sections.append(
+            "\n".join(
+                f"Memory Stale skipped {skipped.path}: {skipped.reason}"
+                for skipped in loaded.skipped
+            )
+        )
+    if context:
+        sections.append(context)
+    return "\n\n".join(sections)
 
 
 def record_tool_activity(

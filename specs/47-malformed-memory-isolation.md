@@ -1,6 +1,6 @@
 # 47 — Malformed memory isolation
 
-**Status: Draft (2026-10-19)**
+**Status: Done (2026-10-19)**
 
 ## Problem Statement
 
@@ -42,8 +42,9 @@ for each file and stops one file's failure from spreading to the whole store.
   - **Stop hook:** silent about skipped files. It reconciles the valid memories
     and persists the turn's captures without repeating the prompt warning.
 - If reconciliation produces a memory whose file would overwrite a malformed
-  file, the malformed file is preserved. That one memory write is skipped and
-  reported, and every other write proceeds.
+  file, the malformed file is preserved and that one memory write is skipped.
+  Every other write proceeds. The malformed file remains visible through the
+  prompt warning and `dream`.
 
 ## User Stories
 
@@ -69,8 +70,8 @@ for each file and stops one file's failure from spreading to the whole store.
 9. As a developer, I want a fixed file to rejoin the store automatically on the
    next load, so that recovery needs no extra command.
 10. As a developer, I want a write that would overwrite a malformed file to be
-    skipped and reported rather than performed, so that a hand edit is never
-    destroyed by an automatic write.
+    skipped rather than performed, so that a hand edit is never destroyed by an
+    automatic write.
 11. As a developer, I want `dream` to audit every valid memory and list each
     skipped file in its errors, so that the audit tool works exactly when I
     need it most.
@@ -114,19 +115,19 @@ for each file and stops one file's failure from spreading to the whole store.
 
   Exceptions outside these categories are not converted. They propagate to
   the adapter's existing failure contract.
-- **Store load result.** The store's loading interface returns the valid
-  memories together with the skipped-file records. Callers that previously
-  received only memories (prompt retrieval, stop reconciliation, `dream`, the
-  report) receive both and decide how to surface the skips. `load_all` keeps
-  returning only the valid memories, or is replaced by the new interface; the
-  implementer chooses whichever keeps call sites cohesive, and no caller may
-  ignore the skips silently.
-- **Write protection.** The store's write operation never deletes or overwrites
-  a file that the corresponding load reported as skipped:
+- **Store load result.** A new store `load` operation returns the valid
+  memories together with the skipped-file records. Prompt retrieval, `dream`,
+  and the report use it and surface the skips. `load_all` keeps returning only
+  the valid memories. The stop hook uses it because it is silent by design.
+- **Write protection is intrinsic to the store.** The write operation never
+  deletes or overwrites a file that cannot be loaded, whatever the caller did
+  beforehand. It uses the skipped set from that store instance's most recent
+  load, and it loads first when the instance has not loaded yet. In
+  particular:
   - Deleting files that no longer correspond to a memory excludes skipped
     files.
-  - A memory whose target file is a skipped file is not written. It is
-    reported as a skipped write, and the other writes proceed.
+  - A memory whose target file is a skipped file is not written, and the other
+    writes proceed.
 
   Writes remain atomic for each file.
 - **Prompt warning format.** Warnings are deterministic, English, and placed in
@@ -134,9 +135,9 @@ for each file and stops one file's failure from spreading to the whole store.
   `Memory Stale skipped <relative path>: <reason>`. They do not count against
   the context budget used for retrieved memories.
 - **Stop hook.** The stop hook reconciles valid memories, persists captures,
-  and removes the task state normally. It emits no message for skipped files.
-  A skipped write caused by a collision is the one stop-time report, through
-  the existing `systemMessage` channel.
+  and removes the task state normally. It emits no message for skipped files
+  or for skipped colliding writes. The three harnesses share no stop-time
+  diagnostic channel, and the malformed file stays visible at the next prompt.
 - **`dream`.** It adds one `errors` entry per skipped file, in the form
   `<relative path>: <reason>`. Its other outcomes are unchanged.
 - **Report.** The HTML report adds an "Unreadable memory files" section listing
@@ -168,8 +169,8 @@ for each file and stops one file's failure from spreading to the whole store.
      fixture.
   4. After the malformed file is fixed, the next prompt retrieves it, with no
      warning.
-  5. A colliding write preserves the malformed file and reports the skipped
-     write, while the other memories are written.
+  5. A colliding write preserves the malformed file while the other memories
+     are written.
   6. `dream` audits the valid memories and lists the skipped file in `errors`.
   7. `memory.report` renders the valid memories and the "Unreadable memory
      files" section.
@@ -204,5 +205,9 @@ for each file and stops one file's failure from spreading to the whole store.
 - Consistent with [spec 34](34-okf-memory-format.md): each invalid record still
   fails actionably and is never partially loaded. The change is that the
   failure is contained to its file.
-- Implementation runs on a dedicated `fix/47-malformed-memory-isolation` branch
-  after this spec is approved.
+- Implementation runs on the dedicated `fix/47-malformed-memory-isolation`
+  branch.
+- The spec 34 store-rejection tests now assert that an invalid record is
+  excluded and reported with its reason, instead of failing the whole load.
+- The public README still needs a short note on malformed-file isolation. It
+  was deferred because `README.md` has unrelated uncommitted edits.

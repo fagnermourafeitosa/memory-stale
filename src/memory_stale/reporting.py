@@ -11,6 +11,7 @@ from typing import cast
 import tomli
 
 from memory_stale.lifecycle import Memory
+from memory_stale.memory_store import SkippedMemoryFile
 
 
 @dataclass(frozen=True)
@@ -54,7 +55,7 @@ def load_config(repository: Path) -> Config:
     )
 
 
-def _render(memories: list[Memory]) -> str:
+def _render(memories: list[Memory], skipped: tuple[SkippedMemoryFile, ...]) -> str:
     rows = []
     groups: dict[str, list[Memory]] = {}
     for memory in memories:
@@ -104,6 +105,16 @@ def _render(memories: list[Memory]) -> str:
                 f"<td>{html.escape(memory.observed_at or '')}</td></tr>"
             )
     body = "".join(rows) or '<tr><td colspan="11">No memories.</td></tr>'
+    unreadable = (
+        "<h2>Unreadable memory files</h2><ul>"
+        + "".join(
+            f"<li><code>{html.escape(item.path)}</code>: {html.escape(item.reason)}</li>"
+            for item in skipped
+        )
+        + "</ul>"
+        if skipped
+        else ""
+    )
     return (
         '<!doctype html><html><head><meta charset="utf-8"><title>Memory Stale</title>'
         "<style>body{font-family:system-ui;margin:2rem}table{border-collapse:collapse;width:100%}"
@@ -116,12 +127,16 @@ def _render(memories: list[Memory]) -> str:
         "<th>Kind</th><th>Claim</th><th>Durability</th><th>Evidence</th><th>Graph</th>"
         "<th>Retrieval terms</th><th>Reasons</th>"
         "<th>Observed commit</th><th>Observed at</th>"
-        f"</tr></thead><tbody>{body}</tbody></table></body></html>\n"
+        f"</tr></thead><tbody>{body}</tbody></table>{unreadable}</body></html>\n"
     )
 
 
 def write_report(
-    repository: Path, memories: list[Memory], *, requested: bool = False
+    repository: Path,
+    memories: list[Memory],
+    *,
+    requested: bool = False,
+    skipped: tuple[SkippedMemoryFile, ...] = (),
 ) -> Path | None:
     config = load_config(repository)
     if not requested and not config.auto_report:
@@ -130,7 +145,7 @@ def write_report(
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(f".{os.getpid()}.tmp")
     try:
-        temporary.write_text(_render(memories), encoding="utf-8")
+        temporary.write_text(_render(memories, skipped), encoding="utf-8")
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)

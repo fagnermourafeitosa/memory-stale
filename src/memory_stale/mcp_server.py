@@ -307,7 +307,8 @@ def _dispatch(request: dict[str, object], cwd: Path) -> dict[str, object] | None
         params = request.get("params")
         if isinstance(params, dict) and params.get("name") == "memory.report":
             repository = _repository_root(cwd)
-            path = write_report(repository, MemoryStore(repository).load_all(), requested=True)
+            loaded = MemoryStore(repository).load()
+            path = write_report(repository, loaded.memories, requested=True, skipped=loaded.skipped)
             result = _tool_result(f"Report written to {path}")
         elif isinstance(params, dict) and params.get("name") == "memory.dream":
             summary = dream(_repository_root(cwd))

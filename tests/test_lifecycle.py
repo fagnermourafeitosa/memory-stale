@@ -273,8 +273,12 @@ def test_store_rejects_invalid_okf_evidence_mappings(
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match=message):
-        store.load_all()
+    loaded = store.load()
+
+    assert loaded.memories == []
+    [skipped] = loaded.skipped
+    assert skipped.path == f".agents/skills/.agent-memory/memories/{path.name}"
+    assert message in skipped.reason
 
 
 def test_dependency_cycle_has_a_finite_deterministic_invalidation_path() -> None:

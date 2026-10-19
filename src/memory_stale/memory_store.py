@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
@@ -19,6 +20,29 @@ _KNOWN_OKF_FIELDS = frozenset(
 )
 
 
+class MemoryFileError(ValueError):
+    """Raised when one memory file cannot be loaded as a complete record."""
+
+    def __init__(self, path: str, reason: str) -> None:
+        super().__init__(f"{path}: {reason}")
+        self.path = path
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class SkippedMemoryFile:
+    """A memory file excluded from the store because it cannot be loaded."""
+
+    path: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class LoadedMemories:
+    memories: list[Memory]
+    skipped: tuple[SkippedMemoryFile, ...]
+
+
 class MemoryStore:
     def __init__(
         self,
@@ -26,22 +50,42 @@ class MemoryStore:
         *,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
+        self.repository = repository
         self.directory = repository / ".agents" / "skills" / ".agent-memory" / "memories"
         self._clock = clock or _utc_now
+        self._skipped_names: frozenset[str] | None = None
+
+    def load(self) -> LoadedMemories:
+        """Load every valid memory and isolate each file that cannot be loaded."""
+        memories: list[Memory] = []
+        skipped: list[SkippedMemoryFile] = []
+        if self.directory.is_dir():
+            for path in sorted(self.directory.glob("*.md")):
+                try:
+                    memories.append(self._load_file(path))
+                except MemoryFileError as error:  # noqa: PERF203 - isolate each file
+                    skipped.append(SkippedMemoryFile(error.path, error.reason))
+        self._skipped_names = frozenset(Path(item.path).name for item in skipped)
+        return LoadedMemories(memories, tuple(skipped))
 
     def load_all(self) -> list[Memory]:
-        if not self.directory.is_dir():
-            return []
-        return [self._load(path) for path in sorted(self.directory.glob("*.md"))]
+        return self.load().memories
 
     def write_all(self, memories: list[Memory]) -> None:
+        """Persist memories without deleting or overwriting files that cannot be loaded."""
+        protected = self._skipped_names
+        if protected is None:
+            self.load()
+            protected = self._skipped_names or frozenset()
         self.directory.mkdir(parents=True, exist_ok=True)
         for memory in memories:
-            self._write(memory)
-        expected = {f"{memory.id}.md" for memory in memories}
+            if f"{memory.id}.md" not in protected:
+                self._write(memory)
+        expected = {f"{memory.id}.md" for memory in memories} | protected
         for path in self.directory.glob("*.md"):
             if path.name not in expected:
                 path.unlink()
+        self._skipped_names = None
 
     def _write(self, memory: Memory) -> None:
         path = self.directory / f"{memory.id}.md"
@@ -95,9 +139,25 @@ class MemoryStore:
         finally:
             temporary.unlink(missing_ok=True)
 
-    def _load(self, path: Path) -> Memory:
-        text = path.read_text(encoding="utf-8")
-        _opening, front_matter, claim = text.split("---", 2)
+    def _load_file(self, path: Path) -> Memory:
+        relative = path.relative_to(self.repository).as_posix()
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as error:
+            raise MemoryFileError(relative, "invalid UTF-8 encoding") from error
+        except OSError as error:
+            raise MemoryFileError(relative, f"unreadable file: {error.strerror}") from error
+        parts = text.split("---", 2)
+        if len(parts) != 3:
+            raise MemoryFileError(relative, "missing front matter")
+        try:
+            return self._load(path, parts[1], parts[2])
+        except yaml.YAMLError as error:
+            raise MemoryFileError(relative, "invalid YAML front matter") from error
+        except ValueError as error:
+            raise MemoryFileError(relative, str(error).replace(f" in {path}", "")) from error
+
+    def _load(self, path: Path, front_matter: str, claim: str) -> Memory:
         loaded = yaml.safe_load(front_matter)
         if not isinstance(loaded, dict) or not all(isinstance(key, str) for key in loaded):
             raise ValueError(f"invalid front matter in {path}")
