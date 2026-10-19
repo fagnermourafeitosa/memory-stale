@@ -26,8 +26,9 @@ fail if they broke:
 3. **Stored memories must stay readable across schema versions.** Specs 14 and
    16 declare that unversioned, v3, and v4 memories migrate deterministically
    and idempotently. The v3/v4 evidence loader has no test at all. The
-   behavior for a malformed memory file is also unpinned: today one corrupt
-   file makes every hook fail, and that is not documented anywhere.
+   behavior for a malformed memory file was unpinned: one corrupt file made
+   every hook fail. [Spec 47](47-malformed-memory-isolation.md) defines the
+   per-file isolation contract that this spec's tests must assert.
 4. **Audit must explain why evidence broke.** `dream` records `file_missing`,
    `locator_missing`, or `unresolvable` stale reasons, and it isolates
    unexpected per-item failures in its error list. None of these outcomes is
@@ -125,10 +126,10 @@ that as a consequence.
 24. As a developer upgrading Memory Stale, I want migration to be idempotent, so
     that running hooks repeatedly does not keep rewriting or drifting my
     memories.
-25. As a developer, I want the current behavior for a malformed memory file
-    (invalid front matter, invalid OKF type, unknown status, stale reason that
-    references unknown evidence, invalid graph) pinned by tests, so that any
-    future change to that contract is deliberate.
+25. As a developer, I want every malformed-file kind (invalid front matter,
+    invalid OKF type, unknown status, stale reason that references unknown
+    evidence, invalid graph) covered against the spec 47 isolation contract,
+    so that one bad file never disables the others.
 26. As a developer, I want `dream` to mark a memory stale with `file_missing`
     when its evidence file is deleted, so that the audit explains the breakage.
 27. As a developer, I want `dream` to report `locator_missing` when the symbol or
@@ -167,11 +168,11 @@ that as a consequence.
     real file condition reaches it. These become removal candidates only after
     a test shows the behavior is unreachable through every seam. Each one is
     added to this list, by updating the spec, before it is deleted.
-- **Malformed memory contract.** Today a malformed memory file makes
-  `MemoryStore.load_all` raise. Hooks then report one failure `systemMessage`
-  and inject no memories. This spec pins that behavior. Changing it (for
-  example, skipping or quarantining the bad file while serving the others) is
-  a recommended follow-up `fix/` spec.
+- **Malformed memory contract.** [Spec 47](47-malformed-memory-isolation.md)
+  defines it: per-file isolation, the bad file preserved byte for byte, and
+  warnings at prompt time, in `dream`, and in the report. Spec 47 is
+  implemented first. This spec then covers the remaining malformed-file kinds
+  against that contract instead of pinning the old whole-store failure.
 - **Legacy formats remain supported.** The unversioned `signatures` schema,
   schema v3, and schema v4 remain part of the contract from specs 14 and 16.
 - **Antigravity repository resolution precedence** is
@@ -209,9 +210,10 @@ that as a consequence.
   memories. Assert that the rewritten file preserves claim, status, stale
   reasons, evidence, `supported_by`, and dependencies. Then run the flow again
   and assert byte-identical output to prove idempotence.
-- **Malformed memories.** Use one row per invalid-file kind. Assert the current
-  observable outcome at the prompt hook (a failure `systemMessage`, no injected
-  context) and at `dream`.
+- **Malformed memories.** Use one row per invalid-file kind not already covered
+  by spec 47. Assert the spec 47 outcome: the valid memories are still
+  injected, one warning names the file, the file is unchanged, and `dream`
+  lists it in `errors`.
 - **Dream audit.** Use real deletions, symbol or node removals, and corrupted
   documents. Assert the stale reason recorded in the rewritten memory file.
   Error isolation uses an unreadable source file (`chmod 000`), skipped when
@@ -243,7 +245,7 @@ that as a consequence.
 
 - Lowering `fail_under` or adding coverage exclusions (`pragma: no cover`,
   `omit`) to reach the threshold.
-- Changing the malformed-memory contract. That is a follow-up `fix/` spec.
+- Changing the malformed-memory contract beyond spec 47.
 - Fixing any bug these tests uncover. Each fix goes in its own `fix/` spec.
 - Coverage gaps in `symbol_index` (88%) and `evaluation` (87%). They need
   grammar and corpus work under a separate spec.
