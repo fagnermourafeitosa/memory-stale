@@ -118,7 +118,12 @@ configuration are kept.
    bundled skill teaches it when and how to do this.
 3. **Turn ends.** Memory Stale compares the working tree with the baseline:
    - It stores the captured memories.
-   - It records automatic provenance for changed symbols.
+   - It records automatic provenance: one `operation` memory per changed
+     symbol (or per changed file when no symbol changed), with a claim that
+     starts with `Automatic change record:`. These records keep exact
+     code-locator retrieval working. In Claude Code and Codex, if changed code
+     has no semantic capture, the hook tells the agent which locations are
+     missing one.
    - It re-checks every memory whose evidence lives in a changed file. Each one
      is either kept active or marked stale with a reason.
 
@@ -156,7 +161,8 @@ request:
 - `active`: every piece of recorded evidence still matches.
 - `stale`: some evidence changed semantically, disappeared, or can no longer be
   resolved. The stale reason says which.
-- `superseded`: the claim was captured again with newer evidence.
+- `superseded`: an active claim was captured again with the same `kind`,
+  claim text, and primary locators, so a newer revision replaced it.
 
 An `active` memory is not proof that the claim is true, and a `stale` memory is
 not proof that it is false. Status only says whether the evidence still
@@ -180,6 +186,15 @@ A capture request looks like this:
 `kind` is one of `behavior`, `contract`, `constraint`, `architecture`, or
 `operation`. At least one `primary` evidence item must have changed during the
 current turn. This keeps memories anchored to work the agent actually did.
+
+The claim must say what the resulting code does or guarantees. Mechanical
+claims such as "src/jobs.py changed in this task" are rejected. Optional
+fields:
+
+- `retrieval_terms`: up to 8 phrases of at most 80 characters each, used only
+  for retrieval, never as evidence.
+- `language`: the language of the claim, such as `en` or `pt`. It selects the
+  stemmer used for retrieval and defaults to `en`.
 
 ## Evidence types
 
@@ -286,6 +301,11 @@ are available for:
 
 **Python** · **TypeScript / TSX** · **JavaScript** · **Go** · **Rust** · **Java** · **Kotlin**
 
+Static dependencies across files are followed through imports in Python,
+JavaScript, and TypeScript only. In Go, Rust, Java, and Kotlin, dependency
+expansion stays within the same file and scope, so a change to a helper in
+another file does not make the claim stale.
+
 Other languages have no fallback. Edits to unsupported files produce no
 automatic records, and symbol evidence pointing at them is rejected. Memory
 Stale never claims more certainty than it has. You can still anchor memories to
@@ -322,7 +342,8 @@ configuration and schema files of any project.
   turns are picked up only when a later turn changes the same file, or when you
   run `/memory-stale dream`. Run `dream` after a pull or a large manual edit.
 - **Stale memories are excluded, never rewritten.** Revalidating a stale claim
-  means the agent captures it again with fresh evidence.
+  means the agent captures it again with fresh evidence. The new revision is
+  active; the stale revision stays in the store as history.
 - **Memory Stale's own files are not evidence.** Anything under `.agents/` is ignored for capture and staleness.
 - **Hand-edited internal state is not supported.** Don't edit the per-turn
   state under `.git/memory-stale/`.
