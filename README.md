@@ -35,12 +35,13 @@ don't count as changes.
 Task 1  Agent records: "AuthService.login validates only the password."
         Evidence: src/auth.py:AuthService.login
 
-Task 2  You add multi-factor authentication to AuthService.login.
+Task 2  You ask the agent to add multi-factor authentication to
+        AuthService.login.
 
 Task 3  Agent works on authentication again.
         Plain memory:  injects the password-only claim as current truth.
-        Memory Stale:  detects the semantic change, marks the memory stale,
-                       and keeps it out of the prompt.
+        Memory Stale:  marked the memory stale when Task 2 ended, so it
+                       stays out of the prompt.
 ```
 
 <p align="center">
@@ -315,6 +316,11 @@ configuration and schema files of any project.
 - **Static analysis is bounded.** Dependencies are followed up to 3 hops and
   64 nodes, through direct calls and named reads only. Reflection, monkey
   patching, and runtime configuration are left out rather than guessed.
+- **Only changes made during an agent turn are checked automatically.**
+  Each turn compares the working tree with the snapshot taken when the
+  prompt was submitted. Edits you make yourself, or commits you pull, between
+  turns are picked up only when a later turn changes the same file, or when you
+  run `/memory-stale dream`. Run `dream` after a pull or a large manual edit.
 - **Stale memories are excluded, never rewritten.** Revalidating a stale claim
   means the agent captures it again with fresh evidence.
 - **Memory Stale's own files are not evidence.** Anything under `.agents/` is ignored for capture and staleness.
