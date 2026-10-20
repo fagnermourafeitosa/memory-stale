@@ -103,3 +103,15 @@ def test_installer_when_cloned_directly_into_agents_skills(tmp_path: Path) -> No
     assert (repository / ".agents" / "hooks.json").exists()
     assert (repository / ".agents" / "plugins" / "memory-stale" / "mcp_config.json").exists()
     assert (repository / ".agents" / "skills" / ".agent-memory" / "config.toml").exists()
+
+
+def test_installed_default_config_lists_only_effective_settings(tmp_path: Path) -> None:
+    repository = _create_repository(tmp_path)
+
+    install(Path(__file__).parents[1], repository, "claude")
+
+    config = (repository / ".agents" / "skills" / ".agent-memory" / "config.toml").read_text(
+        encoding="utf-8"
+    )
+    assert "context_budget = 1500" in config
+    assert "auto_report" not in config

@@ -13,14 +13,13 @@ def test_config_defaults_overrides_and_invalid_values(tmp_path: Path) -> None:
     config_dir = tmp_path / ".agents" / "skills" / ".agent-memory"
     config_dir.mkdir(parents=True)
     (config_dir / "config.toml").write_text(
-        'context_budget = 700\ntop_k = 3\nauto_report = true\nreport_path = "health/report.html"\n',
+        'context_budget = 700\ntop_k = 3\nreport_path = "health/report.html"\n',
         encoding="utf-8",
     )
     loaded = load_config(tmp_path)
-    assert (loaded.context_budget, loaded.top_k, loaded.auto_report, loaded.report_path) == (
+    assert (loaded.context_budget, loaded.top_k, loaded.report_path) == (
         700,
         3,
-        True,
         Path("health/report.html"),
     )
     (config_dir / "config.toml").write_text("context_budget = 0\n", encoding="utf-8")
@@ -35,6 +34,14 @@ def test_config_defaults_overrides_and_invalid_values(tmp_path: Path) -> None:
     (config_dir / "config.toml").write_text('top_k = "five"\n', encoding="utf-8")
     with pytest.raises(ConfigError, match="top_k"):
         load_config(tmp_path)
+
+
+def test_legacy_auto_report_entry_is_ignored(tmp_path: Path) -> None:
+    config_dir = tmp_path / ".agents" / "skills" / ".agent-memory"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.toml").write_text('top_k = 2\nauto_report = "yes"\n', encoding="utf-8")
+
+    assert load_config(tmp_path).top_k == 2
 
 
 def test_html_report_escapes_content_and_is_explicit_by_default(tmp_path: Path) -> None:

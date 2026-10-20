@@ -158,9 +158,6 @@ context_budget = 1500
 # Maximum number of highest-ranked active memories injected per task.
 top_k = 5
 
-# Generate the optional HTML health report after each completed turn.
-auto_report = false
-
 # Repository-relative path used when an HTML report is requested.
 report_path = "memory-report.html"
 """

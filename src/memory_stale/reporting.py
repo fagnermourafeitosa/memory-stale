@@ -17,7 +17,6 @@ from memory_stale.memory_store import SkippedMemoryFile
 @dataclass(frozen=True)
 class Config:
     context_budget: int = 1500
-    auto_report: bool = False
     report_path: Path = Path("memory-report.html")
     top_k: int = 5
 
@@ -34,14 +33,11 @@ def load_config(repository: Path) -> Config:
         data = cast(dict[str, object], tomli.load(stream))
     budget = data.get("context_budget", 1500)
     top_k = data.get("top_k", 5)
-    auto_report = data.get("auto_report", False)
     report_text = data.get("report_path", "memory-report.html")
     if not isinstance(budget, int) or isinstance(budget, bool) or budget <= 0:
         raise ConfigError("context_budget must be a positive integer")
     if not isinstance(top_k, int) or isinstance(top_k, bool) or top_k <= 0:
         raise ConfigError("top_k must be a positive integer")
-    if not isinstance(auto_report, bool):
-        raise ConfigError("auto_report must be a boolean")
     if not isinstance(report_text, str) or not report_text:
         raise ConfigError("report_path must be a non-empty relative path")
     report_path = Path(report_text)
@@ -49,7 +45,6 @@ def load_config(repository: Path) -> Config:
         raise ConfigError("report_path must stay inside the repository")
     return Config(
         context_budget=budget,
-        auto_report=auto_report,
         report_path=report_path,
         top_k=top_k,
     )
@@ -138,9 +133,9 @@ def write_report(
     requested: bool = False,
     skipped: tuple[SkippedMemoryFile, ...] = (),
 ) -> Path | None:
-    config = load_config(repository)
-    if not requested and not config.auto_report:
+    if not requested:
         return None
+    config = load_config(repository)
     path = repository / config.report_path
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(f".{os.getpid()}.tmp")
